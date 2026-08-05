@@ -1,0 +1,59 @@
+@use '../../styles/tokens' as *;
+
+.archive-date {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-4;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: $border-2 solid $color-neutral-60;
+  border-radius: $radius-4;
+  padding: 0;
+  background: $color-neutral-50;
+  cursor: pointer;
+}
+
+.archive-date__day {
+  font-family: $font-cell;
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.48px;
+  color: $color-neutral-100;
+}
+
+// Each state is scoped with :not() to be mutually exclusive with the
+// others, matching the same pattern used for puzzle-cell states in
+// Cell.scss — hovering can never change how a completed or active date
+// looks, and active always wins over completed.
+.archive-date:hover:not(:disabled):not(.archive-date--completed):not(.archive-date--active) {
+  background: $color-neutral-60;
+  border-color: $color-neutral-70;
+}
+
+.archive-date--completed:not(.archive-date--active) {
+  background: $color-success-60;
+  border-color: $color-success-70;
+}
+
+.archive-date--completed:not(.archive-date--active) .archive-date__day,
+.archive-date--completed:not(.archive-date--active) .archive-date__check {
+  color: $color-success-100;
+}
+
+.archive-date--active {
+  background: $color-achievement-60;
+  border-color: $color-achievement-70;
+}
+
+.archive-date--active .archive-date__day {
+  color: $color-achievement-100;
+}
+
+.archive-date:disabled {
+  background: $color-neutral-50;
+  border-color: $color-neutral-60;
+  cursor: default;
+  opacity: 0.4;
+}

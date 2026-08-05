@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__figma__*",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(pwd)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(tree:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

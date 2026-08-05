@@ -1,0 +1,19 @@
+@use '../../styles/tokens' as *;
+
+.puzzle-board {
+  box-sizing: border-box;
+  width: $content-width;
+  display: flex;
+  justify-content: center;
+  padding: $spacing-16;
+  background: $color-neutral-0;
+  border: $border-2 solid $color-information-70;
+  border-top: none;
+  border-radius: 0 0 $radius-4 $radius-4;
+}
+
+.puzzle-board__grid {
+  display: grid;
+  gap: $spacing-2;
+  width: fit-content;
+}

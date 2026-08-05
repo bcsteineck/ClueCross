@@ -1,0 +1,78 @@
+@use '../../styles/tokens' as *;
+
+.cell {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  text-align: center;
+  font-family: $font-cell;
+  font-weight: 500;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+  text-transform: uppercase;
+  color: $color-neutral-100;
+  background: $color-neutral-0;
+  border: $border-2 solid $color-neutral-70;
+  border-radius: $radius-2;
+}
+
+// Cell.tsx selects a cell's text on focus so typing directly replaces the
+// existing letter (maxLength=1 would otherwise block the keystroke). That
+// selection is functional only — hiding its native highlight here keeps
+// backspace/delete looking like one immediate action instead of two.
+.cell::selection {
+  background: transparent;
+  color: inherit;
+}
+
+.cell::-moz-selection {
+  background: transparent;
+  color: inherit;
+}
+
+// Hover only affects the plain default cell. Each of these states is
+// scoped with :not() to be mutually exclusive with the others, so there's
+// no specificity tie-breaking between hover/locked/complete/active to get
+// wrong — hovering can never change how an active, locked, or complete
+// cell looks.
+.cell:hover:not(.cell--active):not(.cell--locked):not(.cell--complete) {
+  background: $color-neutral-60;
+  outline: none;
+}
+
+.cell--locked:not(.cell--active):not(:focus-visible) {
+  background: $color-success-60;
+  border-color: $color-success-70;
+  color: $color-success-100;
+  caret-color: transparent;
+  outline: none;
+  cursor: default;
+}
+
+.cell--complete:not(.cell--active):not(:focus-visible) {
+  background: $color-achievement-60;
+  border-color: $color-achievement-80;
+  color: $color-achievement-100;
+  caret-color: transparent;
+  outline: none;
+  cursor: default;
+}
+
+// The active/focused cell always shows this "you are here" treatment,
+// including when it's also a locked or complete cell, and regardless of
+// hover.
+.cell--active,
+.cell:focus-visible {
+  background: $color-achievement-60;
+  border-color: $color-achievement-80;
+  color: $color-achievement-100;
+  caret-color: transparent;
+  outline: none;
+}
+
+.cell--locked.cell--active,
+.cell--locked:focus-visible,
+.cell--complete.cell--active,
+.cell--complete:focus-visible {
+  cursor: default;
+}

@@ -1,0 +1,22 @@
+@use '../../styles/tokens' as *;
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: $content-width;
+}
+
+.header__logo {
+  font-family: $font-logo;
+  font-weight: 800;
+  font-size: 32px;
+  letter-spacing: 0.64px;
+  color: $color-neutral-100;
+}
+
+.header__options {
+  display: flex;
+  align-items: center;
+  gap: $spacing-32;
+}

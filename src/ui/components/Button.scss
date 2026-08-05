@@ -1,0 +1,81 @@
+@use '../../styles/tokens' as *;
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-8;
+  height: 48px;
+  padding: 0 $spacing-16;
+  border: $border-2 solid;
+  border-radius: $radius-4;
+  background: $color-neutral-0;
+  font-family: $font-clue;
+  font-weight: 500;
+  font-size: 16px;
+  letter-spacing: 0.32px;
+  cursor: pointer;
+}
+
+.button__label {
+  white-space: nowrap;
+}
+
+// style=Default. Active is intentionally identical to the base state (no
+// distinct pressed treatment), so there's no :active rule here.
+.button--default {
+  background: $color-neutral-50;
+  border-color: $color-neutral-60;
+  color: $color-neutral-100;
+}
+
+.button--default:hover {
+  background: $color-neutral-60;
+}
+
+// Shared by both style=Default and style=Reveal — Figma defines one
+// disabled look regardless of which style the button normally uses.
+.button--default:disabled,
+.button--reveal:disabled {
+  background: $color-neutral-50;
+  border-color: $color-neutral-60;
+  color: $color-neutral-70;
+  cursor: default;
+}
+
+// style=Reveal (e.g. "Buy Letter"). Active is identical to the base state,
+// same as style=Default, so there's no separate :active rule here either.
+.button--reveal {
+  background: $color-success-60;
+  border-color: $color-success-70;
+  color: $color-success-100;
+}
+
+.button--reveal:hover {
+  background: $color-success-70;
+}
+
+// type=Text (e.g. Settings)
+.button--text {
+  height: auto;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font-size: 14px;
+  letter-spacing: 0.28px;
+  color: $color-neutral-100;
+}
+
+.button--text:hover .button__label,
+.button--text:active .button__label,
+.button--text.button--active .button__label,
+.button--text:disabled .button__label {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 2px;
+}
+
+.button--text:disabled {
+  color: $color-neutral-70;
+  cursor: default;
+}

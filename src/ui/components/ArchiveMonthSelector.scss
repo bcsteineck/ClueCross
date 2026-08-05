@@ -1,0 +1,49 @@
+@use '../../styles/tokens' as *;
+
+.archive-month-selector {
+  width: $content-width;
+  box-sizing: border-box;
+  background: $color-information-60;
+  border: $border-2 solid $color-information-70;
+  border-radius: $radius-4 $radius-4 0 0;
+}
+
+.archive-month-selector__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-8;
+  width: 100%;
+  box-sizing: border-box;
+  padding: $spacing-16 $spacing-8;
+  border: none;
+  background: transparent;
+  font-family: $font-clue;
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.48px;
+  color: $color-information-100;
+  cursor: pointer;
+}
+
+.archive-month-selector__trigger:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.archive-month-selector__chevron {
+  transition: transform 0.15s ease;
+}
+
+.archive-month-selector__trigger[aria-expanded='true'] .archive-month-selector__chevron {
+  transform: rotate(180deg);
+}
+
+.archive-month-selector__panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: $spacing-16;
+  padding: 0 $spacing-16 $spacing-16;
+}

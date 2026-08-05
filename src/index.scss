@@ -1,0 +1,40 @@
+@use './styles/tokens' as *;
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('/fonts/outfit-800.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Roboto';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/roboto-400-800.woff2') format('woff2');
+}
+
+:root {
+  color-scheme: light;
+  font: 16px/1.5 system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline-color: $color-neutral-100;
+}
+
+:root[data-reduce-motion='true'] * {
+  transition: none !important;
+  animation: none !important;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: #ffffff;
+}

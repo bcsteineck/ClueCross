@@ -1,0 +1,24 @@
+@use '../../styles/tokens' as *;
+
+.clue-header {
+  width: $content-width;
+  box-sizing: border-box;
+  padding: $spacing-16 $spacing-8;
+  background: $color-information-60;
+  border: $border-2 solid $color-information-70;
+  border-radius: $radius-4 $radius-4 0 0;
+  text-align: center;
+}
+
+.clue-header__text {
+  margin: 0;
+  font-family: $font-clue;
+  font-weight: 400;
+  font-size: 24px;
+  letter-spacing: -0.48px;
+  color: $color-information-100;
+
+  strong {
+    font-weight: 800;
+  }
+}

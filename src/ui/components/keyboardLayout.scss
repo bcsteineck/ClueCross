@@ -1,0 +1,13 @@
+@use '../../styles/tokens' as *;
+
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-4;
+}
+
+.keyboard__row {
+  display: flex;
+  gap: $spacing-4;
+}

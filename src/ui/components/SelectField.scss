@@ -1,0 +1,84 @@
+@use '../../styles/tokens' as *;
+
+.select-field {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+}
+
+.select-field__label {
+  font-family: $font-clue;
+  font-weight: 400;
+  font-size: 16px;
+}
+
+.select-field__label--hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.select-field__control {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.select-field__select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 120px;
+  height: 48px;
+  padding: $spacing-12 $spacing-32 $spacing-12 $spacing-16;
+  border: $border-2 solid;
+  border-radius: $radius-4;
+  background: $color-neutral-0;
+  font-family: $font-clue;
+  font-weight: 500;
+  font-size: 16px;
+  appearance: none;
+  cursor: pointer;
+}
+
+.select-field__chevron {
+  position: absolute;
+  right: $spacing-16;
+  pointer-events: none;
+  transition: transform 0.15s ease;
+}
+
+.select-field__select:focus ~ .select-field__chevron {
+  transform: rotate(180deg);
+}
+
+.select-field--default .select-field__label,
+.select-field--default .select-field__select {
+  color: $color-neutral-100;
+}
+
+.select-field--default .select-field__select {
+  border-color: $color-neutral-60;
+}
+
+.select-field--default .select-field__chevron {
+  color: $color-neutral-100;
+}
+
+.select-field--archive .select-field__label,
+.select-field--archive .select-field__select {
+  color: $color-information-100;
+}
+
+.select-field--archive .select-field__select {
+  border-color: $color-information-70;
+}
+
+.select-field--archive .select-field__chevron {
+  color: $color-information-100;
+}

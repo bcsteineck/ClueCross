@@ -1,0 +1,33 @@
+@use '../../styles/tokens' as *;
+
+.credit-badge {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-4;
+  min-width: 100px;
+  height: 48px;
+  padding: $spacing-12 $spacing-16;
+  border-radius: $radius-4;
+}
+
+.credit-badge__value {
+  font-family: $font-clue;
+  font-weight: 800;
+  font-size: 16px;
+
+  &:hover {
+    cursor: default;
+  }
+}
+
+.credit-badge--unused {
+  background: $color-achievement-60;
+  color: $color-achievement-100;
+}
+
+.credit-badge--used {
+  background: $color-error-60;
+  color: $color-error-100;
+}

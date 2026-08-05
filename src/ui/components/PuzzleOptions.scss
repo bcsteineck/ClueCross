@@ -1,0 +1,14 @@
+@use '../../styles/tokens' as *;
+
+.puzzle-options {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-16;
+  width: 100%;
+}
+
+.puzzle-options > * {
+  flex: 1 0 0;
+}
