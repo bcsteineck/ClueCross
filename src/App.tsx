@@ -82,6 +82,7 @@ function App() {
             date={selectedDate}
           />
         )}
+        <footer className="app__copyright">© {new Date().getFullYear()} ClueCross</footer>
       </div>
       {drawer && (
         <NavDrawer

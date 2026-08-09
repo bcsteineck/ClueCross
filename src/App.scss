@@ -22,6 +22,16 @@
   gap: $spacing-24;
 }
 
+.app__copyright {
+  flex-shrink: 0;
+  margin: 0;
+  font-family: $font-body;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  color: $color-neutral-65;
+}
+
 @include mobile {
   .app {
     width: 100%;
@@ -59,6 +69,8 @@
       - 48px
       - (var(--key-size) * (48 / 36) * 3 + #{$spacing-4 * 2})
       - #{$spacing-8 * 3}
+      - 16px
+      - #{$spacing-16}
     );
   }
 

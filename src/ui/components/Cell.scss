@@ -23,6 +23,12 @@
   border: none;
   background: transparent;
   color: transparent;
+  // caret-color defaults to currentColor, which Chrome resolves to this
+  // transparent color as expected — but iOS Safari doesn't trust an
+  // invisible currentColor for the caret specifically and substitutes a
+  // visible one instead, which is the blinking cursor showing up on mobile.
+  // Setting it explicitly closes that gap.
+  caret-color: transparent;
   // Fixed regardless of the cell's visual size (unlike .cell__letter below)
   // — iOS Safari auto-zooms the page on focus when a form control's
   // font-size is under 16px, and since this input is invisible there's no
