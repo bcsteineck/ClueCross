@@ -57,10 +57,23 @@ $content-width: 636px;
 // A small buffer past $content-width so the responsive layout kicks in
 // slightly before content would actually clip, rather than exactly at it.
 $mobile-breakpoint: 656px;
+// Below this viewport height, desktop-width layouts also switch to the
+// shrink-to-fit sizing (see compactLayout) rather than letting the puzzle
+// overflow the window.
+$compact-height-breakpoint: 1050px;
 
 // Breakpoints
 @mixin mobile {
   @media (max-width: $mobile-breakpoint) {
+    @content;
+  }
+}
+
+// Drives the shrink-to-fit sizing (cell/key/clue-text formulas) shared by
+// narrow phones and short-but-wide desktop windows — either condition alone
+// is enough, since each targets a different axis running out of room.
+@mixin compactLayout {
+  @media (max-width: $mobile-breakpoint), (max-height: $compact-height-breakpoint) {
     @content;
   }
 }

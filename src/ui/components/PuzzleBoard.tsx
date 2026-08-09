@@ -110,6 +110,14 @@ export function PuzzleBoard({
 
   function handleChangeValue(cellId: CellId, rawValue: string) {
     const letter = rawValue.slice(-1).toUpperCase()
+    if (letter && !/^[A-Z]$/.test(letter)) {
+      // Reject non-letter input (digits, symbols, etc.) — the controlled
+      // input's value prop hasn't changed, so React won't revert the DOM on
+      // its own; snap the field back to the last valid value directly.
+      const el = inputRefs.current[cellId]
+      if (el) el.value = values[cellId] ?? ''
+      return
+    }
     onSetCellValue(cellId, letter)
     if (letter) {
       // Every occurrence of a revealed letter was already placed by that

@@ -3,7 +3,7 @@
 .clue-header {
   width: 100%;
   box-sizing: border-box;
-  padding: $spacing-16 0;
+  padding: $spacing-8 0;
   border-top: $border-2 solid $color-neutral-100;
   border-bottom: $border-2 solid $color-neutral-100;
   text-align: center;
@@ -22,10 +22,10 @@
   }
 }
 
-@include mobile {
+@include compactLayout {
   .clue-header {
-    width: 100%;
     flex-shrink: 0;
+    padding: $spacing-8 0;
   }
 
   .clue-header__text {

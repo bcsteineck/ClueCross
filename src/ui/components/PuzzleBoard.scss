@@ -22,6 +22,11 @@
   // same structure as desktop, only the width becomes fluid.
   .puzzle-board {
     width: 100%;
+  }
+}
+
+@include compactLayout {
+  .puzzle-board {
     flex-shrink: 0;
   }
 

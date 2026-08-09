@@ -14,7 +14,12 @@
 
 @include mobile {
   .keyboard {
-    flex-shrink: 0;
     width: 100%;
+  }
+}
+
+@include compactLayout {
+  .keyboard {
+    flex-shrink: 0;
   }
 }

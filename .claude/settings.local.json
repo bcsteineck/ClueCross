@@ -23,7 +23,11 @@
       "Bash(sips -c 200 1350 --cropOffset 1040 0 \"/Users/brody/Desktop/Screenshot 2026-08-08 at 9.32.13 PM.png\" --out row20_crop.png)",
       "Bash(python3 *)",
       "Bash(sips *)",
-      "Bash(pkill -f \"vite --port 5184\")"
+      "Bash(pkill -f \"vite --port 5184\")",
+      "Bash(sort -t: -k3 -n)",
+      "Bash(npm test *)",
+      "Bash(lsof *)",
+      "Bash(kill 39062)"
     ]
   }
 }

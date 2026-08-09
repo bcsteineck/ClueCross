@@ -91,7 +91,7 @@
   outline: none;
 }
 
-@include mobile {
+@include compactLayout {
   .cell {
     width: var(--cell-size);
     height: var(--cell-size);

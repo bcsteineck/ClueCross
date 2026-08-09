@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { CellId } from '../../core/types'
 import type { Position } from '../../layout/types'
@@ -34,6 +35,27 @@ export function Cell({
   onKeyDownCell,
   inputRef,
 }: CellProps) {
+  const elementRef = useRef<HTMLInputElement | null>(null)
+  const isFirstRender = useRef(true)
+
+  // Safari (especially iOS) sometimes doesn't repaint an <input>'s text when
+  // its value is changed programmatically while it isn't the focused element
+  // — which is exactly what happens when typing auto-advances focus to the
+  // next cell, or a reveal sets a cell's letter from the Alphabet Keyboard.
+  // Forcing a reflow after such an update works around it.
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    const el = elementRef.current
+    if (!el || el === document.activeElement) return
+    const display = el.style.display
+    el.style.display = 'none'
+    void el.offsetHeight
+    el.style.display = display
+  }, [value])
+
   const accessibleLabel = isLocked
     ? `Locked, letter ${value || 'blank'}`
     : value
@@ -52,10 +74,14 @@ export function Cell({
 
   return (
     <input
-      ref={(el) => inputRef(cellId, el)}
+      ref={(el) => {
+        elementRef.current = el
+        inputRef(cellId, el)
+      }}
       type="text"
       id={`cell-${cellId}`}
       autoComplete="off"
+      inputMode="none"
       maxLength={1}
       value={value}
       readOnly={isLocked}

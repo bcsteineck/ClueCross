@@ -8,7 +8,7 @@
   max-width: 100%;
   margin: 0 auto;
   gap: $spacing-24;
-  padding-block: $spacing-24;
+  padding: $spacing-24 0 $spacing-32;
 }
 
 .app__content {
@@ -24,20 +24,25 @@
 
 @include mobile {
   .app {
-    box-sizing: border-box;
     width: 100%;
+    padding-inline: $spacing-16;
+  }
+}
+
+@include compactLayout {
+  .app {
+    box-sizing: border-box;
     height: 100vh;
     height: 100dvh;
     padding-block: $spacing-8;
-    padding-inline: $spacing-16;
-    gap: $spacing-20;
+    gap: $spacing-16;
     container-type: inline-size;
 
     // Continuously scaled sizing tokens shared by ClueHeader/Key/Cell below
     // — computed once here (relative to this element's own cqw) so every
     // consumer references the same numbers instead of repeating the formula.
     --key-size: max(24px, min(36px, calc((100cqw - 9 * #{$spacing-4}) / 10)));
-    --clue-font-size: clamp(16px, 4cqw, 24px);
+    --clue-font-size: clamp(20px, 4cqw, 24px);
 
     // Height left for the puzzle grid once the other rows (all effectively
     // fixed-height) are subtracted from the viewport. ClueHeader's height
@@ -59,5 +64,6 @@
 
   .puzzle {
     flex-shrink: 0;
+    gap: $spacing-16;
   }
 }

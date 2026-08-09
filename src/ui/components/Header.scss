@@ -45,16 +45,21 @@
 }
 
 @include mobile {
-  .header {
-    width: 100%;
-    flex-shrink: 0;
-  }
-
   .header__options {
     display: none;
   }
 
   .header__menu-button {
     display: flex;
+  }
+
+  .header__logo {
+    font-size: 28px;
+  }
+}
+
+@include compactLayout {
+  .header {
+    flex-shrink: 0;
   }
 }

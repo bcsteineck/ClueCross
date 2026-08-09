@@ -10,7 +10,7 @@
   border: none;
   border-radius: $radius-4;
   padding: 0;
-  background: $color-neutral-40;
+  background: $color-neutral-50;
   color: $color-neutral-100;
   cursor: pointer;
 }
@@ -61,7 +61,7 @@
   letter-spacing: -0.24px;
 }
 
-@include mobile {
+@include compactLayout {
   .key {
     width: var(--key-size);
     height: calc(var(--key-size) * (48 / 36));
