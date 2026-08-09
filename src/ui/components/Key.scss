@@ -15,8 +15,10 @@
   cursor: pointer;
 }
 
-.key:hover {
-  background: $color-neutral-45;
+@include hoverable {
+  .key:hover {
+    background: $color-neutral-45;
+  }
 }
 
 .key:active {
@@ -34,8 +36,10 @@
   color: $color-neutral-100;
 }
 
-.key--reveal:hover {
-  background: $color-cyan-110;
+@include hoverable {
+  .key--reveal:hover {
+    background: $color-cyan-110;
+  }
 }
 
 .key--reveal:active {

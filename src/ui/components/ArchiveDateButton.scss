@@ -27,23 +27,29 @@
 // others, matching the same pattern used for puzzle-cell states in
 // Cell.scss — hovering can never change how a completed or active date
 // looks, and active always wins over completed.
-.archive-date:hover:not(:disabled):not(.archive-date--completed):not(.archive-date--active) {
-  background: $color-neutral-45;
+@include hoverable {
+  .archive-date:hover:not(:disabled):not(.archive-date--completed):not(.archive-date--active) {
+    background: $color-neutral-45;
+  }
 }
 
 .archive-date--completed:not(.archive-date--active) {
   background: $color-highlight-100;
 
-  &:hover {
-    background: $color-highlight-110;
+  @include hoverable {
+    &:hover {
+      background: $color-highlight-110;
+    }
   }
 }
 
 .archive-date--active {
   background: $color-cyan-100;
 
-  &:hover {
-    background: $color-cyan-110;
+  @include hoverable {
+    &:hover {
+      background: $color-cyan-110;
+    }
   }
 }
 

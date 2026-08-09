@@ -35,9 +35,11 @@
 // no specificity tie-breaking between hover/locked/complete/active to get
 // wrong — hovering can never change how an active, locked, or complete
 // cell looks.
-.cell:hover:not(.cell--active):not(.cell--locked):not(.cell--complete):not(.cell--impossible) {
-  background: $color-neutral-40;
-  outline: none;
+@include hoverable {
+  .cell:hover:not(.cell--active):not(.cell--locked):not(.cell--complete):not(.cell--impossible) {
+    background: $color-neutral-40;
+    outline: none;
+  }
 }
 
 .cell--locked:not(.cell--active):not(:focus-visible) {

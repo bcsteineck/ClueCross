@@ -27,9 +27,11 @@
   color: $color-neutral-100;
 }
 
-.button--default:hover {
-  background: $color-cyan-100;
-  border-color: $color-cyan-100;
+@include hoverable {
+  .button--default:hover {
+    background: $color-cyan-100;
+    border-color: $color-cyan-100;
+  }
 }
 
 .button--default:active {
@@ -43,9 +45,11 @@
   color: $color-neutral-65;
   cursor: not-allowed;
 
-  &:hover {
-    background: $color-neutral-40;
-    border-color: $color-neutral-40;
+  @include hoverable {
+    &:hover {
+      background: $color-neutral-40;
+      border-color: $color-neutral-40;
+    }
   }
 }
 
@@ -66,8 +70,10 @@
 .button--pulse {
   animation: button-pulse 3s ease-out infinite;
 
-  &:hover {
-    animation: none;
+  @include hoverable {
+    &:hover {
+      animation: none;
+    }
   }
 }
 
@@ -92,7 +98,14 @@
   color: $color-neutral-100;
 }
 
-.button--text:hover .button__label,
+@include hoverable {
+  .button--text:hover .button__label {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-thickness: 2px;
+  }
+}
+
 .button--text:active .button__label,
 .button--text.button--active .button__label {
   text-decoration: underline;

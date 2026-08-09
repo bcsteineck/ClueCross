@@ -38,9 +38,11 @@
   border-bottom: none;
 }
 
-.archive-month-selector__trigger:hover {
-  text-decoration: underline;
-  text-underline-offset: 2px;
+@include hoverable {
+  .archive-month-selector__trigger:hover {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
 }
 
 .archive-month-selector__chevron {

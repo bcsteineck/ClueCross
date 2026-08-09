@@ -57,8 +57,10 @@
   cursor: pointer;
 }
 
-.result-modal__close:hover {
-  background: $color-neutral-50;
+@include hoverable {
+  .result-modal__close:hover {
+    background: $color-neutral-50;
+  }
 }
 
 .result-modal__award {

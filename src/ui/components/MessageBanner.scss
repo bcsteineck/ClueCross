@@ -43,8 +43,10 @@
   cursor: pointer;
 }
 
-.message-banner__close:hover {
-  background: rgba(0, 0, 0, 0.08);
+@include hoverable {
+  .message-banner__close:hover {
+    background: rgba(0, 0, 0, 0.08);
+  }
 }
 
 @include mobile {

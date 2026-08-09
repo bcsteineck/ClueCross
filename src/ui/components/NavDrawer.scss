@@ -75,9 +75,11 @@
   cursor: pointer;
 }
 
-.nav-drawer__back:hover,
-.nav-drawer__close:hover {
-  background: $color-neutral-50;
+@include hoverable {
+  .nav-drawer__back:hover,
+  .nav-drawer__close:hover {
+    background: $color-neutral-50;
+  }
 }
 
 .nav-drawer__nav {

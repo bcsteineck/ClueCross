@@ -77,3 +77,13 @@ $compact-height-breakpoint: 1050px;
     @content;
   }
 }
+
+// Scopes :hover styles to devices that actually have a hovering pointer.
+// Touch browsers simulate :hover on tap and only clear it on the next tap
+// elsewhere, so without this gate a tapped button's hover style visibly
+// "sticks" until something else is tapped.
+@mixin hoverable {
+  @media (hover: hover) and (pointer: fine) {
+    @content;
+  }
+}

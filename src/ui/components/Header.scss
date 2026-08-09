@@ -40,8 +40,10 @@
   cursor: pointer;
 }
 
-.header__menu-button:hover {
-  background: $color-neutral-50;
+@include hoverable {
+  .header__menu-button:hover {
+    background: $color-neutral-50;
+  }
 }
 
 @include mobile {
