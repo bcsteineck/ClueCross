@@ -1,19 +1,34 @@
 @use '../../styles/tokens' as *;
 
-.cell {
+// The actual visible box — border/background live here, not on .cell (the
+// input), since that input is fully transparent (see Cell.tsx for why).
+.cell-tile {
   box-sizing: border-box;
+  position: relative;
   width: 28px;
   height: 28px;
-  text-align: center;
-  font-family: $font-cell;
-  font-weight: 500;
-  font-size: 20px;
-  letter-spacing: -0.4px;
-  text-transform: uppercase;
-  color: $color-neutral-100;
   background: $color-neutral-0;
   border: $border-2 solid $color-neutral-100;
   border-radius: $radius-2;
+}
+
+.cell {
+  position: absolute;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: transparent;
+  // Fixed regardless of the cell's visual size (unlike .cell__letter below)
+  // — iOS Safari auto-zooms the page on focus when a form control's
+  // font-size is under 16px, and since this input is invisible there's no
+  // visual reason to ever shrink it.
+  font-size: 16px;
+  cursor: pointer;
 }
 
 // Cell.tsx selects a cell's text on focus so typing directly replaces the
@@ -30,34 +45,52 @@
   color: inherit;
 }
 
+.cell__letter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  font-family: $font-cell;
+  font-weight: 500;
+  font-size: 20px;
+  letter-spacing: -0.4px;
+  text-transform: uppercase;
+  color: $color-neutral-100;
+}
+
 // Hover only affects the plain default cell. Each of these states is
 // scoped with :not() to be mutually exclusive with the others, so there's
 // no specificity tie-breaking between hover/locked/complete/active to get
 // wrong — hovering can never change how an active, locked, or complete
 // cell looks.
 @include hoverable {
-  .cell:hover:not(.cell--active):not(.cell--locked):not(.cell--complete):not(.cell--impossible) {
+  .cell-tile:hover:not(:has(.cell--active)):not(:has(.cell--locked)):not(:has(.cell--complete)):not(
+      :has(.cell--impossible)
+    ) {
     background: $color-neutral-40;
-    outline: none;
   }
 }
 
 .cell--locked:not(.cell--active):not(:focus-visible) {
-  background: $color-cyan-100;
-  border-color: $color-neutral-100;
-  color: $color-neutral-100;
-  caret-color: transparent;
   outline: none;
   cursor: default;
 }
 
+.cell-tile:has(.cell--locked):not(:has(.cell--active)):not(:has(.cell:focus-visible)) {
+  background: $color-cyan-100;
+  border-color: $color-neutral-100;
+}
+
 .cell--complete:not(.cell--active):not(:focus-visible) {
-  background: $color-highlight-100;
-  border-color: $color-highlight-100;
-  color: $color-neutral-100;
-  caret-color: transparent;
   outline: none;
   cursor: default;
+}
+
+.cell-tile:has(.cell--complete):not(:has(.cell--active)):not(:has(.cell:focus-visible)) {
+  background: $color-highlight-100;
+  border-color: $color-highlight-100;
 }
 
 // The active/focused cell always shows this "you are here" treatment,
@@ -65,11 +98,13 @@
 // hover.
 .cell--active,
 .cell:focus-visible {
+  outline: none;
+}
+
+.cell-tile:has(.cell--active),
+.cell-tile:has(.cell:focus-visible) {
   background: $color-highlight-100;
   border-color: $color-neutral-100;
-  color: $color-neutral-100;
-  caret-color: transparent;
-  outline: none;
 }
 
 .cell--locked.cell--active,
@@ -86,17 +121,26 @@
 // looking at right after typing it.
 .cell--impossible,
 .cell--impossible:focus-visible {
-  background: $color-bust-100;
-  border-color: $color-neutral-100;
-  color: $color-neutral-100;
-  caret-color: transparent;
   outline: none;
 }
 
+.cell-tile:has(.cell--impossible),
+.cell-tile:has(.cell--impossible:focus-visible) {
+  background: $color-bust-100;
+  border-color: $color-neutral-100;
+}
+
 @include compactLayout {
-  .cell {
+  .cell-tile {
+    border-radius: 0;  
+  }
+
+  .cell-tile {
     width: var(--cell-size);
     height: var(--cell-size);
+  }
+
+  .cell__letter {
     font-size: calc(var(--cell-size) * (20 / 28));
   }
 }

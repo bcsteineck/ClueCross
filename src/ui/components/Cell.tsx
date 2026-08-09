@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react'
 import type { KeyboardEvent } from 'react'
 import type { CellId } from '../../core/types'
 import type { Position } from '../../layout/types'
@@ -35,27 +34,6 @@ export function Cell({
   onKeyDownCell,
   inputRef,
 }: CellProps) {
-  const elementRef = useRef<HTMLInputElement | null>(null)
-  const isFirstRender = useRef(true)
-
-  // Safari (especially iOS) sometimes doesn't repaint an <input>'s text when
-  // its value is changed programmatically while it isn't the focused element
-  // — which is exactly what happens when typing auto-advances focus to the
-  // next cell, or a reveal sets a cell's letter from the Alphabet Keyboard.
-  // Forcing a reflow after such an update works around it.
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false
-      return
-    }
-    const el = elementRef.current
-    if (!el || el === document.activeElement) return
-    const display = el.style.display
-    el.style.display = 'none'
-    void el.offsetHeight
-    el.style.display = display
-  }, [value])
-
   const accessibleLabel = isLocked
     ? `Locked, letter ${value || 'blank'}`
     : value
@@ -73,36 +51,47 @@ export function Cell({
     .join(' ')
 
   return (
-    <input
-      ref={(el) => {
-        elementRef.current = el
-        inputRef(cellId, el)
-      }}
-      type="text"
-      id={`cell-${cellId}`}
-      autoComplete="off"
-      inputMode="none"
-      maxLength={1}
-      value={value}
-      readOnly={isLocked}
-      tabIndex={isActive ? 0 : -1}
-      aria-label={accessibleLabel}
-      data-testid={`cell-${cellId}`}
-      className={className}
+    <div
+      className="cell-tile"
       style={{
         gridColumn: position.x + 1,
         gridRow: position.y + 1,
       }}
-      onFocus={(event) => {
-        onActivate(cellId)
-        if (!isLocked) {
-          event.target.select()
-        }
-      }}
-      onMouseDown={() => onPointerDownCell(cellId)}
-      onClick={() => onClickActivate(cellId)}
-      onChange={(event) => onChangeValue(cellId, event.target.value)}
-      onKeyDown={(event) => onKeyDownCell(cellId, event)}
-    />
+    >
+      {/* Invisible on purpose — Safari (especially iOS) sometimes doesn't
+          repaint an <input>'s own text when its value changes while it isn't
+          the focused element (auto-advancing after typing, or a reveal
+          setting a cell that was never focused, both do this). The visible
+          letter below is a plain span driven by ordinary React rendering,
+          which sidesteps that bug entirely; this input only ever handles
+          focus, caret, and keystrokes. */}
+      <input
+        ref={(el) => inputRef(cellId, el)}
+        type="text"
+        id={`cell-${cellId}`}
+        autoComplete="off"
+        inputMode="none"
+        maxLength={1}
+        value={value}
+        readOnly={isLocked}
+        tabIndex={isActive ? 0 : -1}
+        aria-label={accessibleLabel}
+        data-testid={`cell-${cellId}`}
+        className={className}
+        onFocus={(event) => {
+          onActivate(cellId)
+          if (!isLocked) {
+            event.target.select()
+          }
+        }}
+        onMouseDown={() => onPointerDownCell(cellId)}
+        onClick={() => onClickActivate(cellId)}
+        onChange={(event) => onChangeValue(cellId, event.target.value)}
+        onKeyDown={(event) => onKeyDownCell(cellId, event)}
+      />
+      <span className="cell__letter" aria-hidden="true">
+        {value}
+      </span>
+    </div>
   )
 }

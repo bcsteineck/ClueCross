@@ -31,6 +31,7 @@
   }
 
   .puzzle-board__grid {
+    gap: $spacing-1;
     // Capped at the Figma-spec 28px, otherwise governed by whichever of
     // width/height is more constraining for this puzzle's column/row
     // count, and floored so a pathological viewport can't collapse cells
