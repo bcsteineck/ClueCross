@@ -7,13 +7,12 @@
   gap: $spacing-8;
   height: 48px;
   padding: 0 $spacing-16;
-  border: $border-2 solid;
-  border-radius: $radius-4;
-  background: $color-neutral-0;
+  border-radius: $radius-full;
   font-family: $font-clue;
   font-weight: 500;
   font-size: 16px;
   letter-spacing: 0.32px;
+  border: $border-2 solid;
   cursor: pointer;
 }
 
@@ -21,38 +20,65 @@
   white-space: nowrap;
 }
 
-// style=Default. Active is intentionally identical to the base state (no
-// distinct pressed treatment), so there's no :active rule here.
+// style=Default
 .button--default {
-  background: $color-neutral-50;
-  border-color: $color-neutral-60;
+  background: $color-neutral-0;
+  border-color: $color-neutral-100;
   color: $color-neutral-100;
 }
 
 .button--default:hover {
-  background: $color-neutral-60;
+  background: $color-cyan-100;
+  border-color: $color-cyan-100;
 }
 
-// Shared by both style=Default and style=Reveal — Figma defines one
-// disabled look regardless of which style the button normally uses.
-.button--default:disabled,
-.button--reveal:disabled {
-  background: $color-neutral-50;
-  border-color: $color-neutral-60;
-  color: $color-neutral-70;
-  cursor: default;
+.button--default:active {
+  background: $color-cyan-110;
+  border-color: $color-cyan-110;
 }
 
-// style=Reveal (e.g. "Buy Letter"). Active is identical to the base state,
-// same as style=Default, so there's no separate :active rule here either.
-.button--reveal {
-  background: $color-success-60;
-  border-color: $color-success-70;
-  color: $color-success-100;
+.button--default:disabled {
+  background: $color-neutral-40;
+  border-color: $color-neutral-40;
+  color: $color-neutral-65;
+  cursor: not-allowed;
+
+  &:hover {
+    background: $color-neutral-40;
+    border-color: $color-neutral-40;
+  }
 }
 
-.button--reveal:hover {
-  background: $color-success-70;
+// Buy Letter call to action: rings of $color-cyan-100 expand outward from
+// the button and fade with distance, looping while the button is enabled.
+@keyframes button-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba($color-cyan-100, 1);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba($color-cyan-100, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba($color-cyan-100, 0);
+  }
+}
+
+.button--pulse {
+  animation: button-pulse 3s ease-out infinite;
+
+  &:hover {
+    animation: none;
+  }
+}
+
+.button--pulse:disabled {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button--pulse {
+    animation: none;
+  }
 }
 
 // type=Text (e.g. Settings)
@@ -68,14 +94,17 @@
 
 .button--text:hover .button__label,
 .button--text:active .button__label,
-.button--text.button--active .button__label,
-.button--text:disabled .button__label {
+.button--text.button--active .button__label {
   text-decoration: underline;
   text-underline-offset: 2px;
   text-decoration-thickness: 2px;
 }
 
 .button--text:disabled {
-  color: $color-neutral-70;
-  cursor: default;
+  color: $color-neutral-65;
+  cursor: not-allowed;
+
+  .button__label {
+    text-decoration: none;
+  }
 }

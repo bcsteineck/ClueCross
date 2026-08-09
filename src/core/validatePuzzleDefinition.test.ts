@@ -8,6 +8,12 @@ import { dogsPuzzle } from '../data/dogsPuzzle'
 import { dogsPuzzleLayout } from '../layout/dogsPuzzleLayout'
 import { spacePuzzle } from '../data/spacePuzzle'
 import { spacePuzzleLayout } from '../layout/spacePuzzleLayout'
+import { fruitPuzzle } from '../data/fruitPuzzle'
+import { fruitPuzzleLayout } from '../layout/fruitPuzzleLayout'
+import { magicPuzzle } from '../data/magicPuzzle'
+import { magicPuzzleLayout } from '../layout/magicPuzzleLayout'
+import { flowerPuzzle } from '../data/flowerPuzzle'
+import { flowerPuzzleLayout } from '../layout/flowerPuzzleLayout'
 
 function makeValidFixture(): { puzzle: PuzzleDefinition; layout: LayoutDefinition } {
   const puzzle: PuzzleDefinition = {
@@ -50,6 +56,21 @@ describe('validatePuzzleDefinition', () => {
 
   it('accepts the hand-authored Space puzzle', () => {
     const result = validatePuzzleDefinition(spacePuzzle, spacePuzzleLayout)
+    expect(result).toEqual({ valid: true, errors: [] })
+  })
+
+  it('accepts the hand-authored Fruit puzzle', () => {
+    const result = validatePuzzleDefinition(fruitPuzzle, fruitPuzzleLayout)
+    expect(result).toEqual({ valid: true, errors: [] })
+  })
+
+  it('accepts the hand-authored Magic puzzle', () => {
+    const result = validatePuzzleDefinition(magicPuzzle, magicPuzzleLayout)
+    expect(result).toEqual({ valid: true, errors: [] })
+  })
+
+  it('accepts the hand-authored Flower puzzle', () => {
+    const result = validatePuzzleDefinition(flowerPuzzle, flowerPuzzleLayout)
     expect(result).toEqual({ valid: true, errors: [] })
   })
 

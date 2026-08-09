@@ -1,4 +1,3 @@
-import { Check } from 'lucide-react'
 import './ArchiveDateButton.scss'
 
 export type ArchiveDateStatus = 'default' | 'completed' | 'active'
@@ -11,10 +10,9 @@ export interface ArchiveDateButtonProps {
   onSelect: () => void
 }
 
-// Completed state adds a checkmark alongside the color change so it isn't
-// communicated by color alone (Figma's mock only uses color). Active is
-// additionally conveyed via aria-current, since it's the same idea as the
-// browser's own "current page in a set of pages" semantics.
+// Completed/active are still conveyed to assistive tech via the aria-label
+// suffix and aria-current below, even though the visual distinction is
+// color-only now.
 export function ArchiveDateButton({
   day,
   status,
@@ -44,7 +42,6 @@ export function ArchiveDateButton({
       onClick={onSelect}
     >
       <span className="archive-date__day">{day}</span>
-      {completed && <Check size={14} className="archive-date__check" aria-hidden="true" />}
     </button>
   )
 }

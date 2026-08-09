@@ -63,6 +63,30 @@ describe('Archive', () => {
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
   })
 
+  it('clicking Archive again while already viewing it returns to the puzzle', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await openArchive(user)
+    expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
+
+    await openArchive(user)
+
+    expect(screen.getByRole('heading', { name: /clue:/i })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: /puzzle calendar/i })).toBeNull()
+  })
+
+  it('clicking the ClueCross logo returns to the puzzle from the archive', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+    await openArchive(user)
+    expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: /cluecross/i }))
+
+    expect(screen.getByRole('heading', { name: /clue:/i })).toBeTruthy()
+    expect(screen.queryByRole('group', { name: /puzzle calendar/i })).toBeNull()
+  })
+
   it('shows the current month initially', async () => {
     const user = userEvent.setup()
     render(<App />)
@@ -70,7 +94,7 @@ describe('Archive', () => {
     expect(screen.getByRole('button', { name: /august 2026/i })).toBeTruthy()
   })
 
-  it('weekday headings start with Monday', async () => {
+  it('weekday headings start with Sunday', async () => {
     const user = userEvent.setup()
     const { container } = render(<App />)
     await openArchive(user)
@@ -80,10 +104,10 @@ describe('Archive', () => {
       (el) => el.querySelector('.archive-calendar__visually-hidden')?.textContent,
     )
     expect(fullNames).toEqual([
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
+      'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday',
     ])
     const shortLabels = Array.from(weekdayEls).map((el) => el.textContent?.trim()[0])
-    expect(shortLabels.join(' ')).toBe('M T W T F S S')
+    expect(shortLabels.join(' ')).toBe('S M T W T F S')
   })
 
   it('aligns dates under the correct weekdays', async () => {
@@ -171,7 +195,7 @@ describe('Archive', () => {
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
   })
 
-  it('supports a completed state distinct from a plain color change', () => {
+  it('applies a completed state via aria-label and styling', () => {
     render(
       <ArchiveCalendar
         initialMonth={new Date(2026, 7, 5)}
@@ -183,7 +207,6 @@ describe('Archive', () => {
 
     const completedButton = screen.getByRole('button', { name: /august 5, 2026 \(completed\)/i })
     expect(completedButton.className).toContain('archive-date--completed')
-    expect(completedButton.querySelector('svg.archive-date__check')).toBeTruthy()
 
     const plainButton = screen.getByRole('button', { name: /open puzzle for august 4, 2026/i })
     expect(plainButton.className).not.toContain('archive-date--completed')
@@ -241,7 +264,9 @@ describe('Archive', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.tab() // -> Archive button (first focusable element)
+    await user.tab() // -> ClueCross logo (first focusable element)
+    await user.tab() // -> How to Play button
+    await user.tab() // -> Archive button
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /^archive$/i }))
     await user.keyboard('{Enter}')
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()

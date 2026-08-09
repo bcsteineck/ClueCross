@@ -10,42 +10,41 @@
   border: none;
   border-radius: $radius-4;
   padding: 0;
-  background: $color-neutral-60;
-  color: $color-black;
+  background: $color-neutral-40;
+  color: $color-neutral-100;
   cursor: pointer;
 }
 
 .key:hover {
-  background: $color-neutral-70;
+  background: $color-neutral-45;
 }
 
 .key:active {
-  background: $color-neutral-60;
+  background: $color-neutral-40;
 }
 
 .key:disabled {
   background: $color-neutral-40;
-  color: $color-neutral-70;
+  color: $color-neutral-65;
   cursor: default;
 }
 
-.key--reveal,
-.key--reveal:hover {
-  background: $color-success-60;
-  color: $color-success-100;
+.key--reveal {
+  background: $color-cyan-100;
+  color: $color-neutral-100;
 }
 
 .key--reveal:hover {
-  background: $color-success-70;
+  background: $color-cyan-110;
 }
 
 .key--reveal:active {
-  background: $color-success-60;
+  background: $color-cyan-100;
 }
 
 .key--reveal:disabled {
   background: $color-neutral-40;
-  color: $color-neutral-70;
+  color: $color-neutral-65;
 }
 
 .key__letter {
@@ -60,4 +59,19 @@
   font-weight: 500;
   font-size: 12px;
   letter-spacing: -0.24px;
+}
+
+@include mobile {
+  .key {
+    width: var(--key-size);
+    height: calc(var(--key-size) * (48 / 36));
+  }
+
+  .key__letter {
+    font-size: calc(var(--key-size) * (20 / 36));
+  }
+
+  .key__cost {
+    font-size: calc(var(--key-size) * (12 / 36));
+  }
 }

@@ -14,30 +14,30 @@ import {
 } from './archiveCalendar'
 
 describe('WEEKDAYS', () => {
-  it('starts with Monday', () => {
-    expect(WEEKDAYS[0]).toEqual({ short: 'M', full: 'Monday' })
-    expect(WEEKDAYS.map((w) => w.short).join(' ')).toBe('M T W T F S S')
+  it('starts with Sunday', () => {
+    expect(WEEKDAYS[0]).toEqual({ short: 'S', full: 'Sunday' })
+    expect(WEEKDAYS.map((w) => w.short).join(' ')).toBe('S M T W T F S')
   })
 
-  it('ends with Sunday', () => {
-    expect(WEEKDAYS[6]).toEqual({ short: 'S', full: 'Sunday' })
+  it('ends with Saturday', () => {
+    expect(WEEKDAYS[6]).toEqual({ short: 'S', full: 'Saturday' })
   })
 })
 
 describe('getLeadingBlankCount', () => {
-  it('is 0 when the month starts on a Monday', () => {
+  it('is 1 when the month starts on a Monday', () => {
     // 2026-06-01 is a Monday.
-    expect(getLeadingBlankCount(2026, 5)).toBe(0)
+    expect(getLeadingBlankCount(2026, 5)).toBe(1)
   })
 
-  it('is 6 when the month starts on a Sunday', () => {
+  it('is 0 when the month starts on a Sunday', () => {
     // 2026-11-01 is a Sunday.
-    expect(getLeadingBlankCount(2026, 10)).toBe(6)
+    expect(getLeadingBlankCount(2026, 10)).toBe(0)
   })
 
-  it('is 5 when the month starts on a Saturday', () => {
+  it('is 6 when the month starts on a Saturday', () => {
     // 2026-08-01 is a Saturday.
-    expect(getLeadingBlankCount(2026, 7)).toBe(5)
+    expect(getLeadingBlankCount(2026, 7)).toBe(6)
   })
 })
 
@@ -56,16 +56,16 @@ describe('getDaysInMonth', () => {
 })
 
 describe('buildMonthGrid', () => {
-  it('pads August 2026 with 5 leading blanks so day 1 lands on Saturday', () => {
+  it('pads August 2026 with 6 leading blanks so day 1 lands on Saturday', () => {
     const grid = buildMonthGrid(2026, 7)
-    expect(grid.slice(0, 5)).toEqual([null, null, null, null, null])
-    expect(grid[5]).toBe(1)
+    expect(grid.slice(0, 6)).toEqual([null, null, null, null, null, null])
+    expect(grid[6]).toBe(1)
     expect(grid.at(-1)).toBe(31)
-    expect(grid).toHaveLength(5 + 31)
+    expect(grid).toHaveLength(6 + 31)
   })
 
-  it('has no leading blanks for a month starting on Monday', () => {
-    const grid = buildMonthGrid(2026, 5) // June 2026 starts on Monday
+  it('has no leading blanks for a month starting on Sunday', () => {
+    const grid = buildMonthGrid(2026, 10) // November 2026 starts on Sunday
     expect(grid[0]).toBe(1)
   })
 

@@ -1,15 +1,15 @@
 // Pure date/grid math for the Archive calendar — no React, no app state,
 // so month-grid construction and formatting can be unit tested directly.
 
-// Monday-first, matching the calendar's weekday row (M T W T F S S).
+// Sunday-first, matching the calendar's weekday row (S M T W T F S).
 export const WEEKDAYS = [
+  { short: 'S', full: 'Sunday' },
   { short: 'M', full: 'Monday' },
   { short: 'T', full: 'Tuesday' },
   { short: 'W', full: 'Wednesday' },
   { short: 'T', full: 'Thursday' },
   { short: 'F', full: 'Friday' },
   { short: 'S', full: 'Saturday' },
-  { short: 'S', full: 'Sunday' },
 ] as const
 
 const MONTH_NAMES = [
@@ -35,11 +35,11 @@ export function isSameDate(a: Date, b: Date): boolean {
   )
 }
 
-// JS Date.getDay() is Sunday-first (0-6); convert to a Monday-first offset
-// (0=Monday .. 6=Sunday) to know how many leading blanks a month needs.
+// JS Date.getDay() is already Sunday-first (0=Sunday .. 6=Saturday), which
+// matches the calendar's column order, so it doubles directly as the
+// leading-blank count a month needs.
 export function getLeadingBlankCount(year: number, month: number): number {
-  const firstWeekday = new Date(year, month, 1).getDay()
-  return (firstWeekday + 6) % 7
+  return new Date(year, month, 1).getDay()
 }
 
 export function getDaysInMonth(year: number, month: number): number {

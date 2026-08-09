@@ -6,12 +6,17 @@
 
 .archive-calendar__body {
   box-sizing: border-box;
-  width: $content-width;
+  width: 100%;
   padding: $spacing-8 $spacing-32 $spacing-32;
   background: $color-neutral-0;
-  border: $border-2 solid $color-information-70;
   border-top: none;
-  border-radius: 0 0 $radius-4 $radius-4;
+}
+
+@include mobile {
+  .archive-calendar__body {
+    width: 100%;
+    padding: $spacing-8 $spacing-16 $spacing-16;
+  }
 }
 
 .archive-calendar__weekdays,
@@ -31,9 +36,11 @@
   justify-content: center;
   aspect-ratio: 1 / 1;
   background: $color-neutral-0;
+  border-radius: $radius-4;
   font-family: $font-cell;
   font-weight: 600;
-  font-size: 24px;
+  font-size: 28px;
+  letter-spacing: -0.56px;
   color: $color-neutral-100;
 }
 

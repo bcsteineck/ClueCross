@@ -1,0 +1,166 @@
+@use '../../styles/tokens' as *;
+
+.nav-drawer__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+.nav-drawer {
+  box-sizing: border-box;
+  position: fixed;
+  inset-block: 0;
+  right: 0;
+  width: min(280px, 80vw);
+  display: flex;
+  flex-direction: column;
+  padding: $spacing-32 $spacing-20;
+  background: $color-neutral-0;
+  box-shadow: $shadow-large;
+  // Slides in via a transition triggered by the --open modifier (added a
+  // moment after mount, see NavDrawer.tsx) rather than a @keyframes
+  // animation. Transitions only play when the transform value actually
+  // changes, so toggling reduce-motion off later — which removes the
+  // global `transition: none !important` override — can't replay this: the
+  // transform isn't changing at that point, so there's nothing to animate.
+  // A @keyframes animation doesn't have that guarantee — its animation-name
+  // going from `none` back to a real value restarts it from scratch, which
+  // is exactly what happened before this fix.
+  transform: translateX(100%);
+  transition: transform 0.2s ease-out;
+}
+
+.nav-drawer--open {
+  transform: translateX(0);
+}
+
+.nav-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-8;
+  margin-bottom: $spacing-20;
+}
+
+.nav-drawer__header-start {
+  display: flex;
+  align-items: center;
+  gap: $spacing-8;
+  min-width: 0;
+}
+
+.nav-drawer__title {
+  margin: 0;
+  font-family: $font-clue;
+  font-weight: 800;
+  font-size: 24px;
+  color: $color-neutral-100;
+}
+
+.nav-drawer__back,
+.nav-drawer__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-4;
+  background: transparent;
+  color: $color-neutral-100;
+  cursor: pointer;
+}
+
+.nav-drawer__back:hover,
+.nav-drawer__close:hover {
+  background: $color-neutral-50;
+}
+
+.nav-drawer__nav {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-20;
+}
+
+.nav-drawer__nav .button--text {
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.nav-drawer__section {
+  margin-bottom: $spacing-20;
+}
+
+.nav-drawer__section:last-child {
+  margin-bottom: 0;
+}
+
+.nav-drawer__section-title {
+  margin: 0 0 $spacing-12;
+  font-family: $font-clue;
+  font-weight: 600;
+  font-size: 16px;
+  color: $color-neutral-100;
+}
+
+.nav-drawer__checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: $spacing-8;
+  font-family: $font-clue;
+  font-size: 16px;
+  color: $color-neutral-100;
+  cursor: pointer;
+}
+
+.nav-drawer__checkbox {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+}
+
+.nav-drawer__checkbox input {
+  appearance: none;
+  margin: 0;
+  width: 20px;
+  height: 20px;
+  border: $border-2 solid $color-neutral-100;
+  border-radius: $radius-2;
+  background: $color-neutral-0;
+  cursor: pointer;
+}
+
+.nav-drawer__checkbox input:checked {
+  background: $color-cyan-100;
+  border-color: $color-cyan-100;
+}
+
+.nav-drawer__checkbox-icon {
+  position: absolute;
+  inset: 2px;
+  color: $color-neutral-100;
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.nav-drawer__checkbox input:checked ~ .nav-drawer__checkbox-icon {
+  visibility: visible;
+}
+
+.nav-drawer__confirm-text {
+  margin: 0 0 $spacing-12;
+  font-family: $font-clue;
+  font-size: 14px;
+  color: $color-neutral-100;
+}
+
+.nav-drawer__confirm-actions {
+  display: flex;
+  gap: $spacing-8;
+}

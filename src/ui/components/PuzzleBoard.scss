@@ -2,18 +2,45 @@
 
 .puzzle-board {
   box-sizing: border-box;
-  width: $content-width;
+  width: 100%;
   display: flex;
   justify-content: center;
-  padding: $spacing-16;
   background: $color-neutral-0;
-  border: $border-2 solid $color-information-70;
   border-top: none;
-  border-radius: 0 0 $radius-4 $radius-4;
 }
 
 .puzzle-board__grid {
   display: grid;
   gap: $spacing-2;
   width: fit-content;
+}
+
+@include mobile {
+  // .puzzle-board keeps the border/background (rather than the grid
+  // holding them) so it always matches ClueHeader's full width and the two
+  // read as one connected card, with the grid just centered inside it —
+  // same structure as desktop, only the width becomes fluid.
+  .puzzle-board {
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .puzzle-board__grid {
+    // Capped at the Figma-spec 28px, otherwise governed by whichever of
+    // width/height is more constraining for this puzzle's column/row
+    // count, and floored so a pathological viewport can't collapse cells
+    // to nothing (an oversized grid at that point is expected to make the
+    // page scroll as a fallback, rather than render illegibly).
+    --cell-size: max(
+      16px,
+      min(
+        28px,
+        calc((100cqw - #{$spacing-16 * 2} - (var(--cols) - 1) * #{$spacing-2}) / var(--cols)),
+        calc(
+          (var(--board-available-height) - #{$spacing-16 * 2} - (var(--rows) - 1) * #{$spacing-2}) /
+            var(--rows)
+        )
+      )
+    );
+  }
 }

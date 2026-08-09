@@ -12,7 +12,7 @@
   text-transform: uppercase;
   color: $color-neutral-100;
   background: $color-neutral-0;
-  border: $border-2 solid $color-neutral-70;
+  border: $border-2 solid $color-neutral-100;
   border-radius: $radius-2;
 }
 
@@ -35,24 +35,24 @@
 // no specificity tie-breaking between hover/locked/complete/active to get
 // wrong — hovering can never change how an active, locked, or complete
 // cell looks.
-.cell:hover:not(.cell--active):not(.cell--locked):not(.cell--complete) {
-  background: $color-neutral-60;
+.cell:hover:not(.cell--active):not(.cell--locked):not(.cell--complete):not(.cell--impossible) {
+  background: $color-neutral-40;
   outline: none;
 }
 
 .cell--locked:not(.cell--active):not(:focus-visible) {
-  background: $color-success-60;
-  border-color: $color-success-70;
-  color: $color-success-100;
+  background: $color-cyan-100;
+  border-color: $color-neutral-100;
+  color: $color-neutral-100;
   caret-color: transparent;
   outline: none;
   cursor: default;
 }
 
 .cell--complete:not(.cell--active):not(:focus-visible) {
-  background: $color-achievement-60;
-  border-color: $color-achievement-80;
-  color: $color-achievement-100;
+  background: $color-highlight-100;
+  border-color: $color-highlight-100;
+  color: $color-neutral-100;
   caret-color: transparent;
   outline: none;
   cursor: default;
@@ -63,9 +63,9 @@
 // hover.
 .cell--active,
 .cell:focus-visible {
-  background: $color-achievement-60;
-  border-color: $color-achievement-80;
-  color: $color-achievement-100;
+  background: $color-highlight-100;
+  border-color: $color-neutral-100;
+  color: $color-neutral-100;
   caret-color: transparent;
   outline: none;
 }
@@ -75,4 +75,26 @@
 .cell--complete.cell--active,
 .cell--complete:focus-visible {
   cursor: default;
+}
+
+// A manually-entered letter that's provably wrong — every occurrence of it
+// was already placed elsewhere by a reveal, so it can't be this cell's
+// answer. Wins over the active/focus treatment above (same specificity,
+// later in the cascade) since this is exactly the cell the player is
+// looking at right after typing it.
+.cell--impossible,
+.cell--impossible:focus-visible {
+  background: $color-bust-100;
+  border-color: $color-neutral-100;
+  color: $color-neutral-100;
+  caret-color: transparent;
+  outline: none;
+}
+
+@include mobile {
+  .cell {
+    width: var(--cell-size);
+    height: var(--cell-size);
+    font-size: calc(var(--cell-size) * (20 / 28));
+  }
 }

@@ -38,3 +38,12 @@ body {
   justify-content: center;
   background: #ffffff;
 }
+
+#root {
+  // Explicit, rather than left to shrink-to-fit its content's width: .app
+  // uses container-type:inline-size (for its continuous cqw-based sizing
+  // formulas), which makes it report no intrinsic width to this ancestor —
+  // without a definite width here, that collapses #root (and everything
+  // inside it) to 0.
+  width: 100%;
+}

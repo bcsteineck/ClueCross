@@ -30,18 +30,23 @@
   align-items: center;
 }
 
+.select-field__label {
+  color: $color-neutral-100;
+}
+
 .select-field__select {
   box-sizing: border-box;
   width: 100%;
   min-width: 120px;
   height: 48px;
   padding: $spacing-12 $spacing-32 $spacing-12 $spacing-16;
-  border: $border-2 solid;
+  border: $border-2 solid $color-neutral-100;
   border-radius: $radius-4;
   background: $color-neutral-0;
   font-family: $font-clue;
   font-weight: 500;
   font-size: 16px;
+  color: $color-neutral-100;
   appearance: none;
   cursor: pointer;
 }
@@ -49,36 +54,11 @@
 .select-field__chevron {
   position: absolute;
   right: $spacing-16;
+  color: $color-neutral-100;
   pointer-events: none;
   transition: transform 0.15s ease;
 }
 
 .select-field__select:focus ~ .select-field__chevron {
   transform: rotate(180deg);
-}
-
-.select-field--default .select-field__label,
-.select-field--default .select-field__select {
-  color: $color-neutral-100;
-}
-
-.select-field--default .select-field__select {
-  border-color: $color-neutral-60;
-}
-
-.select-field--default .select-field__chevron {
-  color: $color-neutral-100;
-}
-
-.select-field--archive .select-field__label,
-.select-field--archive .select-field__select {
-  color: $color-information-100;
-}
-
-.select-field--archive .select-field__select {
-  border-color: $color-information-70;
-}
-
-.select-field--archive .select-field__chevron {
-  color: $color-information-100;
 }

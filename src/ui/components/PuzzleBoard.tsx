@@ -1,5 +1,5 @@
-import { useEffect, useImperativeHandle, useRef } from 'react'
-import type { KeyboardEvent, Ref } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef } from 'react'
+import type { CSSProperties, KeyboardEvent, Ref } from 'react'
 import type { CellId, PuzzleDefinition } from '../../core/types'
 import { getAvailableDirectionsForCell } from '../../layout/entryDirection'
 import type { Direction } from '../../layout/entryDirection'
@@ -14,12 +14,16 @@ export interface PuzzleBoardProps {
   layout: LayoutDefinition
   values: Record<CellId, string>
   lockedCellIds: Record<CellId, true>
+  revealedLetters: Record<string, true>
   isComplete: boolean
   activeCellId: CellId | null
   activeDirection: Direction
+  impossibleCellId: CellId | null
   onSetCellValue: (cellId: CellId, value: string) => void
   onActiveCellChange: (cellId: CellId) => void
   onActiveDirectionChange: (direction: Direction) => void
+  onImpossibleLetterAttempt: (cellId: CellId, letter: string) => void
+  onImpossibleLetterCleared: () => void
   ref?: Ref<PuzzleBoardHandle>
 }
 
@@ -42,15 +46,31 @@ export function PuzzleBoard({
   layout,
   values,
   lockedCellIds,
+  revealedLetters,
   isComplete,
   activeCellId,
   activeDirection,
+  impossibleCellId,
   onSetCellValue,
   onActiveCellChange,
   onActiveDirectionChange,
+  onImpossibleLetterAttempt,
+  onImpossibleLetterCleared,
   ref,
 }: PuzzleBoardProps) {
   const inputRefs = useRef<Record<CellId, HTMLInputElement | null>>({})
+
+  // Grid dimensions, derived from cell positions so the mobile layout can
+  // size cells to fit the viewport (see PuzzleBoard.scss) without needing
+  // an explicit column/row count in LayoutDefinition.
+  const cols = useMemo(
+    () => Math.max(...Object.values(layout.cellPositions).map((position) => position.x)) + 1,
+    [layout],
+  )
+  const rows = useMemo(
+    () => Math.max(...Object.values(layout.cellPositions).map((position) => position.y)) + 1,
+    [layout],
+  )
 
   // Mirrors activeCellId in a ref so a mousedown handler (which fires
   // before the resulting focus event) can tell whether the clicked cell
@@ -92,6 +112,12 @@ export function PuzzleBoard({
     const letter = rawValue.slice(-1).toUpperCase()
     onSetCellValue(cellId, letter)
     if (letter) {
+      // Every occurrence of a revealed letter was already placed by that
+      // reveal — this cell wasn't among them (it's still unlocked, or the
+      // input couldn't have changed), so this letter is provably wrong here.
+      if (revealedLetters[letter]) {
+        onImpossibleLetterAttempt(cellId, letter)
+      }
       const forward: ArrowDirection = activeDirection === 'across' ? 'right' : 'down'
       const next = getCellsInDirection(layout, cellId, forward).find(
         (id) => !lockedCellIds[id],
@@ -107,6 +133,11 @@ export function PuzzleBoard({
 
     if (values[cellId]) {
       onSetCellValue(cellId, '')
+      // Deleting the impossible letter resolves the exact thing the alert
+      // was about, so the alert (banner + cell highlight) clears with it.
+      if (cellId === impossibleCellId) {
+        onImpossibleLetterCleared()
+      }
       return
     }
 
@@ -116,6 +147,9 @@ export function PuzzleBoard({
     )
     if (previous) {
       onSetCellValue(previous, '')
+      if (previous === impossibleCellId) {
+        onImpossibleLetterCleared()
+      }
       focusCell(previous)
     }
   }
@@ -154,7 +188,12 @@ export function PuzzleBoard({
 
   return (
     <div className="puzzle-board">
-      <div role="group" aria-label="Puzzle board" className="puzzle-board__grid">
+      <div
+        role="group"
+        aria-label="Puzzle board"
+        className="puzzle-board__grid"
+        style={{ '--cols': cols, '--rows': rows } as CSSProperties}
+      >
         {Object.keys(puzzle.cells).map((cellId) => (
           <Cell
             key={cellId}
@@ -164,6 +203,7 @@ export function PuzzleBoard({
             isLocked={!!lockedCellIds[cellId]}
             isActive={cellId === effectiveActiveCellId}
             isComplete={isComplete}
+            isImpossible={cellId === impossibleCellId}
             onActivate={(id) => activateCell(id, { allowToggle: false })}
             onPointerDownCell={handlePointerDownCell}
             onClickActivate={(id) =>

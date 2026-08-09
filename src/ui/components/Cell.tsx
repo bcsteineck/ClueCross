@@ -10,6 +10,7 @@ export interface CellProps {
   isLocked: boolean
   isActive: boolean
   isComplete: boolean
+  isImpossible: boolean
   onActivate: (cellId: CellId) => void
   onPointerDownCell: (cellId: CellId) => void
   onClickActivate: (cellId: CellId) => void
@@ -25,6 +26,7 @@ export function Cell({
   isLocked,
   isActive,
   isComplete,
+  isImpossible,
   onActivate,
   onPointerDownCell,
   onClickActivate,
@@ -43,6 +45,7 @@ export function Cell({
     isLocked && 'cell--locked',
     isActive && 'cell--active',
     isComplete && 'cell--complete',
+    isImpossible && 'cell--impossible',
   ]
     .filter(Boolean)
     .join(' ')

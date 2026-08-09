@@ -11,3 +11,10 @@
   display: flex;
   gap: $spacing-4;
 }
+
+@include mobile {
+  .keyboard {
+    flex-shrink: 0;
+    width: 100%;
+  }
+}

@@ -1,4 +1,6 @@
 import { CircleStar } from 'lucide-react'
+import type { AwardLevel } from '../../core/awardLevel'
+import { getAwardLevel } from '../../core/awardLevel'
 import './CreditBadge.scss'
 
 export interface CreditBadgeProps {
@@ -6,17 +8,17 @@ export interface CreditBadgeProps {
   ariaLabel: string
   testId: string
   // Only meaningful for a numeric value; explicit values (e.g. non-score
-  // content) can pin the styling directly instead of deriving it from sign.
-  variant?: 'unused' | 'used'
+  // content) can pin the styling directly instead of deriving it from the
+  // award level.
+  variant?: AwardLevel
   showIcon?: boolean
   // Text shown before the value (e.g. "Score:"). Kept separate from
-  // `value` so sign-based variant detection still sees the raw number.
+  // `value` so award-level variant detection still sees the raw number.
   label?: string
 }
 
-// A badge whose styling reflects the sign of a numeric value: the
-// "unused credits" gold look for zero/positive, and the "used credits"
-// red look once negative.
+// A badge whose styling reflects the award level of a numeric value, using
+// the same gold/silver/bronze/bust tiers as the end-of-puzzle result.
 export function CreditBadge({
   value,
   ariaLabel,
@@ -25,7 +27,7 @@ export function CreditBadge({
   showIcon = true,
   label,
 }: CreditBadgeProps) {
-  const resolvedVariant = variant ?? (typeof value === 'number' && value < 0 ? 'used' : 'unused')
+  const resolvedVariant = variant ?? (typeof value === 'number' ? getAwardLevel(value) : 'gold')
   return (
     <div
       className={`credit-badge credit-badge--${resolvedVariant}`}

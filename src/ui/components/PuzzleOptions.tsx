@@ -23,7 +23,7 @@ export function PuzzleOptions({ score, mode, buyDisabled, onToggle }: PuzzleOpti
         testId="score-badge"
       />
       <Button
-        variant={isTyping ? 'reveal' : 'default'}
+        pulse={isTyping}
         disabled={isTyping && buyDisabled}
         iconLeft={
           isTyping ? (

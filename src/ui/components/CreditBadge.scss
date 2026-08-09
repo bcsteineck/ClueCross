@@ -22,12 +22,22 @@
   }
 }
 
-.credit-badge--unused {
-  background: $color-achievement-60;
-  color: $color-achievement-100;
+.credit-badge--gold {
+  background: $color-gold;
+  color: $color-neutral-100;
 }
 
-.credit-badge--used {
-  background: $color-error-60;
-  color: $color-error-100;
+.credit-badge--silver {
+  background: $color-silver;
+  color: $color-neutral-100;
+}
+
+.credit-badge--bronze {
+  background: $color-bronze;
+  color: $color-neutral-100;
+}
+
+.credit-badge--bust {
+  background: $color-bust-100;
+  color: $color-neutral-100;
 }

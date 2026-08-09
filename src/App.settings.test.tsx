@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { toDateKey } from './core/archiveCalendar'
 import { isDateCompleted } from './core/completionTracking'
+import { markOnboardingCompleted } from './core/onboardingCompletion'
 import { dogsPuzzle } from './data/dogsPuzzle'
 
 // jsdom's default test origin doesn't provide a working localStorage, so
@@ -60,6 +61,11 @@ vi.mock('./data/archivePuzzles', async () => {
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', createMemoryStorage())
+  // This file exercises the Settings drawer, not onboarding — without this,
+  // stubbing a real (empty) localStorage makes every render here look like
+  // a genuine first visit, and the Onboarding modal would open alongside
+  // whatever dialog each test is actually asserting on.
+  markOnboardingCompleted()
 })
 
 afterEach(() => {
@@ -76,7 +82,7 @@ async function openSettings(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /^settings$/i }))
 }
 
-describe('Settings modal', () => {
+describe('Settings drawer', () => {
   it('opens on Settings click and closes via the X button', async () => {
     const user = userEvent.setup()
     render(<App />)
@@ -107,7 +113,7 @@ describe('Settings modal', () => {
     await user.click(screen.getByRole('heading', { name: /settings/i }))
     expect(screen.getByRole('dialog')).toBeTruthy()
 
-    const overlay = container.querySelector('.settings-modal__overlay')
+    const overlay = container.querySelector('.nav-drawer__overlay')
     expect(overlay).toBeTruthy()
     await user.click(overlay as Element)
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -199,6 +205,55 @@ describe('Settings modal', () => {
   })
 })
 
+describe('Mobile menu', () => {
+  async function openMenu(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /open menu/i }))
+  }
+
+  it('opens into the menu view, listing Archive and Settings', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openMenu(user)
+    const dialog = screen.getByRole('dialog', { name: /menu/i })
+    expect(within(dialog).getByRole('button', { name: /^archive$/i })).toBeTruthy()
+  })
+
+  it('navigates to the settings view in place, without closing the drawer', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openMenu(user)
+    const dialog = screen.getByRole('dialog', { name: /menu/i })
+    await user.click(within(dialog).getByRole('button', { name: /^settings$/i }))
+
+    expect(screen.getByRole('dialog', { name: /settings/i })).toBeTruthy()
+    expect(screen.getByRole('checkbox', { name: /reduce motion/i })).toBeTruthy()
+  })
+
+  it('returns to the menu view via the back button, without closing the drawer', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openMenu(user)
+    let dialog = screen.getByRole('dialog', { name: /menu/i })
+    await user.click(within(dialog).getByRole('button', { name: /^settings$/i }))
+    await user.click(screen.getByRole('button', { name: /back to menu/i }))
+
+    dialog = screen.getByRole('dialog', { name: /menu/i })
+    expect(within(dialog).getByRole('button', { name: /^archive$/i })).toBeTruthy()
+  })
+
+  it('has no back button when settings is opened directly from the desktop header', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('button', { name: /^settings$/i }))
+    expect(screen.getByRole('dialog', { name: /settings/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /back to menu/i })).toBeNull()
+  })
+})
+
 describe('Completion tracking', () => {
   it('marks a date completed once its puzzle is solved, distinct from the active date', async () => {
     const user = userEvent.setup()
@@ -208,7 +263,7 @@ describe('Completion tracking', () => {
       await user.click(getCell(cell.id))
       await user.keyboard(cell.correctLetter)
     }
-    expect(isDateCompleted(toDateKey(TODAY))).toBe(true)
+    expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
 
     // Switch to yesterday's puzzle so today is no longer the "active" date
     // — active takes visual priority over completed in the calendar.
@@ -232,12 +287,12 @@ describe('Completion tracking', () => {
       await user.click(getCell(cell.id))
       await user.keyboard(cell.correctLetter)
     }
-    expect(isDateCompleted(toDateKey(TODAY))).toBe(true)
+    expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
 
     await openSettings(user)
     await user.click(screen.getByRole('button', { name: /reset current puzzle/i }))
     await user.click(screen.getByRole('button', { name: /^reset$/i }))
 
-    expect(isDateCompleted(toDateKey(TODAY))).toBe(true)
+    expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
   })
 })

@@ -1,0 +1,48 @@
+@use '../../styles/tokens' as *;
+
+.archive-calendar-key {
+  box-sizing: border-box;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-24;
+  width: 100%;
+  padding: $spacing-16 $spacing-20;
+}
+
+.archive-calendar-key__item {
+  display: flex;
+  align-items: center;
+  gap: $spacing-12;
+}
+
+.archive-calendar-key__swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: $radius-2;
+  flex-shrink: 0;
+}
+
+.archive-calendar-key__swatch--completed {
+  background: $color-highlight-100;
+}
+
+.archive-calendar-key__swatch--selected {
+  background: $color-cyan-100;
+}
+
+.archive-calendar-key__label {
+  font-family: $font-clue;
+  font-weight: 500;
+  font-size: 12px;
+  letter-spacing: 0.24px;
+  color: $color-neutral-100;
+  white-space: nowrap;
+}
+
+@include mobile {
+  .archive-calendar-key {
+    padding: $spacing-16;
+  }
+}

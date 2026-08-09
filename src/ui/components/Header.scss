@@ -4,19 +4,57 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: $content-width;
+  width: 100%;
 }
 
 .header__logo {
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: none;
   font-family: $font-logo;
   font-weight: 800;
   font-size: 32px;
   letter-spacing: 0.64px;
   color: $color-neutral-100;
+  cursor: pointer;
 }
 
 .header__options {
   display: flex;
   align-items: center;
   gap: $spacing-32;
+}
+
+.header__menu-button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-4;
+  background: transparent;
+  color: $color-neutral-100;
+  cursor: pointer;
+}
+
+.header__menu-button:hover {
+  background: $color-neutral-50;
+}
+
+@include mobile {
+  .header {
+    width: 100%;
+    flex-shrink: 0;
+  }
+
+  .header__options {
+    display: none;
+  }
+
+  .header__menu-button {
+    display: flex;
+  }
 }

@@ -1,0 +1,112 @@
+@use '../../styles/tokens' as *;
+
+.result-modal__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-16;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
+}
+
+.result-modal {
+  box-sizing: border-box;
+  width: 400px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: $spacing-32;
+  background: $color-neutral-0;
+  border-radius: $radius-8;
+  box-shadow: $shadow-large;
+  text-align: center;
+}
+
+.result-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: $spacing-20;
+  padding-bottom: $spacing-20;
+  border-bottom: $border-2 solid $color-neutral-100;
+}
+
+.result-modal__title {
+  margin: 0;
+  font-family: $font-clue;
+  font-weight: 800;
+  font-size: 24px;
+  color: $color-neutral-100;
+}
+
+.result-modal__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-4;
+  background: transparent;
+  color: $color-neutral-100;
+  cursor: pointer;
+}
+
+.result-modal__close:hover {
+  background: $color-neutral-50;
+}
+
+.result-modal__award {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-8;
+  margin: 0 0 $spacing-20;
+  padding: $spacing-12 $spacing-24;
+  border-radius: $radius-4;
+  font-family: $font-clue;
+  font-weight: 800;
+  font-size: 24px;
+  color: $color-neutral-100;
+}
+
+.result-modal__award svg {
+  width: 1em;
+  height: 1em;
+}
+
+.result-modal__award--gold {
+  background: $color-gold;
+}
+
+.result-modal__award--silver {
+  background: $color-silver;
+}
+
+.result-modal__award--bronze {
+  background: $color-bronze;
+}
+
+.result-modal__award--bust {
+  background: $color-bust-100;
+}
+
+.result-modal__message {
+  margin: 0 0 $spacing-8;
+  font-family: $font-body;
+  font-weight: 500;
+  font-size: 16px;
+  color: $color-neutral-100;
+}
+
+.result-modal__score {
+  margin: 0;
+  font-family: $font-body;
+  font-weight: 700;
+  font-size: 20px;
+  color: $color-neutral-100;
+}

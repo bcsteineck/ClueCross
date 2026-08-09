@@ -8,6 +8,7 @@ import {
   startOfMonth,
 } from '../../core/archiveCalendar'
 import { getEarliestArchiveMonth, getToday, isDateAvailable } from '../../data/archivePuzzles'
+import { ArchiveCalendarKey } from './ArchiveCalendarKey'
 import { ArchiveDateButton } from './ArchiveDateButton'
 import { ArchiveMonthSelector } from './ArchiveMonthSelector'
 import './ArchiveCalendar.scss'
@@ -82,6 +83,7 @@ export function ArchiveCalendar({
           )}
         </div>
       </div>
+      <ArchiveCalendarKey />
     </div>
   )
 }

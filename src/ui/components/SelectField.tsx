@@ -7,7 +7,6 @@ export interface SelectFieldProps
   extends Omit<SelectHTMLAttributes<HTMLSelectElement>, 'className' | 'id'> {
   label: string
   id?: string
-  variant?: 'default' | 'archive'
   hideLabel?: boolean
 }
 
@@ -17,7 +16,6 @@ export interface SelectFieldProps
 export function SelectField({
   label,
   id,
-  variant = 'default',
   hideLabel = false,
   children,
   ...rest
@@ -29,7 +27,7 @@ export function SelectField({
     : 'select-field__label'
 
   return (
-    <div className={`select-field select-field--${variant}`}>
+    <div className="select-field">
       <label className={labelClassName} htmlFor={selectId}>
         {label}
       </label>

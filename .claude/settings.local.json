@@ -18,7 +18,12 @@
       "Read(//private/tmp/**)",
       "Bash(npx oxlint *)",
       "Bash(pkill -f \"vite --port 5183\")",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(sips -g pixelWidth -g pixelHeight \"/Users/brody/Desktop/Screenshot 2026-08-08 at 9.32.13 PM.png\")",
+      "Bash(sips -c 200 1350 --cropOffset 1040 0 \"/Users/brody/Desktop/Screenshot 2026-08-08 at 9.32.13 PM.png\" --out row20_crop.png)",
+      "Bash(python3 *)",
+      "Bash(sips *)",
+      "Bash(pkill -f \"vite --port 5184\")"
     ]
   }
 }

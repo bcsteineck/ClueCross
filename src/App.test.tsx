@@ -3,20 +3,25 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import App from './App'
-import { dogsPuzzle } from './data/dogsPuzzle'
+import { flowerPuzzle } from './data/flowerPuzzle'
 import { DEFAULT_REVEAL_BUDGET, getLetterCost } from './core/letterCosts'
 
 afterEach(cleanup)
 
-// Relevant Dogs-puzzle layout, for reference:
-//   SHEPHERD across, row 0, cols 0-7:  r0c0=S r0c1=H r0c2=E r0c3=P
-//                                       r0c4=H r0c5=E r0c6=R r0c7=D
-//   POODLE down, col 3, rows 0-5:      r0c3=P r1c3=O r2c3=O r3c3=D r4c3=L r5c3=E
+// Relevant Flower-puzzle layout, for reference:
+//   CHRYSANTHEMUM across, row 10, cols 3-15: r10c3=C r10c4=H r10c5=R r10c6=Y
+//                                             r10c7=S r10c8=A r10c9=N r10c10=T
+//                                             r10c11=H r10c12=E r10c13=M r10c14=U
+//                                             r10c15=M
+//   MARIGOLD down, col 15, rows 10-17:       r10c15=M r11c15=A r12c15=R r13c15=I
+//                                             r14c15=G r15c15=O r16c15=L r17c15=D
+//   ORCHID down, col 19, rows 1-6:           r1c19=O r2c19=R r3c19=C r4c19=H
+//                                             r5c19=I r6c19=D
 // Starting score is 2000. Every letter has a fixed cost from LETTER_COSTS
 // regardless of how many times (or whether) it appears in this puzzle, and
 // the score is a running total — reveals are never blocked by it, and it
-// can go negative. 'H' appears 7 times (r0c1, r0c4, r7c2, r9c2, r12c2,
-// r12c15, r13c1) — a real repeated letter, unlike the old sample puzzle.
+// can go negative. 'D' appears 10 times (r0c10, r6c19, r7c13, r7c18, r13c9,
+// r15c11, r15c16, r16c5, r17c15, r19c5) — a real repeated letter.
 
 function getCell(cellId: string): HTMLInputElement {
   return screen.getByTestId(`cell-${cellId}`) as HTMLInputElement
@@ -48,10 +53,10 @@ async function openRevealMode(user: ReturnType<typeof userEvent.setup>) {
 // so it can be revealed afterward, once already unaffordable.
 const ALL_LETTERS_EXCEPT_C = 'ABDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
-describe('App with the "Dogs" puzzle', () => {
+describe('App with the "Flower" puzzle', () => {
   it('renders the clue and no submit control', () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: /clue: dogs/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /clue: flowers/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /submit/i })).toBeNull()
   })
 
@@ -65,17 +70,94 @@ describe('App with the "Dogs" puzzle', () => {
     render(<App />)
 
     await openRevealMode(user)
-    await user.click(getLetterButton('H'))
+    await user.click(getLetterButton('D'))
 
-    const hCells = ['r0c1', 'r0c4', 'r7c2', 'r9c2', 'r12c2', 'r12c15', 'r13c1']
-    for (const cellId of hCells) {
-      expect(getCell(cellId).value).toBe('H')
+    const dCells = [
+      'r0c10', 'r6c19', 'r7c13', 'r7c18', 'r13c9',
+      'r15c11', 'r15c16', 'r16c5', 'r17c15', 'r19c5',
+    ]
+    for (const cellId of dCells) {
+      expect(getCell(cellId).value).toBe('D')
       expect(getCell(cellId).readOnly).toBe(true)
     }
     // Already-revealed letter keys stay disabled.
-    expect(getLetterButton('H').disabled).toBe(true)
-    // Deducts exactly H's fixed cost, not 7x for the 7 cells it filled.
-    expect(getScoreBadgeValue()).toBe(String(2000 - getLetterCost('H')))
+    expect(getLetterButton('D').disabled).toBe(true)
+    // Deducts exactly D's fixed cost, not 10x for the 10 cells it filled.
+    expect(getScoreBadgeValue()).toBe(String(2000 - getLetterCost('D')))
+  })
+
+  it('flags a manually-typed letter that has already been fully revealed elsewhere', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openRevealMode(user)
+    await user.click(getLetterButton('D')) // locks every D cell board-wide
+
+    // r0c2 is LILAC's first cell ('L') — not one of the D cells, so it's
+    // still editable, but any 'D' typed here is provably wrong: every D
+    // has already been placed elsewhere by the reveal.
+    await user.click(getCell('r0c2'))
+    await user.keyboard('D')
+
+    expect(getCell('r0c2').value).toBe('D')
+    expect(getCell('r0c2').className).toContain('cell--impossible')
+    expect(
+      screen.getByText(/every "d" has already been revealed/i),
+    ).toBeTruthy()
+  })
+
+  it('deleting the impossible letter clears the cell highlight and dismisses the banner', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openRevealMode(user)
+    await user.click(getLetterButton('D'))
+    await user.click(getCell('r0c2'))
+    await user.keyboard('D')
+    expect(getCell('r0c2').className).toContain('cell--impossible')
+
+    await user.click(getCell('r0c2'))
+    await user.keyboard('{Backspace}')
+
+    expect(getCell('r0c2').value).toBe('')
+    expect(getCell('r0c2').className).not.toContain('cell--impossible')
+    expect(screen.queryByText(/already been revealed/i)).toBeNull()
+  })
+
+  it('deleting the impossible letter via chained backspace from the next cell also clears the alert', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openRevealMode(user)
+    await user.click(getLetterButton('D'))
+    await user.click(getCell('r0c2'))
+    await user.keyboard('D')
+    expect(getCell('r0c2').className).toContain('cell--impossible')
+    // r0c2 only belongs to LILAC (across), so typing auto-advanced focus
+    // right to r0c3, which is still empty.
+    expect(document.activeElement).toBe(getCell('r0c3'))
+
+    await user.keyboard('{Backspace}') // r0c3 is empty -> deletes r0c2's D and moves back
+
+    expect(getCell('r0c2').value).toBe('')
+    expect(getCell('r0c2').className).not.toContain('cell--impossible')
+    expect(screen.queryByText(/already been revealed/i)).toBeNull()
+  })
+
+  it('dismisses the impossible-letter banner and cell highlight via the close button', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await openRevealMode(user)
+    await user.click(getLetterButton('D'))
+    await user.click(getCell('r0c2'))
+    await user.keyboard('D')
+    expect(getCell('r0c2').className).toContain('cell--impossible')
+
+    await user.click(screen.getByRole('button', { name: /dismiss message/i }))
+
+    expect(screen.queryByText(/already been revealed/i)).toBeNull()
+    expect(getCell('r0c2').className).not.toContain('cell--impossible')
   })
 
   it('typing-advance skips a cell locked via letter reveal', async () => {
@@ -83,37 +165,40 @@ describe('App with the "Dogs" puzzle', () => {
     render(<App />)
 
     await openRevealMode(user)
-    await user.click(getLetterButton('H')) // locks r0c1 and r0c4, among others
+    await user.click(getLetterButton('H')) // locks r10c4, among others
 
-    await user.click(getCell('r0c0'))
-    await user.keyboard('S')
-    // r0c1 is locked, so focus should skip it and land on r0c2
-    expect(document.activeElement).toBe(getCell('r0c2'))
+    await user.click(getCell('r10c3'))
+    await user.keyboard('C')
+    // r10c4 is locked, so focus should skip it and land on r10c5
+    expect(document.activeElement).toBe(getCell('r10c5'))
   })
 
-  it('supports the down direction via a single-direction cell (POODLE)', async () => {
+  it('supports the down direction via a single-direction cell (ORCHID)', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(getCell('r1c3')) // only belongs to POODLE (down)
+    await user.click(getCell('r1c19')) // only belongs to ORCHID (down)
     await user.keyboard('O')
-    expect(document.activeElement).toBe(getCell('r2c3'))
-    await user.keyboard('D')
-    expect(document.activeElement).toBe(getCell('r3c3'))
+    expect(document.activeElement).toBe(getCell('r2c19'))
+    await user.keyboard('R')
+    expect(document.activeElement).toBe(getCell('r3c19'))
   })
 
   it('arrow keys move spatially and stay put at a boundary', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(getCell('r0c0'))
+    await user.click(getCell('r0c6'))
     await user.keyboard('{ArrowRight}')
-    expect(document.activeElement).toBe(getCell('r0c1'))
+    // c7 has no cell, so focus jumps straight to the next real one
+    expect(document.activeElement).toBe(getCell('r0c8'))
     await user.keyboard('{ArrowLeft}')
-    expect(document.activeElement).toBe(getCell('r0c0'))
+    expect(document.activeElement).toBe(getCell('r0c6'))
+
+    await user.click(getCell('r0c2')) // leftmost cell in row 0
     await user.keyboard('{ArrowLeft}')
     // nothing further left
-    expect(document.activeElement).toBe(getCell('r0c0'))
+    expect(document.activeElement).toBe(getCell('r0c2'))
   })
 
   it('arrow keys land on locked cells the same way everywhere, mid-line and at a corner', async () => {
@@ -121,56 +206,56 @@ describe('App with the "Dogs" puzzle', () => {
     render(<App />)
 
     await openRevealMode(user)
-    await user.click(getLetterButton('H')) // locks r0c1, mid-line in row 0
-    await user.click(getLetterButton('D')) // locks r0c7, a corner cell
+    await user.click(getLetterButton('H')) // locks r10c4, mid-line in row 10
+    await user.click(getLetterButton('M')) // locks r10c15, a corner cell
 
-    await user.click(getCell('r0c0'))
+    await user.click(getCell('r10c3'))
     await user.keyboard('{ArrowRight}')
-    // r0c1 is locked but still the nearest cell, so focus lands right on it
-    expect(document.activeElement).toBe(getCell('r0c1'))
+    // r10c4 is locked but still the nearest cell, so focus lands right on it
+    expect(document.activeElement).toBe(getCell('r10c4'))
 
-    await user.click(getCell('r0c6'))
+    await user.click(getCell('r10c14'))
     await user.keyboard('{ArrowRight}')
-    // r0c7 (locked corner: last of SHEPHERD across, first of DALMATIAN
-    // down) is reached the same consistent way
-    expect(document.activeElement).toBe(getCell('r0c7'))
+    // r10c15 (locked corner: last of CHRYSANTHEMUM across, first of
+    // MARIGOLD down) is reached the same consistent way
+    expect(document.activeElement).toBe(getCell('r10c15'))
 
     await user.keyboard('{ArrowDown}')
-    // turning the corner into DALMATIAN still works
-    expect(document.activeElement).toBe(getCell('r1c7'))
+    // turning the corner into MARIGOLD still works
+    expect(document.activeElement).toBe(getCell('r11c15'))
   })
 
   it('backspace clears the current cell in place when it has content', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(getCell('r0c0'))
-    await user.keyboard('SH')
-    expect(getCell('r0c1').value).toBe('H')
-    expect(document.activeElement).toBe(getCell('r0c2'))
+    await user.click(getCell('r10c3'))
+    await user.keyboard('CH')
+    expect(getCell('r10c4').value).toBe('H')
+    expect(document.activeElement).toBe(getCell('r10c5'))
 
-    await user.click(getCell('r0c1'))
-    await user.keyboard('{Backspace}') // r0c1 has content -> clears it, stays
-    expect(getCell('r0c1').value).toBe('')
-    expect(document.activeElement).toBe(getCell('r0c1'))
+    await user.click(getCell('r10c4'))
+    await user.keyboard('{Backspace}') // r10c4 has content -> clears it, stays
+    expect(getCell('r10c4').value).toBe('')
+    expect(document.activeElement).toBe(getCell('r10c4'))
   })
 
   it('backspace on an empty cell deletes the previous cell and moves back in one press', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await user.click(getCell('r0c0'))
-    await user.keyboard('SH')
-    expect(getCell('r0c1').value).toBe('H')
-    expect(document.activeElement).toBe(getCell('r0c2'))
+    await user.click(getCell('r10c3'))
+    await user.keyboard('CH')
+    expect(getCell('r10c4').value).toBe('H')
+    expect(document.activeElement).toBe(getCell('r10c5'))
 
-    await user.keyboard('{Backspace}') // r0c2 is empty -> deletes r0c1's H and moves back
-    expect(document.activeElement).toBe(getCell('r0c1'))
-    expect(getCell('r0c1').value).toBe('')
+    await user.keyboard('{Backspace}') // r10c5 is empty -> deletes r10c4's H and moves back
+    expect(document.activeElement).toBe(getCell('r10c4'))
+    expect(getCell('r10c4').value).toBe('')
 
-    await user.keyboard('{Backspace}') // r0c1 now empty -> deletes r0c0's S and moves back
-    expect(document.activeElement).toBe(getCell('r0c0'))
-    expect(getCell('r0c0').value).toBe('')
+    await user.keyboard('{Backspace}') // r10c4 now empty -> deletes r10c3's C and moves back
+    expect(document.activeElement).toBe(getCell('r10c3'))
+    expect(getCell('r10c3').value).toBe('')
   })
 
   it('never disables a reveal key based on affordability, even as the score goes negative', async () => {
@@ -195,18 +280,18 @@ describe('App with the "Dogs" puzzle', () => {
     expect(getScoreBadgeValue()).toBe(String(score - getLetterCost('C')))
   })
 
-  it('shows the unused-credit badge styling at zero or positive score, and the used-credit styling once negative', async () => {
+  it('shows the gold badge styling at the starting (high) score, and the bust styling once negative', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    expect(getScoreBadge().className).toContain('credit-badge--unused')
+    expect(getScoreBadge().className).toContain('credit-badge--gold')
 
     await openRevealMode(user)
     for (const letter of ALL_LETTERS_EXCEPT_C) {
       await user.click(getLetterButton(letter))
     }
     expect(getScoreBadgeValue().startsWith('-')).toBe(true)
-    expect(getScoreBadge().className).toContain('credit-badge--used')
+    expect(getScoreBadge().className).toContain('credit-badge--bust')
   })
 
   it('renders only one live score badge', () => {
@@ -219,9 +304,9 @@ describe('App with the "Dogs" puzzle', () => {
     render(<App />)
 
     expect(getScoreBadgeValue()).toBe('2000')
-    await user.click(getCell('r0c0'))
-    await user.keyboard('SHEPHERD')
-    expect(getCell('r0c7').value).toBe('D')
+    await user.click(getCell('r10c3'))
+    await user.keyboard('CHRYSANTHEMUM')
+    expect(getCell('r10c15').value).toBe('M')
     expect(getScoreBadgeValue()).toBe('2000')
   })
 
@@ -241,15 +326,34 @@ describe('App with the "Dogs" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    for (const cell of Object.values(dogsPuzzle.cells)) {
+    for (const cell of Object.values(flowerPuzzle.cells)) {
       await user.click(getCell(cell.id))
       await user.keyboard(cell.correctLetter)
     }
 
-    for (const cell of Object.values(dogsPuzzle.cells)) {
+    for (const cell of Object.values(flowerPuzzle.cells)) {
       const input = getCell(cell.id)
       expect(input.className).toContain('cell--complete')
       expect(input.readOnly).toBe(true)
     }
+  })
+
+  it('shows the result modal with the award and final score immediately on completion, and closes via the close button', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // Filled entirely by typing, no reveals, so the score stays at the
+    // full starting budget (2000) — comfortably in Gold range (>= 1200).
+    for (const cell of Object.values(flowerPuzzle.cells)) {
+      await user.click(getCell(cell.id))
+      await user.keyboard(cell.correctLetter)
+    }
+
+    expect(screen.getByRole('dialog', { name: /puzzle complete/i })).toBeTruthy()
+    expect(screen.getByText('Gold')).toBeTruthy()
+    expect(screen.getByText('Final Score: 2000')).toBeTruthy()
+
+    await user.click(screen.getByRole('button', { name: /^close$/i }))
+    expect(screen.queryByRole('dialog', { name: /puzzle complete/i })).toBeNull()
   })
 })

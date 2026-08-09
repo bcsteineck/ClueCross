@@ -1,29 +1,41 @@
 @use '../../styles/tokens' as *;
 
 .archive-month-selector {
-  width: $content-width;
+  width: 100%;
   box-sizing: border-box;
-  background: $color-information-60;
-  border: $border-2 solid $color-information-70;
-  border-radius: $radius-4 $radius-4 0 0;
+}
+
+@include mobile {
+  .archive-month-selector {
+    width: 100%;
+  }
 }
 
 .archive-month-selector__trigger {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: $spacing-8;
+  gap: 10px;
   width: 100%;
   box-sizing: border-box;
-  padding: $spacing-16 $spacing-8;
+  padding: $spacing-16 0;
   border: none;
+  border-top: $border-2 solid $color-neutral-100;
+  border-bottom: $border-2 solid $color-neutral-100;
   background: transparent;
   font-family: $font-clue;
-  font-weight: 800;
+  font-weight: 500;
   font-size: 24px;
   letter-spacing: -0.48px;
-  color: $color-information-100;
+  color: $color-neutral-100;
   cursor: pointer;
+}
+
+// While the month/year panel is open, the header and panel read as one
+// bordered block — the bottom border moves down to the panel instead of
+// sitting between the header text and the selects.
+.archive-month-selector__trigger[aria-expanded='true'] {
+  border-bottom: none;
 }
 
 .archive-month-selector__trigger:hover {
@@ -46,4 +58,5 @@
   justify-content: center;
   gap: $spacing-16;
   padding: 0 $spacing-16 $spacing-16;
+  border-bottom: $border-2 solid $color-neutral-100;
 }

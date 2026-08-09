@@ -70,7 +70,6 @@ export function ArchiveMonthSelector({
         <div id={panelId} className="archive-month-selector__panel">
           <SelectField
             label="Month"
-            variant="archive"
             hideLabel
             value={pendingMonth}
             onChange={(e) => handleMonthChange(Number(e.target.value))}
@@ -83,7 +82,6 @@ export function ArchiveMonthSelector({
           </SelectField>
           <SelectField
             label="Year"
-            variant="archive"
             hideLabel
             value={pendingYear}
             onChange={(e) => handleYearChange(Number(e.target.value))}
