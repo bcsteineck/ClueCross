@@ -38,7 +38,7 @@
     // to nothing (an oversized grid at that point is expected to make the
     // page scroll as a fallback, rather than render illegibly).
     --cell-size: max(
-      20px,
+      16px,
       min(
         28px,
         calc((100cqw - #{$spacing-16 * 2} - (var(--cols) - 1) * #{$spacing-2}) / var(--cols)),
