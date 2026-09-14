@@ -8,7 +8,7 @@
   justify-content: center;
   gap: $spacing-24;
   width: 100%;
-  padding: $spacing-16 $spacing-20;
+  padding: $spacing-20;
 }
 
 .archive-calendar-key__item {
@@ -25,19 +25,18 @@
 }
 
 .archive-calendar-key__swatch--completed {
-  background: $color-highlight-100;
+  background: $color-brand-secondary;
 }
 
 .archive-calendar-key__swatch--selected {
-  background: $color-cyan-100;
+  background: $color-brand-primary;
 }
 
 .archive-calendar-key__label {
-  font-family: $font-clue;
-  font-weight: 500;
-  font-size: 12px;
-  letter-spacing: 0.24px;
-  color: $color-neutral-100;
+  font-family: $font-body;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-12;
+  color: $color-gray-70;
   white-space: nowrap;
 }
 

@@ -1,0 +1,47 @@
+@use '../../styles/tokens' as *;
+
+.mobile-puzzle-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+}
+
+.mobile-puzzle-view__board {
+  box-sizing: border-box;
+  width: 100%;
+  // Always the puzzle's own shape (cols:rows), sized from width alone —
+  // never stretched taller by extra vertical room. .mobile-puzzle-view
+  // actions below absorbs any leftover height instead (see there), which
+  // is what keeps this from growing/shrinking between renders and shifting
+  // the Reveal Letter button (this footprint is shared with
+  // MobileRevealView's letter selector for the same reason).
+  aspect-ratio: var(--cols) / var(--rows);
+  flex-shrink: 0;
+  display: flex;
+}
+
+.mobile-puzzle-view__actions {
+  box-sizing: border-box;
+  width: 100%;
+  padding: $spacing-16;
+  // Grows to absorb whatever height the board (fixed above) and info bar
+  // don't use. flex-shrink: 0 (not the default 1) means it never
+  // compresses the button below its own natural size either — once even
+  // that doesn't fit, the page scrolls instead, the same as before.
+  flex: 1 0 auto;
+  border-top: $border-1 solid $color-gray-30;
+  border-bottom: $border-1 solid $color-gray-30;
+  background: $color-brand-secondary-wash;
+}
+
+// Scoped to this view specifically — PuzzleBoard.scss's own defaults
+// (width/max-width only) stay correct for the desktop dashboard, which
+// sizes the board from its own content rather than a fixed aspect-ratio
+// footprint.
+.mobile-puzzle-view__board .puzzle-board {
+  flex: 1;
+  min-height: 0;
+  border-radius: 0;
+  padding: $spacing-16;
+}

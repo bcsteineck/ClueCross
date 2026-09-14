@@ -3,24 +3,30 @@
 .archive-date {
   box-sizing: border-box;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: $spacing-4;
   width: 100%;
   aspect-ratio: 1 / 1;
-  border: none;
-  border-radius: $radius-4;
+  border: $border-1 solid $color-gray-30;
+  border-radius: $radius-8;
   padding: 0;
-  background: $color-neutral-40;
+  background: $color-gray-00;
+  color: $color-gray-90;
   cursor: pointer;
+}
+
+.archive-date .star-rating {
+  gap: 2px;
 }
 
 .archive-date__day {
   font-family: $font-cell;
   font-weight: 600;
-  font-size: 28px;
-  letter-spacing: -0.56px;
-  color: $color-neutral-100;
+  font-size: $font-size-18;
+  letter-spacing: -0.36px;
+  color: inherit;
 }
 
 // Each state is scoped with :not() to be mutually exclusive with the
@@ -29,32 +35,47 @@
 // looks, and active always wins over completed.
 @include hoverable {
   .archive-date:hover:not(:disabled):not(.archive-date--completed):not(.archive-date--active) {
-    background: $color-neutral-45;
+    background: $color-gray-10;
+    border-color: $color-gray-40;
   }
 }
 
+// Completed — green fill, real earned star rating in white.
 .archive-date--completed:not(.archive-date--active) {
-  background: $color-highlight-100;
+  background: $color-brand-secondary;
+  border-color: $color-brand-secondary;
+  color: $color-gray-00;
 
   @include hoverable {
     &:hover {
-      background: $color-highlight-110;
+      background: $color-brand-secondary-hover;
+      border-color: $color-brand-secondary-hover;
     }
   }
 }
 
+// Active/currently-viewing — purple, overrides completed's green whenever
+// both apply (existing, tested priority).
 .archive-date--active {
-  background: $color-cyan-100;
+  background: $color-brand-primary;
+  border-color: $color-brand-primary;
+  color: $color-gray-00;
 
   @include hoverable {
     &:hover {
-      background: $color-cyan-110;
+      background: $color-brand-primary-hover;
+      border-color: $color-brand-primary-hover;
     }
   }
 }
 
+// Disabled/unpublished — very subtle, muted placeholder stars distinct
+// from an available-but-unplayed date's plainer black placeholder (spec
+// section 15: a real 0-star completed result must still read differently
+// from either of these, which the green fill above already guarantees).
 .archive-date:disabled {
-  background: $color-neutral-40;
+  background: $color-gray-10;
+  border-color: $color-gray-20;
+  color: $color-gray-30;
   cursor: default;
-  opacity: 0.4;
 }

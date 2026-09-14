@@ -5,12 +5,6 @@
   box-sizing: border-box;
 }
 
-@include mobile {
-  .archive-month-selector {
-    width: 100%;
-  }
-}
-
 .archive-month-selector__trigger {
   display: flex;
   align-items: center;
@@ -18,17 +12,19 @@
   gap: 10px;
   width: 100%;
   box-sizing: border-box;
-  padding: $spacing-16 0;
+  padding: $spacing-20 0;
   border: none;
-  border-top: $border-2 solid $color-neutral-100;
-  border-bottom: $border-2 solid $color-neutral-100;
+  border-bottom: $border-1 solid $color-gray-30;
   background: transparent;
-  font-family: $font-clue;
-  font-weight: 500;
-  font-size: 24px;
-  letter-spacing: -0.48px;
-  color: $color-neutral-100;
+  font-family: $font-logo;
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-20;
+  color: $color-gray-90;
   cursor: pointer;
+
+  @include mobile {
+    padding-top: 0;
+  }
 }
 
 // While the month/year panel is open, the header and panel read as one
@@ -60,5 +56,5 @@
   justify-content: center;
   gap: $spacing-16;
   padding: 0 $spacing-16 $spacing-16;
-  border-bottom: $border-2 solid $color-neutral-100;
+  border-bottom: $border-2 solid $color-gray-20;
 }

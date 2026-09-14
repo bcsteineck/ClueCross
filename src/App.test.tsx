@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import App from './App'
 import { flowerPuzzle } from './data/flowerPuzzle'
-import { DEFAULT_REVEAL_BUDGET, getLetterCost } from './core/letterCosts'
+import { DEFAULT_REVEAL_BUDGET, FREE_REVEALS_PER_PUZZLE, getLetterCost } from './core/letterCosts'
 
 afterEach(cleanup)
 
@@ -35,28 +35,51 @@ function getScoreBadge(): HTMLElement {
   return screen.getByTestId('score-badge')
 }
 
+// Score badge text is now "<score> / <unlockBudget>" (spec section 11) —
+// extract just the leading (possibly negative) number.
 function getScoreBadgeValue(): string {
-  return getScoreBadge().textContent?.replace(/^Score:\s*/, '') ?? ''
+  return getScoreBadge().textContent?.match(/-?\d+/)?.[0] ?? ''
 }
 
-// The reveal-letter (AlphabetKeyboard) UI only renders in "reveal" mode,
-// entered via the Buy Letter toggle; the default mode is the on-screen
-// typing keyboard.
+// The Reveal Letter selector only renders while the Reveal Letter view is
+// open, entered via the persistent "Reveal Letter" action; the default
+// center content is the puzzle board.
 async function openRevealMode(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole('button', { name: /buy letter/i }))
+  await user.click(screen.getByRole('button', { name: /^reveal letter/i }))
 }
 
-// Every letter except 'C' — revealing all of these costs more than the
-// starting budget (sum of every fixed price is comfortably over
-// DEFAULT_REVEAL_BUDGET) regardless of the exact per-letter prices, so the
-// score goes negative without hardcoding a magic subset. 'C' is held back
-// so it can be revealed afterward, once already unaffordable.
-const ALL_LETTERS_EXCEPT_C = 'ABDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+// Reveal Letter is a single action, not a persistent mode (spec section
+// 7): selecting a letter immediately returns to the Puzzle view. Every
+// reveal in these tests therefore has to reopen the Reveal Letter view
+// first, rather than clicking several letter buttons in a row.
+async function revealLetterViaUI(user: ReturnType<typeof userEvent.setup>, letter: string) {
+  await openRevealMode(user)
+  await user.click(getLetterButton(letter))
+}
+
+// Letters burned to exhaust the puzzle's free reveals in tests that need
+// to exercise paid-cost behavior — kept distinct from 'C' (see below) and
+// from any letter a given test asserts on directly.
+const FREE_BURN_LETTERS = ['J', 'K', 'L']
+
+async function burnFreeReveals(user: ReturnType<typeof userEvent.setup>) {
+  for (let i = 0; i < FREE_REVEALS_PER_PUZZLE; i++) {
+    await revealLetterViaUI(user, FREE_BURN_LETTERS[i])
+  }
+}
+
+// Every letter except 'C' and FREE_BURN_LETTERS — revealing all of these
+// costs more than the starting budget (sum of every fixed price is
+// comfortably over DEFAULT_REVEAL_BUDGET) regardless of the exact
+// per-letter prices, so the score goes negative without hardcoding a magic
+// subset. 'C' is held back so it can be revealed afterward, once already
+// unaffordable.
+const PAID_LETTERS_EXCEPT_C = 'ABDEFGHIMNOPQRSTUVWXYZ'.split('')
 
 describe('App with the "Flower" puzzle', () => {
   it('renders the clue and no submit control', () => {
     render(<App />)
-    expect(screen.getByRole('heading', { name: /clue: flowers/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /today's clue\s*flowers/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /submit/i })).toBeNull()
   })
 
@@ -65,12 +88,21 @@ describe('App with the "Flower" puzzle', () => {
     expect(getScoreBadgeValue()).toBe('2000')
   })
 
+  it('does not deduct score for the puzzle\'s first free reveals', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await revealLetterViaUI(user, 'D')
+    expect(getScoreBadgeValue()).toBe('2000')
+  })
+
   it('revealing a repeated letter fills and locks every occurrence board-wide', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('D'))
+    await burnFreeReveals(user)
+    const scoreBeforeD = Number(getScoreBadgeValue())
+    await revealLetterViaUI(user, 'D')
 
     const dCells = [
       'r0c10', 'r6c19', 'r7c13', 'r7c18', 'r13c9',
@@ -80,18 +112,19 @@ describe('App with the "Flower" puzzle', () => {
       expect(getCell(cellId).value).toBe('D')
       expect(getCell(cellId).readOnly).toBe(true)
     }
-    // Already-revealed letter keys stay disabled.
+    // Already-revealed letter keys stay disabled — reopen the selector to
+    // inspect it, since a successful reveal returns to the Puzzle view.
+    await openRevealMode(user)
     expect(getLetterButton('D').disabled).toBe(true)
     // Deducts exactly D's fixed cost, not 10x for the 10 cells it filled.
-    expect(getScoreBadgeValue()).toBe(String(2000 - getLetterCost('D')))
+    expect(getScoreBadgeValue()).toBe(String(scoreBeforeD - getLetterCost('D')))
   })
 
   it('flags a manually-typed letter that has already been fully revealed elsewhere', async () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('D')) // locks every D cell board-wide
+    await revealLetterViaUI(user, 'D') // locks every D cell board-wide
 
     // r0c2 is LILAC's first cell ('L') — not one of the D cells, so it's
     // still editable, but any 'D' typed here is provably wrong: every D
@@ -110,8 +143,7 @@ describe('App with the "Flower" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('D'))
+    await revealLetterViaUI(user, 'D')
     await user.click(getCell('r0c2'))
     await user.keyboard('D')
     expect(getCell('r0c2').className).toContain('cell--impossible')
@@ -128,8 +160,7 @@ describe('App with the "Flower" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('D'))
+    await revealLetterViaUI(user, 'D')
     await user.click(getCell('r0c2'))
     await user.keyboard('D')
     expect(getCell('r0c2').className).toContain('cell--impossible')
@@ -148,8 +179,7 @@ describe('App with the "Flower" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('D'))
+    await revealLetterViaUI(user, 'D')
     await user.click(getCell('r0c2'))
     await user.keyboard('D')
     expect(getCell('r0c2').className).toContain('cell--impossible')
@@ -164,8 +194,7 @@ describe('App with the "Flower" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('H')) // locks r10c4, among others
+    await revealLetterViaUI(user, 'H') // locks r10c4, among others
 
     await user.click(getCell('r10c3'))
     await user.keyboard('C')
@@ -205,9 +234,8 @@ describe('App with the "Flower" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('H')) // locks r10c4, mid-line in row 10
-    await user.click(getLetterButton('M')) // locks r10c15, a corner cell
+    await revealLetterViaUI(user, 'H') // locks r10c4, mid-line in row 10
+    await revealLetterViaUI(user, 'M') // locks r10c15, a corner cell
 
     await user.click(getCell('r10c3'))
     await user.keyboard('{ArrowRight}')
@@ -262,11 +290,11 @@ describe('App with the "Flower" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    for (const letter of ALL_LETTERS_EXCEPT_C) {
-      await user.click(getLetterButton(letter))
+    await burnFreeReveals(user)
+    for (const letter of PAID_LETTERS_EXCEPT_C) {
+      await revealLetterViaUI(user, letter)
     }
-    const score = DEFAULT_REVEAL_BUDGET - ALL_LETTERS_EXCEPT_C.reduce(
+    const score = DEFAULT_REVEAL_BUDGET - PAID_LETTERS_EXCEPT_C.reduce(
       (sum, letter) => sum + getLetterCost(letter),
       0,
     )
@@ -275,6 +303,7 @@ describe('App with the "Flower" puzzle', () => {
 
     // A letter far more expensive than the (negative) score must still be
     // enabled — reveals are never blocked by affordability.
+    await openRevealMode(user)
     expect(getLetterButton('C').disabled).toBe(false)
     await user.click(getLetterButton('C'))
     expect(getScoreBadgeValue()).toBe(String(score - getLetterCost('C')))
@@ -286,9 +315,9 @@ describe('App with the "Flower" puzzle', () => {
 
     expect(getScoreBadge().className).toContain('credit-badge--gold')
 
-    await openRevealMode(user)
-    for (const letter of ALL_LETTERS_EXCEPT_C) {
-      await user.click(getLetterButton(letter))
+    await burnFreeReveals(user)
+    for (const letter of PAID_LETTERS_EXCEPT_C) {
+      await revealLetterViaUI(user, letter)
     }
     expect(getScoreBadgeValue().startsWith('-')).toBe(true)
     expect(getScoreBadge().className).toContain('credit-badge--bust')
@@ -314,9 +343,10 @@ describe('App with the "Flower" puzzle', () => {
     const user = userEvent.setup()
     render(<App />)
 
-    await openRevealMode(user)
-    await user.click(getLetterButton('D'))
-    const remaining = 2000 - getLetterCost('D')
+    await burnFreeReveals(user)
+    const scoreBeforeD = Number(getScoreBadgeValue())
+    await revealLetterViaUI(user, 'D')
+    const remaining = scoreBeforeD - getLetterCost('D')
     expect(
       screen.getByText(new RegExp(`unlocked d\\..*score.*${remaining}`, 'i')),
     ).toBeTruthy()
@@ -338,20 +368,21 @@ describe('App with the "Flower" puzzle', () => {
     }
   })
 
-  it('shows the result modal with the award and final score immediately on completion, and closes via the close button', async () => {
+  it('shows the result modal with the star rating and final score immediately on completion, and closes via the close button', async () => {
     const user = userEvent.setup()
     render(<App />)
 
     // Filled entirely by typing, no reveals, so the score stays at the
-    // full starting budget (2000) — comfortably in Gold range (>= 1200).
+    // full starting budget (2000) — comfortably in the top (3-star) range.
     for (const cell of Object.values(flowerPuzzle.cells)) {
       await user.click(getCell(cell.id))
       await user.keyboard(cell.correctLetter)
     }
 
-    expect(screen.getByRole('dialog', { name: /puzzle complete/i })).toBeTruthy()
-    expect(screen.getByText('Gold')).toBeTruthy()
-    expect(screen.getByText('Final Score: 2000')).toBeTruthy()
+    const dialog = screen.getByRole('dialog', { name: /puzzle complete/i })
+    expect(dialog).toBeTruthy()
+    expect(within(dialog).getByRole('img', { name: '3 out of 3 stars' })).toBeTruthy()
+    expect(within(dialog).getByText('Final Score: 2000 / 2000')).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: /^close$/i }))
     expect(screen.queryByRole('dialog', { name: /puzzle complete/i })).toBeNull()

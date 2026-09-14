@@ -1,0 +1,53 @@
+@use '../../styles/tokens' as *;
+
+.mobile-header {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: $spacing-12 $spacing-16;
+}
+
+.mobile-header__logo {
+  display: flex;
+  align-items: center;
+  border: none;
+  margin: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.mobile-header__logo-image {
+  // Same SVG as the desktop header, sized down for the more compact mobile
+  // header — matches the height of the icon glyphs (Info/Settings/Archive
+  // are size={22}) sharing this row.
+  height: 22px;
+  width: auto;
+}
+
+.mobile-header__icons {
+  display: flex;
+  align-items: center;
+  gap: $spacing-16;
+}
+
+.mobile-header__icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: $radius-full;
+  background: transparent;
+  color: $color-gray-90;
+  cursor: pointer;
+}
+
+.mobile-header__icon-button[aria-pressed='true'] {
+  background: $color-brand-primary-wash;
+  color: $color-brand-primary;
+}

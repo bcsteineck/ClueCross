@@ -62,6 +62,10 @@ export const LETTER_COSTS: Readonly<Record<Letter, number>> = {
 
 export const DEFAULT_REVEAL_BUDGET = 2000
 
+// Every puzzle starts with this many reveals that cost 0 points and don't
+// affect star rating, regardless of the letter chosen.
+export const FREE_REVEALS_PER_PUZZLE = 3
+
 function isLetter(value: string): value is Letter {
   return Object.hasOwn(LETTER_COSTS, value)
 }
@@ -75,4 +79,13 @@ export function getLetterCost(letter: string): number {
     throw new Error(`getLetterCost: "${letter}" is not a single A-Z letter.`)
   }
   return LETTER_COSTS[normalized]
+}
+
+// Shared by every place that shows the remaining free-reveal count (the
+// Reveal Letter and Cancel Reveal buttons, on both breakpoints) — undefined
+// once they're exhausted, so callers can render nothing rather than an
+// empty or zero-count message.
+export function getFreeRevealsSublabel(freeRevealsRemaining: number): string | undefined {
+  if (freeRevealsRemaining <= 0) return undefined
+  return `${freeRevealsRemaining} free reveal${freeRevealsRemaining === 1 ? '' : 's'} remaining`
 }

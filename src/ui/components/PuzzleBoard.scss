@@ -5,48 +5,33 @@
   width: 100%;
   display: flex;
   justify-content: center;
-  background: $color-neutral-0;
-  border-top: none;
+  align-items: center;
+  background: $color-gray-90;
+  border-radius: $radius-16;
+  padding: $spacing-20;
+  // Lets .cell__letter (in Cell.scss) scale its font with the grid's own
+  // available width via cqw, rather than needing a JS-computed pixel size.
+  container-type: inline-size;
 }
 
 .puzzle-board__grid {
   display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
   gap: $spacing-2;
-  width: fit-content;
-}
-
-@include mobile {
-  // .puzzle-board keeps the border/background (rather than the grid
-  // holding them) so it always matches ClueHeader's full width and the two
-  // read as one connected card, with the grid just centered inside it —
-  // same structure as desktop, only the width becomes fluid.
-  .puzzle-board {
-    width: 100%;
-  }
+  width: 100%;
+  // Keeps every cell square while filling the available width, whatever
+  // the puzzle's actual column/row count — this is what makes the board
+  // fill its container per spec section 20, instead of sitting at a fixed
+  // pixel size regardless of how much room the card actually has.
+  aspect-ratio: var(--cols) / var(--rows);
+  // Caps individual cells at a comfortable reading size on a very wide
+  // center column, rather than growing without bound.
+  max-width: calc(var(--cols) * 40px + (var(--cols) - 1) * #{$spacing-2});
 }
 
 @include compactLayout {
-  .puzzle-board {
-    flex-shrink: 0;
-  }
-
   .puzzle-board__grid {
-    gap: $spacing-1;
-    // Capped at the Figma-spec 28px, otherwise governed by whichever of
-    // width/height is more constraining for this puzzle's column/row
-    // count, and floored so a pathological viewport can't collapse cells
-    // to nothing (an oversized grid at that point is expected to make the
-    // page scroll as a fallback, rather than render illegibly).
-    --cell-size: max(
-      16px,
-      min(
-        28px,
-        calc((100cqw - #{$spacing-16 * 2} - (var(--cols) - 1) * #{$spacing-2}) / var(--cols)),
-        calc(
-          (var(--board-available-height) - #{$spacing-16 * 2} - (var(--rows) - 1) * #{$spacing-2}) /
-            var(--rows)
-        )
-      )
-    );
+    gap: $spacing-2;
   }
 }

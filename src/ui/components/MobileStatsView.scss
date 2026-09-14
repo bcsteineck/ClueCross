@@ -1,0 +1,61 @@
+@use '../../styles/tokens' as *;
+
+.mobile-stats-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  padding-bottom: $spacing-24;
+}
+
+.mobile-stats-view__title {
+  margin: 0;
+  font-family: $font-body;
+  font-size: $font-size-18;
+  font-weight: $font-weight-semibold;
+  color: $color-gray-90;
+  line-height: 1;
+}
+
+.mobile-stats-view__score-band {
+  box-sizing: border-box;
+  width: 100%;
+  padding: $spacing-20 $spacing-16;
+  background: $color-brand-primary-wash;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-8;
+  border-bottom: $border-1 solid $color-gray-30;
+}
+
+.mobile-stats-view__score-heading {
+  display: flex;
+  align-items: center;
+  gap: $spacing-12;
+}
+
+.mobile-stats-view__score-value {
+  margin: 0;
+  font-family: $font-logo;
+  font-size: $font-size-36;
+  font-weight: $font-weight-bold;
+  color: $color-brand-primary;
+}
+
+.mobile-stats-view__section {
+  box-sizing: border-box;
+  width: 100%;
+  padding: $spacing-20 $spacing-16;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-16;
+  border-bottom: $border-1 solid $color-gray-30;
+}
+
+.mobile-stats-view__score-total {
+  font-family: $font-body;
+  font-size: $font-size-18;
+  color: $color-gray-60;
+  font-weight: $font-weight-regular;
+}

@@ -5,6 +5,10 @@ import './CreditBadge.scss'
 
 export interface CreditBadgeProps {
   value: number | string
+  // Rendered smaller/lighter right after `value` (e.g. "/ 2000"), matching
+  // the Figma Score card's large/small split fraction treatment. Purely
+  // visual — doesn't affect award-level derivation.
+  secondaryText?: string
   ariaLabel: string
   testId: string
   // Only meaningful for a numeric value; explicit values (e.g. non-score
@@ -21,6 +25,7 @@ export interface CreditBadgeProps {
 // the same gold/silver/bronze/bust tiers as the end-of-puzzle result.
 export function CreditBadge({
   value,
+  secondaryText,
   ariaLabel,
   testId,
   variant,
@@ -35,7 +40,10 @@ export function CreditBadge({
       data-testid={testId}
     >
       {showIcon && <CircleStar size={20} aria-hidden="true" />}
-      <span className="credit-badge__value">{label ? `${label} ${value}` : value}</span>
+      <span className="credit-badge__value">
+        {label ? `${label} ${value}` : value}
+        {secondaryText && <span className="credit-badge__secondary">{secondaryText}</span>}
+      </span>
     </div>
   )
 }

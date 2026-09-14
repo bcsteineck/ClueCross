@@ -17,21 +17,21 @@ export interface ArchiveCalendarProps {
   initialMonth: Date
   activeDate: Date
   onSelectDate: (date: Date) => void
-  isDateCompleted?: (date: Date) => boolean
+  // Undefined means "not completed" — distinct from a real 0-star result,
+  // which is what lets a genuinely completed 0-star puzzle look different
+  // from an unplayed date's placeholder stars (spec section 15).
+  getDateStarCount?: (date: Date) => 0 | 1 | 2 | 3 | undefined
 }
 
-// Completion isn't tracked anywhere yet (no accounts/persistence), so the
-// default always reports "not completed" — callers can pass a real
-// predicate once that data exists.
-function defaultIsDateCompleted(): boolean {
-  return false
+function defaultGetDateStarCount(): undefined {
+  return undefined
 }
 
 export function ArchiveCalendar({
   initialMonth,
   activeDate,
   onSelectDate,
-  isDateCompleted = defaultIsDateCompleted,
+  getDateStarCount = defaultGetDateStarCount,
 }: ArchiveCalendarProps) {
   const [month, setMonth] = useState(() => startOfMonth(initialMonth))
   const today = getToday()
@@ -76,7 +76,7 @@ export function ArchiveCalendar({
                 day={day}
                 today={today}
                 activeDate={activeDate}
-                isDateCompleted={isDateCompleted}
+                getDateStarCount={getDateStarCount}
                 onSelectDate={onSelectDate}
               />
             ),
@@ -94,7 +94,7 @@ interface ArchiveDateButtonCellProps {
   day: number
   today: Date
   activeDate: Date
-  isDateCompleted: (date: Date) => boolean
+  getDateStarCount: (date: Date) => 0 | 1 | 2 | 3 | undefined
   onSelectDate: (date: Date) => void
 }
 
@@ -104,13 +104,14 @@ function ArchiveDateButtonCell({
   day,
   today,
   activeDate,
-  isDateCompleted,
+  getDateStarCount,
   onSelectDate,
 }: ArchiveDateButtonCellProps) {
   const date = new Date(year, monthIndex, day)
   const available = isDateAvailable(date)
   const active = available && isSameDate(date, activeDate)
-  const completed = available && !active && isDateCompleted(date)
+  const resultStarCount = available ? getDateStarCount(date) : undefined
+  const completed = available && !active && resultStarCount !== undefined
   const fullDate = formatFullDate(date)
   const isFuture = date.getTime() > today.getTime()
 
@@ -127,6 +128,10 @@ function ArchiveDateButtonCell({
       day={day}
       status={status}
       available={available}
+      // Real earned rating for a completed date; a placeholder 0 (rendered
+      // as muted or very-subtle outline stars depending on `status`/
+      // `available`, not as a real result) everywhere else.
+      starCount={resultStarCount ?? 0}
       ariaLabel={ariaLabel}
       onSelect={() => onSelectDate(date)}
     />

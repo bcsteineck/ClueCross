@@ -3,6 +3,30 @@
 @font-face {
   font-family: 'Outfit';
   font-style: normal;
+  font-weight: 200;
+  font-display: swap;
+  src: url('/fonts/outfit-200.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/outfit-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/outfit-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Outfit';
+  font-style: normal;
   font-weight: 800;
   font-display: swap;
   src: url('/fonts/outfit-800.woff2') format('woff2');
@@ -18,16 +42,20 @@
 
 :root {
   color-scheme: light;
-  font: 16px/1.5 system-ui, sans-serif;
+  font: 16px/1.375 system-ui, sans-serif;
 }
 
 :focus-visible {
-  outline-color: $color-neutral-100;
+  outline-color: $color-brand-primary;
 }
 
 :root[data-reduce-motion='true'] * {
   transition: none !important;
   animation: none !important;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
@@ -36,13 +64,17 @@ body {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  background: #ffffff;
+  background: $color-gray-10;
+
+  @include mobile {
+    background: $color-gray-00;
+  }
 }
 
 #root {
-  // Explicit, rather than left to shrink-to-fit its content's width: .app
-  // uses container-type:inline-size (for its continuous cqw-based sizing
-  // formulas), which makes it report no intrinsic width to this ancestor —
+  // Explicit, rather than left to shrink-to-fit its content — .app and its
+  // descendants (the puzzle board in particular) establish their own
+  // container-query contexts, which report no intrinsic width upward;
   // without a definite width here, that collapses #root (and everything
   // inside it) to 0.
   width: 100%;

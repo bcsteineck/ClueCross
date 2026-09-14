@@ -4,9 +4,6 @@ import './Button.scss'
 export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'className'> {
   variant?: 'default' | 'text'
   active?: boolean
-  // Draws attention to the "Buy Letter" call to action with an outward
-  // pulsing glow — cosmetic only, not a distinct visual variant.
-  pulse?: boolean
   iconLeft?: ReactNode
   iconRight?: ReactNode
   ref?: Ref<HTMLButtonElement>
@@ -15,7 +12,6 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
 export function Button({
   variant = 'default',
   active,
-  pulse,
   iconLeft,
   iconRight,
   children,
@@ -23,12 +19,7 @@ export function Button({
   ref,
   ...rest
 }: ButtonProps) {
-  const className = [
-    'button',
-    `button--${variant}`,
-    active && 'button--active',
-    pulse && 'button--pulse',
-  ]
+  const className = ['button', `button--${variant}`, active && 'button--active']
     .filter(Boolean)
     .join(' ')
 

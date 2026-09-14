@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_REVEAL_BUDGET, getLetterCost, LETTER_COSTS } from './letterCosts'
+import { DEFAULT_REVEAL_BUDGET, getFreeRevealsSublabel, getLetterCost, LETTER_COSTS } from './letterCosts'
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 
@@ -63,5 +63,19 @@ describe('getLetterCost', () => {
     expect(() => getLetterCost('1')).toThrow()
     expect(() => getLetterCost('AB')).toThrow()
     expect(() => getLetterCost('')).toThrow()
+  })
+})
+
+describe('getFreeRevealsSublabel', () => {
+  it('is undefined once free reveals are exhausted', () => {
+    expect(getFreeRevealsSublabel(0)).toBeUndefined()
+  })
+
+  it('uses singular phrasing for exactly one remaining', () => {
+    expect(getFreeRevealsSublabel(1)).toBe('1 free reveal remaining')
+  })
+
+  it('uses plural phrasing for more than one remaining', () => {
+    expect(getFreeRevealsSublabel(3)).toBe('3 free reveals remaining')
   })
 })

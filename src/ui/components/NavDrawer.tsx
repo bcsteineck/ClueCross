@@ -1,47 +1,59 @@
-import { Archive, ArrowLeft, Check, Info, Settings, X } from 'lucide-react'
+import { Check, X } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from './Button'
 import './NavDrawer.scss'
 
-export type NavDrawerView = 'menu' | 'settings'
-
 export interface NavDrawerProps {
-  initialView: NavDrawerView
-  onHowToPlayClick: () => void
-  archiveActive?: boolean
-  onArchiveClick: () => void
   reduceMotion: boolean
   onReduceMotionChange: (enabled: boolean) => void
   onResetCurrentPuzzle: () => void
+  currentPuzzleCompleted: boolean
   onClose: () => void
 }
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
+// A single settings overlay now on both breakpoints — the mobile hamburger
+// menu this used to also serve (a separate 'menu' view) was removed along
+// with the hamburger itself (spec section 6): mobile's persistent header
+// has its own direct Settings icon now, the same as desktop.
 export function NavDrawer({
-  initialView,
-  onHowToPlayClick,
-  archiveActive,
-  onArchiveClick,
   reduceMotion,
   onReduceMotionChange,
   onResetCurrentPuzzle,
+  currentPuzzleCompleted,
   onClose,
 }: NavDrawerProps) {
-  const [view, setView] = useState<NavDrawerView>(initialView)
+  // A completed puzzle's archived result is permanent (it always reflects
+  // the first completion, by design — see puzzleResults.ts), so there's no
+  // real reason for a player to reset and replay one. import.meta.env.DEV
+  // is Vite's build-time flag: true only for a local dev server, and false
+  // (with this whole branch dead-code-eliminated) in what actually ships —
+  // this is a developer-only escape hatch for testing an already-completed
+  // puzzle's flows again, not a hidden feature reachable in production.
+  const resetLocked = currentPuzzleCompleted && !import.meta.env.DEV
+  const devOverrideActive = currentPuzzleCompleted && import.meta.env.DEV
   const [confirmingReset, setConfirmingReset] = useState(false)
   const [open, setOpen] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
+  // Captured once via a lazy state initializer rather than read inside the
+  // effect below: the initializer form is stable across React StrictMode's
+  // dev-only extra mount/cleanup/mount cycle, whereas reading
+  // document.activeElement directly in the effect body is not — that
+  // cleanup already runs once "for practice" before the effect it belongs
+  // to fires again, and this drawer's trigger is briefly inert while any of
+  // that is happening, so its own restorative focus() call silently no-ops
+  // and the second mount would otherwise capture the (wrong) close button
+  // as "previously focused" instead.
+  const [previouslyFocused] = useState(() => document.activeElement as HTMLElement | null)
 
-  // Locks background scroll for the whole lifetime of the drawer, and
-  // restores focus to whatever triggered it once closed — same modal
-  // semantics regardless of which view is currently showing.
+  // Locks background scroll for the lifetime of the drawer, and restores
+  // focus to whatever triggered it once closed.
   useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
 
@@ -49,7 +61,7 @@ export function NavDrawer({
       document.body.style.overflow = previousOverflow
       previouslyFocused?.focus()
     }
-  }, [])
+  }, [previouslyFocused])
 
   // Flips one render after mount, so the panel is first painted off-screen
   // and this becomes a genuine transform change for the slide-in transition
@@ -58,12 +70,9 @@ export function NavDrawer({
     setOpen(true)
   }, [])
 
-  // Moves focus into the panel on open, and again on every menu <-> settings
-  // transition so screen reader users land on the new view instead of a
-  // control that just got replaced out from under them.
   useEffect(() => {
     dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus()
-  }, [view])
+  }, [])
 
   useEffect(() => {
     if (confirmingReset) {
@@ -106,16 +115,6 @@ export function NavDrawer({
     onClose()
   }
 
-  function handleBack() {
-    setConfirmingReset(false)
-    setView('menu')
-  }
-
-  // Only a drawer that started on the menu (mobile hamburger) can go back
-  // to it — one opened straight into settings (desktop) has no menu view
-  // to return to.
-  const canGoBack = initialView === 'menu' && view === 'settings'
-
   return (
     <div className="nav-drawer__overlay" onClick={handleOverlayClick}>
       <div
@@ -128,93 +127,67 @@ export function NavDrawer({
       >
         <div className="nav-drawer__header">
           <div className="nav-drawer__header-start">
-            {canGoBack && (
-              <button
-                type="button"
-                className="nav-drawer__back"
-                aria-label="Back to menu"
-                onClick={handleBack}
-              >
-                <ArrowLeft size={20} aria-hidden="true" />
-              </button>
-            )}
             <h2 id={titleId} className="nav-drawer__title">
-              {view === 'menu' ? 'Menu' : 'Settings'}
+              Settings
             </h2>
           </div>
           <button
             type="button"
             className="nav-drawer__close"
-            aria-label={view === 'menu' ? 'Close menu' : 'Close settings'}
+            aria-label="Close settings"
             onClick={onClose}
           >
             <X size={20} aria-hidden="true" />
           </button>
         </div>
 
-        {view === 'menu' ? (
-          <nav className="nav-drawer__nav">
-            <Button
-              variant="text"
-              iconLeft={<Info size={20} aria-hidden="true" />}
-              onClick={onHowToPlayClick}
-            >
-              How to Play
-            </Button>
-            <Button
-              variant="text"
-              active={archiveActive}
-              iconLeft={<Archive size={20} aria-hidden="true" />}
-              onClick={onArchiveClick}
-            >
-              Archive
-            </Button>
-            <Button
-              variant="text"
-              iconLeft={<Settings size={20} aria-hidden="true" />}
-              onClick={() => setView('settings')}
-            >
-              Settings
-            </Button>
-          </nav>
-        ) : (
-          <>
-            <section className="nav-drawer__section">
-              <h3 className="nav-drawer__section-title">Accessibility</h3>
-              <label className="nav-drawer__checkbox-row">
-                <span className="nav-drawer__checkbox">
-                  <input
-                    type="checkbox"
-                    checked={reduceMotion}
-                    onChange={(event) => onReduceMotionChange(event.target.checked)}
-                  />
-                  <Check size={16} aria-hidden="true" className="nav-drawer__checkbox-icon" />
-                </span>
-                Reduce motion
-              </label>
-            </section>
+        <section className="nav-drawer__section">
+          <h3 className="nav-drawer__section-title">Accessibility</h3>
+          <label className="nav-drawer__checkbox-row">
+            <span className="nav-drawer__checkbox">
+              <input
+                type="checkbox"
+                checked={reduceMotion}
+                onChange={(event) => onReduceMotionChange(event.target.checked)}
+              />
+              <Check size={16} aria-hidden="true" className="nav-drawer__checkbox-icon" />
+            </span>
+            Reduce motion
+          </label>
+        </section>
 
-            <section className="nav-drawer__section">
-              <h3 className="nav-drawer__section-title">Puzzle</h3>
-              {confirmingReset ? (
-                <div className="nav-drawer__confirm">
-                  <p className="nav-drawer__confirm-text">
-                    Reset your progress on this puzzle? Entered and revealed letters will be
-                    cleared.
-                  </p>
-                  <div className="nav-drawer__confirm-actions">
-                    <Button ref={cancelButtonRef} onClick={() => setConfirmingReset(false)}>
-                      Cancel
-                    </Button>
-                    <Button onClick={handleConfirmedReset}>Reset</Button>
-                  </div>
-                </div>
-              ) : (
-                <Button onClick={() => setConfirmingReset(true)}>Reset current puzzle</Button>
+        <section className="nav-drawer__section">
+          <h3 className="nav-drawer__section-title">Puzzle</h3>
+          {confirmingReset ? (
+            <div className="nav-drawer__confirm">
+              <p className="nav-drawer__confirm-text">
+                Reset your progress on this puzzle? Entered and revealed letters will be cleared.
+                {devOverrideActive &&
+                  ' Its archived result stays recorded (dev override only clears the board).'}
+              </p>
+              <div className="nav-drawer__confirm-actions">
+                <Button ref={cancelButtonRef} onClick={() => setConfirmingReset(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleConfirmedReset}>Reset</Button>
+              </div>
+            </div>
+          ) : resetLocked ? (
+            <>
+              <Button disabled>Reset current puzzle</Button>
+              <p className="nav-drawer__hint">This puzzle is already complete.</p>
+            </>
+          ) : (
+            <>
+              <Button onClick={() => setConfirmingReset(true)}>Reset current puzzle</Button>
+              {devOverrideActive && (
+                <p className="nav-drawer__hint">
+                  Dev override: this puzzle is complete, but only local dev builds can reset it.
+                </p>
               )}
-            </section>
-          </>
-        )}
+            </>
+          )}
+        </section>
       </div>
     </div>
   )

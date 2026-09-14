@@ -1,11 +1,13 @@
-import { CircleStar, CircleX, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent } from 'react'
-import { useEffect, useId, useRef } from 'react'
-import { AWARD_LABELS, AWARD_MESSAGES, getAwardLevel } from '../../core/awardLevel'
+import { useEffect, useId, useRef, useState } from 'react'
+import { getStarCount } from '../../core/awardLevel'
+import { StarRating } from './StarRating'
 import './ResultModal.scss'
 
 export interface ResultModalProps {
   score: number
+  unlockBudget: number
   onClose: () => void
 }
 
@@ -14,17 +16,19 @@ const FOCUSABLE_SELECTOR =
 
 // Centered dialog + blurred/locked backdrop, same treatment as the nav
 // drawer's overlay — shown once, immediately when a puzzle is completed.
-export function ResultModal({ score, onClose }: ResultModalProps) {
-  const award = getAwardLevel(score)
-  const AwardIcon = award === 'bust' ? CircleX : CircleStar
+export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) {
+  const starCount = getStarCount(score)
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleId = useId()
+  // See NavDrawer's identical capture for why this is a lazy state
+  // initializer rather than a plain read inside the effect below (stable
+  // across React StrictMode's dev-only extra mount/cleanup/mount cycle).
+  const [previouslyFocused] = useState(() => document.activeElement as HTMLElement | null)
 
   // Locks background scroll, moves focus into the dialog, and restores
   // both on close — the page behind genuinely can't be scrolled or
   // interacted with while this is open.
   useEffect(() => {
-    const previouslyFocused = document.activeElement as HTMLElement | null
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus()
@@ -33,7 +37,7 @@ export function ResultModal({ score, onClose }: ResultModalProps) {
       document.body.style.overflow = previousOverflow
       previouslyFocused?.focus()
     }
-  }, [])
+  }, [previouslyFocused])
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
@@ -89,12 +93,12 @@ export function ResultModal({ score, onClose }: ResultModalProps) {
           </button>
         </div>
 
-        <div className={`result-modal__award result-modal__award--${award}`}>
-          <AwardIcon aria-hidden="true" />
-          {AWARD_LABELS[award]}
+        <div className="result-modal__award">
+          <StarRating count={starCount} size={32} />
         </div>
-        <p className="result-modal__message">{AWARD_MESSAGES[award]}</p>
-        <p className="result-modal__score">Final Score: {score}</p>
+        <p className="result-modal__score">
+          Final Score: {score} / {unlockBudget}
+        </p>
       </div>
     </div>
   )

@@ -1,0 +1,29 @@
+.mobile-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  // A real height for the flex:1 rule below to distribute against — without
+  // this, .mobile-layout has no definite size of its own (body centers its
+  // children by their natural size rather than stretching them), so
+  // flex: 1 had nothing to fill and each view was actually just falling
+  // back to its own content's natural height. Those heights aren't
+  // identical between the Puzzle and Reveal views, which is what caused
+  // the Reveal/Cancel button to visibly shift when switching between them.
+  // `svh` (not `dvh`) deliberately stays fixed while the on-screen keyboard
+  // opens/closes, so that alone can't reintroduce the same kind of shift.
+  min-height: 100svh;
+}
+
+// Puzzle/Reveal opt into filling whatever height the header/info-bar don't
+// use, so the board/selector below can size against genuine available
+// height via a container query (see MobilePuzzleView.scss) instead of only
+// ever measuring width. `min-height: 0` is what lets this flex item
+// actually shrink below its content's natural height when space is tight,
+// rather than forcing an overflow; growing past 100dvh (and scrolling) is
+// still perfectly fine when content genuinely doesn't fit.
+.mobile-layout > .mobile-puzzle-view,
+.mobile-layout > .mobile-reveal-view {
+  flex: 1;
+  min-height: 0;
+}

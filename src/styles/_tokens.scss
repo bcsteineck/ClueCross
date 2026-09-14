@@ -2,25 +2,7 @@
 // (https://www.figma.com/design/eQLd6Y0nFa4PsKs2bTkO8Q/ClueCross-Library).
 
 // Colors
-$color-neutral-0: #ffffff;
-$color-neutral-40: #f3f3f3;
-$color-neutral-50: #e9e9e9;
-$color-neutral-100: #333333;
-
-$color-highlight-100: #fee868;
-$color-highlight-110: #f3de63;
-$color-cyan-100: #85dfed;
-$color-cyan-110: #7cd1de;
 $color-bust-100: #f9a3a3;
-$color-neutral-45: #dddddd;
-$color-neutral-65: #bbbbbb;
-// First-pass award color for the Bronze result tier — Gold reuses
-// $color-highlight-100, Silver reuses $color-neutral-65, and Bust reuses
-// $color-bust-100, since all three already fit; nothing existing covers
-// bronze.
-$color-gold: $color-highlight-100;
-$color-silver: $color-neutral-45;
-$color-bronze: #edba88;
 
 // Spacing
 $spacing-1: 1px;
@@ -34,34 +16,109 @@ $spacing-24: 24px;
 $spacing-28: 28px;
 $spacing-32: 32px;
 
+// v0.2.0 palette (from the ClueCross v0.2.0 Library Figma file:
+// https://www.figma.com/design/hLN6rA7REe3dd2bt6dktqG/ClueCross-v0.2.0-Library).
+$color-brand-primary: #623de2;
+$color-brand-primary-hover: #5032bb;
+$color-brand-primary-wash: #f1ecff;
+$color-brand-primary-shadow: #3c258d;
+$color-brand-secondary: #247f5f;
+$color-brand-secondary-hover: #227459;
+$color-brand-secondary-wash: #e8fff7;
+$color-brand-secondary-shadow: #174c3a;
+
+$color-gray-00: #ffffff;
+$color-gray-10: #f7f7f7;
+$color-gray-20: #e3e3e3;
+$color-gray-30: #c6c6c6;
+$color-gray-40: #aaaaaa;
+$color-gray-50: #8e8e8e;
+$color-gray-60: #717171;
+$color-gray-70: #555555;
+$color-gray-80: #383838;
+$color-gray-90: #1c1c1c;
+
 // Radius
+$radius-1: 1px;
 $radius-2: 2px;
 $radius-4: 4px;
 $radius-8: 8px;
+$radius-12: 12px;
+$radius-16: 16px;
 $radius-full: 9999px;
 
 // Border widths
+$border-1: 1px;
 $border-2: 2px;
 
 // Shadows
 $shadow-large: 0px 8px 24px rgba(0, 0, 0, 0.18);
+// Soft elevation for the v0.2.0 "Shadow" Container Card variant.
+$shadow-card: 0px 4px 10px rgba(0, 0, 0, 0.05);
+
+// The v0.2.0 primary-CTA "hard shadow" is a flat, no-blur offset paired
+// 1:1 with each button color's own darker shade (not a single reusable
+// color) — so it's a mixin callers pass their paired shade into, not a
+// fixed token.
+@mixin hard-shadow($shade, $x: 2px, $y: 2px) {
+  box-shadow: $x $y 0px $shade;
+}
 
 // Typography
-$font-clue: 'Roboto', sans-serif;
 $font-logo: 'Outfit', sans-serif;
 $font-cell: 'Roboto', sans-serif;
 // Default font for general-purpose body text (banners, messages, etc.).
 $font-body: 'Roboto', sans-serif;
 
+// v0.2.0 type scale (Outfit for headings/numbers/buttons, Roboto for body
+// text/data) — v0.1 had no size/weight scale, only the family tokens above.
+$font-size-12: 12px;
+$font-size-14: 14px;
+$font-size-16: 16px;
+$font-size-18: 18px;
+$font-size-20: 20px;
+$font-size-24: 24px;
+$font-size-28: 28px;
+$font-size-36: 36px;
+$font-size-40: 40px;
+$font-size-48: 48px;
+
+$font-weight-extralight: 200;
+$font-weight-regular: 400;
+$font-weight-medium: 500;
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+$font-weight-extrabold: 800;
+
 // Layout
 $content-width: 636px;
-// A small buffer past $content-width so the responsive layout kicks in
-// slightly before content would actually clip, rather than exactly at it.
-$mobile-breakpoint: 656px;
-// Below this viewport height, desktop-width layouts also switch to the
-// shrink-to-fit sizing (see compactLayout) rather than letting the puzzle
-// overflow the window.
+// Chosen empirically (v0.2.0 quality pass), not from a device category:
+// below this, the desktop 3-column dashboard's right-column controls (the
+// primary Reveal Letter button in particular, at its 24px label size)
+// start wrapping to two lines inside a quarter-width column — per spec
+// section 6, "breakpoints should be determined by when the layout can no
+// longer comfortably support the intended composition." Below this width,
+// the mobile single-task composition is used instead, including at
+// tablet-ish widths, per spec section 6's explicit allowance ("do not
+// introduce a separate tablet design unless necessary").
+$mobile-breakpoint: 1024px;
+// Below this viewport height, layouts also pick up a few compact-specific
+// refinements (see compactLayout) alongside the width-based mobile ones.
 $compact-height-breakpoint: 1050px;
+
+// Shared by the desktop header (a full-bleed bar) and the dashboard body
+// below it, so the logo/nav and the 3-column grid line up to the same
+// visual edges despite the header spanning the full viewport width.
+$desktop-content-max-width: 1280px;
+$desktop-content-padding-inline: clamp($spacing-16, 5vw, 80px);
+
+@mixin desktop-content-width {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: $desktop-content-max-width;
+  margin-inline: auto;
+  padding-inline: $desktop-content-padding-inline;
+}
 
 // Breakpoints
 @mixin mobile {
@@ -70,9 +127,12 @@ $compact-height-breakpoint: 1050px;
   }
 }
 
-// Drives the shrink-to-fit sizing (cell/key/clue-text formulas) shared by
-// narrow phones and short-but-wide desktop windows — either condition alone
-// is enough, since each targets a different axis running out of room.
+// A couple of small compact-specific visual refinements (e.g. sharper cell
+// corners, a tighter board gap) shared by narrow phones and short-but-wide
+// desktop windows — either condition alone is enough, since each targets a
+// different axis running out of room. The puzzle board's actual fluid
+// sizing doesn't depend on this — see PuzzleBoard.scss and
+// MobilePuzzleView.scss for that.
 @mixin compactLayout {
   @media (max-width: $mobile-breakpoint), (max-height: $compact-height-breakpoint) {
     @content;

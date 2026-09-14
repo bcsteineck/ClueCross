@@ -1,0 +1,32 @@
+@use '../../styles/tokens' as *;
+
+.mobile-reveal-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.mobile-reveal-view__selector {
+  box-sizing: border-box;
+  width: 100%;
+  padding: $spacing-16;
+  // Same footprint as .mobile-puzzle-view__board — the puzzle's own shape
+  // (cols:rows), sized from width alone, never stretched taller by extra
+  // vertical room. --cols/--rows come from MobileLayout (see there), since
+  // this view never renders an actual PuzzleBoard to read them from
+  // directly. .mobile-reveal-view__cancel-band below absorbs any leftover
+  // height instead, matching .mobile-puzzle-view__actions.
+  aspect-ratio: var(--cols) / var(--rows);
+  flex-shrink: 0;
+  display: flex;
+}
+
+.mobile-reveal-view__cancel-band {
+  box-sizing: border-box;
+  width: 100%;
+  padding: $spacing-16;
+  flex: 1 0 auto;
+  background: $color-brand-primary-wash;
+  border-top: $border-1 solid $color-gray-30;
+  border-bottom: $border-1 solid $color-gray-30;
+}

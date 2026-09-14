@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { buildMonthGrid, getDaysInMonth, getLeadingBlankCount } from './core/archiveCalendar'
+import { dogsPuzzle } from './data/dogsPuzzle'
 import { ArchiveCalendar } from './ui/components/ArchiveCalendar'
 
 // A fixed "today" decouples these tests from the real wall-clock date, and
@@ -52,14 +53,16 @@ async function changeMonth(
 }
 
 describe('Archive', () => {
-  it('clicking Archive replaces the puzzle content with the calendar', async () => {
+  it('clicking Archive shows the calendar in the center column, leaving the clue card visible', async () => {
     const user = userEvent.setup()
     render(<App />)
-    expect(screen.getByRole('heading', { name: /clue:/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /today's clue/i })).toBeTruthy()
 
     await openArchive(user)
 
-    expect(screen.queryByRole('heading', { name: /clue:/i })).toBeNull()
+    // Desktop's left column (Clue/Score/Progress) stays visible regardless
+    // of view — only the center column's content changes (spec section 5).
+    expect(screen.getByRole('heading', { name: /today's clue/i })).toBeTruthy()
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
   })
 
@@ -71,7 +74,7 @@ describe('Archive', () => {
 
     await openArchive(user)
 
-    expect(screen.getByRole('heading', { name: /clue:/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /today's clue/i })).toBeTruthy()
     expect(screen.queryByRole('group', { name: /puzzle calendar/i })).toBeNull()
   })
 
@@ -83,7 +86,7 @@ describe('Archive', () => {
 
     await user.click(screen.getByRole('button', { name: /cluecross/i }))
 
-    expect(screen.getByRole('heading', { name: /clue:/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /today's clue/i })).toBeTruthy()
     expect(screen.queryByRole('group', { name: /puzzle calendar/i })).toBeNull()
   })
 
@@ -176,7 +179,7 @@ describe('Archive', () => {
 
     await user.click(screen.getByRole('button', { name: /open puzzle for august 5, 2026/i }))
 
-    expect(screen.getByRole('heading', { name: /clue: dogs/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /today's clue\s*dogs/i })).toBeTruthy()
     expect(screen.queryByRole('group', { name: /puzzle calendar/i })).toBeNull()
   })
 
@@ -191,25 +194,47 @@ describe('Archive', () => {
 
     await user.click(unavailable)
 
-    expect(screen.queryByRole('heading', { name: /clue:/i })).toBeNull()
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
   })
 
-  it('applies a completed state via aria-label and styling', () => {
+  it('applies a completed state via aria-label (including the real star count) and styling', () => {
     render(
       <ArchiveCalendar
         initialMonth={new Date(2026, 7, 5)}
         activeDate={new Date(2026, 0, 1)} // unrelated date, so it never wins over "completed"
         onSelectDate={() => {}}
-        isDateCompleted={(date) => date.getDate() === 5}
+        getDateStarCount={(date) => (date.getDate() === 5 ? 2 : undefined)}
       />,
     )
 
-    const completedButton = screen.getByRole('button', { name: /august 5, 2026 \(completed\)/i })
+    const completedButton = screen.getByRole('button', {
+      name: /august 5, 2026 \(completed, 2 out of 3 stars\)/i,
+    })
     expect(completedButton.className).toContain('archive-date--completed')
 
     const plainButton = screen.getByRole('button', { name: /open puzzle for august 4, 2026/i })
     expect(plainButton.className).not.toContain('archive-date--completed')
+  })
+
+  it('distinguishes a real 0-star completed result from an unplayed date', () => {
+    render(
+      <ArchiveCalendar
+        initialMonth={new Date(2026, 7, 5)}
+        activeDate={new Date(2026, 0, 1)}
+        onSelectDate={() => {}}
+        getDateStarCount={(date) => (date.getDate() === 5 ? 0 : undefined)}
+      />,
+    )
+
+    // A genuine 0-star result is still "(completed, ...)", distinct from an
+    // unplayed date's plain "Open puzzle for ..." label.
+    const zeroStarButton = screen.getByRole('button', {
+      name: /august 5, 2026 \(completed, 0 out of 3 stars\)/i,
+    })
+    expect(zeroStarButton.className).toContain('archive-date--completed')
+
+    const unplayedButton = screen.getByRole('button', { name: /open puzzle for august 4, 2026/i })
+    expect(unplayedButton.className).not.toContain('archive-date--completed')
   })
 
   it('marks the currently viewed puzzle\'s date as active, taking priority over completed', () => {
@@ -218,7 +243,7 @@ describe('Archive', () => {
         initialMonth={new Date(2026, 7, 5)}
         activeDate={new Date(2026, 7, 5)}
         onSelectDate={() => {}}
-        isDateCompleted={(date) => date.getDate() === 5}
+        getDateStarCount={(date) => (date.getDate() === 5 ? 2 : undefined)}
       />,
     )
 
@@ -253,11 +278,55 @@ describe('Archive', () => {
     // in the previous month.
     await changeMonth(user, 'august 2026', 'July')
     await user.click(screen.getByRole('button', { name: /open puzzle for july 22, 2026/i }))
-    expect(screen.getByRole('heading', { name: /clue: dogs/i })).toBeTruthy()
+    // July 22 isn't "today" (mocked as August 5), so the clue card shows
+    // its publication date instead of "Today's Clue" (spec section 15).
+    expect(screen.getByRole('heading', { name: /july 22, 2026\s*dogs/i })).toBeTruthy()
 
     await openArchive(user)
 
     expect(screen.getByRole('button', { name: /july 2026/i })).toBeTruthy()
+  })
+
+  it('restores in-progress state when returning to a previously viewed puzzle via Archive', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByTestId('cell-r0c0'))
+    await user.keyboard('S')
+    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('S')
+
+    // Switch to a different available date (a separate, never-played
+    // session) and back to the original date via Archive.
+    await openArchive(user)
+    await user.click(screen.getByRole('button', { name: /open puzzle for august 4, 2026/i }))
+    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('')
+
+    await openArchive(user)
+    await user.click(screen.getByRole('button', { name: /open puzzle for august 5, 2026/i }))
+
+    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('S')
+  })
+
+  it('does not restore a reset puzzle\'s pre-reset progress after switching dates and back', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByTestId('cell-r0c0'))
+    await user.keyboard('S')
+    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('S')
+
+    await user.click(screen.getByRole('button', { name: /^settings$/i }))
+    await user.click(screen.getByRole('button', { name: /reset current puzzle/i }))
+    await user.click(screen.getByRole('button', { name: /^reset$/i }))
+    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('')
+
+    // Switching away and back after a reset must not resurrect the
+    // pre-reset progress that was cached under the old session key.
+    await openArchive(user)
+    await user.click(screen.getByRole('button', { name: /open puzzle for august 4, 2026/i }))
+    await openArchive(user)
+    await user.click(screen.getByRole('button', { name: /open puzzle for august 5, 2026/i }))
+    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('')
   })
 
   it('supports full keyboard operation of the Archive controls', async () => {
@@ -265,8 +334,7 @@ describe('Archive', () => {
     render(<App />)
 
     await user.tab() // -> ClueCross logo (first focusable element)
-    await user.tab() // -> How to Play button
-    await user.tab() // -> Archive button
+    await user.tab() // -> Archive button (desktop header has no How-to-Play trigger)
     expect(document.activeElement).toBe(screen.getByRole('button', { name: /^archive$/i }))
     await user.keyboard('{Enter}')
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
@@ -280,6 +348,68 @@ describe('Archive', () => {
     availableDate.focus()
     await user.keyboard('{Enter}')
 
-    expect(screen.getByRole('heading', { name: /clue: dogs/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /today's clue\s*dogs/i })).toBeTruthy()
+  })
+})
+
+// This file's other tests don't stub localStorage, so completion/result
+// persistence silently no-ops for them (caught by that code's own
+// try/catch) — fine, since none of them depend on it. These do, so they
+// get their own scoped stub instead of adding one file-wide.
+describe('Completed archived puzzle restoration', () => {
+  function createMemoryStorage(): Storage {
+    const store = new Map<string, string>()
+    return {
+      getItem: (key) => store.get(key) ?? null,
+      setItem: (key, value) => {
+        store.set(key, String(value))
+      },
+      removeItem: (key) => {
+        store.delete(key)
+      },
+      clear: () => {
+        store.clear()
+      },
+      key: (index) => Array.from(store.keys())[index] ?? null,
+      get length() {
+        return store.size
+      },
+    }
+  }
+
+  function getCell(cellId: string): HTMLInputElement {
+    return screen.getByTestId(`cell-${cellId}`) as HTMLInputElement
+  }
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', createMemoryStorage())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('restores a completed archived puzzle\'s board and score after a full remount', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<App />)
+
+    for (const cell of Object.values(dogsPuzzle.cells)) {
+      await user.click(getCell(cell.id))
+      await user.keyboard(cell.correctLetter)
+    }
+    expect(screen.getByRole('dialog', { name: /puzzle complete/i })).toBeTruthy()
+    // A full unmount+remount discards in-memory state (the session cache
+    // and React state alike) — only what's actually persisted survives,
+    // which is exactly what this test needs to exercise (spec section 12:
+    // "revisiting the completed puzzle restores its completed state").
+    unmount()
+
+    render(<App />)
+
+    for (const cell of Object.values(dogsPuzzle.cells)) {
+      expect(getCell(cell.id).value).toBe(cell.correctLetter)
+      expect(getCell(cell.id).readOnly).toBe(true)
+    }
+    expect(screen.getByTestId('score-badge').textContent).toContain('2000')
   })
 })
