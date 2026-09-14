@@ -17,7 +17,7 @@
   display: flex;
   flex-direction: column;
   padding: $spacing-32 $spacing-20;
-  background: $color-neutral-0;
+  background: $color-gray-00;
   box-shadow: $shadow-large;
   // Slides in via a transition triggered by the --open modifier (added a
   // moment after mount, see NavDrawer.tsx) rather than a @keyframes
@@ -53,13 +53,12 @@
 
 .nav-drawer__title {
   margin: 0;
-  font-family: $font-clue;
-  font-weight: 800;
-  font-size: 24px;
-  color: $color-neutral-100;
+  font-family: $font-logo;
+  font-weight: $font-weight-bold;
+  font-size: $font-size-24;
+  color: $color-gray-90;
 }
 
-.nav-drawer__back,
 .nav-drawer__close {
   display: flex;
   align-items: center;
@@ -71,26 +70,14 @@
   border: none;
   border-radius: $radius-4;
   background: transparent;
-  color: $color-neutral-100;
+  color: $color-gray-90;
   cursor: pointer;
 }
 
 @include hoverable {
-  .nav-drawer__back:hover,
   .nav-drawer__close:hover {
-    background: $color-neutral-50;
+    background: $color-gray-10;
   }
-}
-
-.nav-drawer__nav {
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-20;
-}
-
-.nav-drawer__nav .button--text {
-  justify-content: flex-start;
-  width: 100%;
 }
 
 .nav-drawer__section {
@@ -103,19 +90,19 @@
 
 .nav-drawer__section-title {
   margin: 0 0 $spacing-12;
-  font-family: $font-clue;
-  font-weight: 600;
-  font-size: 16px;
-  color: $color-neutral-100;
+  font-family: $font-body;
+  font-weight: $font-weight-semibold;
+  font-size: $font-size-16;
+  color: $color-gray-90;
 }
 
 .nav-drawer__checkbox-row {
   display: flex;
   align-items: center;
   gap: $spacing-8;
-  font-family: $font-clue;
-  font-size: 16px;
-  color: $color-neutral-100;
+  font-family: $font-body;
+  font-size: $font-size-16;
+  color: $color-gray-90;
   cursor: pointer;
 }
 
@@ -132,21 +119,21 @@
   margin: 0;
   width: 20px;
   height: 20px;
-  border: $border-2 solid $color-neutral-100;
+  border: $border-2 solid $color-gray-90;
   border-radius: $radius-2;
-  background: $color-neutral-0;
+  background: $color-gray-00;
   cursor: pointer;
 }
 
 .nav-drawer__checkbox input:checked {
-  background: $color-cyan-100;
-  border-color: $color-cyan-100;
+  background: $color-brand-primary;
+  border-color: $color-brand-primary;
 }
 
 .nav-drawer__checkbox-icon {
   position: absolute;
   inset: 2px;
-  color: $color-neutral-100;
+  color: $color-gray-00;
   pointer-events: none;
   visibility: hidden;
 }
@@ -157,12 +144,19 @@
 
 .nav-drawer__confirm-text {
   margin: 0 0 $spacing-12;
-  font-family: $font-clue;
-  font-size: 14px;
-  color: $color-neutral-100;
+  font-family: $font-body;
+  font-size: $font-size-14;
+  color: $color-gray-90;
 }
 
 .nav-drawer__confirm-actions {
   display: flex;
   gap: $spacing-8;
+}
+
+.nav-drawer__hint {
+  margin: $spacing-8 0 0;
+  font-family: $font-body;
+  font-size: $font-size-14;
+  color: $color-gray-60;
 }

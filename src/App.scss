@@ -1,81 +1,20 @@
 @use './styles/tokens' as *;
 
+// Deliberately unconstrained — DesktopLayout.scss owns its own max-width
+// and centering now. Previously this set a fixed narrow `$content-width`
+// (636px) and drove a JS-computed --board-available-height shrink-to-fit
+// system tightly coupled to the old single-column mobile-style page
+// (ClueHeader + board + on-screen keyboard all stacked in one
+// non-scrolling viewport-height column). That whole system is gone along
+// with the components it was built for (the on-screen keyboard and its
+// Key/ClueHeader consumers were removed in Phase 4). The mobile puzzle
+// screen's own height-fitting is handled per-view instead — see
+// MobileLayout.scss/MobilePuzzleView.scss for the container-query-based
+// approach that replaced it.
 .app {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: $content-width;
-  max-width: 100%;
-  margin: 0 auto;
-  gap: $spacing-24;
-  padding: $spacing-24 0 $spacing-32;
+  width: 100%;
 }
 
 .app__content {
   display: contents;
-}
-
-.puzzle {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: $spacing-24;
-}
-
-.app__copyright {
-  flex-shrink: 0;
-  margin: 0;
-  font-family: $font-body;
-  font-size: 12px;
-  line-height: 16px;
-  text-align: center;
-  color: $color-neutral-65;
-}
-
-@include mobile {
-  .app {
-    width: 100%;
-    padding-inline: $spacing-16;
-  }
-}
-
-@include compactLayout {
-  .app {
-    box-sizing: border-box;
-    height: 100vh;
-    height: 100dvh;
-    padding-block: $spacing-8;
-    gap: $spacing-16;
-    container-type: inline-size;
-
-    // Continuously scaled sizing tokens shared by ClueHeader/Key/Cell below
-    // — computed once here (relative to this element's own cqw) so every
-    // consumer references the same numbers instead of repeating the formula.
-    --key-size: max(24px, min(36px, calc((100cqw - 9 * #{$spacing-4}) / 10)));
-    --clue-font-size: clamp(20px, 4cqw, 24px);
-
-    // Height left for the puzzle grid once the other rows (all effectively
-    // fixed-height) are subtracted from the viewport. ClueHeader's height
-    // reserves a worst-case 2 lines since its actual line count depends on
-    // clue text length, which can't be known in a pure CSS formula — a
-    // shorter clue just leaves a small gap under it rather than the grid
-    // reclaiming that space.
-    --board-available-height: calc(
-      100dvh
-      - #{$spacing-8 * 2}
-      - 48px
-      - #{$spacing-16 * 2}
-      - (var(--clue-font-size) * 1.5 * 2)
-      - 48px
-      - (var(--key-size) * (48 / 36) * 3 + #{$spacing-4 * 2})
-      - #{$spacing-8 * 3}
-      - 16px
-      - #{$spacing-16}
-    );
-  }
-
-  .puzzle {
-    flex-shrink: 0;
-    gap: $spacing-16;
-  }
 }

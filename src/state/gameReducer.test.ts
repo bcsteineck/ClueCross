@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createInitialGameState, isPuzzleComplete } from '../core/gameEngine'
-import { getLetterCost } from '../core/letterCosts'
+import { FREE_REVEALS_PER_PUZZLE, getLetterCost } from '../core/letterCosts'
 import type { PuzzleDefinition } from '../core/types'
 import { gameReducer } from './gameReducer'
 
@@ -31,7 +31,9 @@ describe('gameReducer', () => {
     const next = gameReducer(state, { type: 'REVEAL_LETTER', letter: 'X' })
     expect(next.values.a).toBe('X')
     expect(next.revealedLetters).toEqual({ X: true })
-    expect(next.score).toBe(100 - COST_X)
+    // The puzzle's first reveal is free.
+    expect(next.score).toBe(100)
+    expect(next.freeRevealsRemaining).toBe(FREE_REVEALS_PER_PUZZLE - 1)
   })
 
   it('runs a full play sequence through dispatched actions and completes automatically', () => {

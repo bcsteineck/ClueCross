@@ -1,0 +1,46 @@
+@use '../../styles/tokens' as *;
+
+.mobile-info-bar {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-12;
+  width: 100%;
+  padding: $spacing-12 $spacing-16;
+  border-top: $border-1 solid $color-gray-30;
+  border-bottom: $border-1 solid $color-gray-30;
+}
+
+.mobile-info-bar__heading {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+// The heading above shrinks (and its own clue line ellipsizes) so this
+// never does, when there isn't room for both at their natural size.
+.mobile-info-bar > .button {
+  flex-shrink: 0;
+}
+
+.mobile-info-bar__label {
+  font-family: $font-body;
+  font-size: $font-size-14;
+  font-weight: $font-weight-semibold;
+  color: $color-gray-70;
+}
+
+.mobile-info-bar__clue {
+  font-family: $font-logo;
+  font-size: $font-size-18;
+  font-weight: $font-weight-bold;
+  color: $color-gray-90;
+  text-decoration: underline;
+  text-decoration-color: $color-brand-primary;
+  text-underline-offset: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

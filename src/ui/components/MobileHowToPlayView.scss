@@ -1,0 +1,32 @@
+@use '../../styles/tokens' as *;
+
+.mobile-how-to-play-view {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.mobile-how-to-play-view__content {
+  box-sizing: border-box;
+  width: 100%;
+  padding: $spacing-16;
+}
+
+.mobile-how-to-play-view__title {
+  margin: 0 0 $spacing-16;
+  font-family: $font-logo;
+  font-size: $font-size-24;
+  font-weight: $font-weight-bold;
+  color: $color-gray-90;
+}
+
+.mobile-how-to-play-view__steps {
+  margin: 0;
+  padding-left: $spacing-20;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+  font-family: $font-body;
+  font-size: $font-size-16;
+  color: $color-gray-80;
+}

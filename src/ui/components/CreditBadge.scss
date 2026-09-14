@@ -8,14 +8,21 @@
   gap: $spacing-4;
   min-width: 100px;
   height: 48px;
-  padding: $spacing-12 $spacing-16;
-  border-radius: $radius-4;
+  border-radius: $radius-8;
+  // v0.2.0 replaces the Gold/Silver/Bronze/Bust presentation with stars
+  // (spec section 11) — the star rating shown alongside this badge is what
+  // conveys the tier now, so all four award-level modifier classes below
+  // share this one neutral look rather than each getting a distinct color.
+  // The classes themselves are kept (only the CSS is unified) since
+  // existing tests key off them.
+  color: $color-gray-90;
 }
 
 .credit-badge__value {
-  font-family: $font-clue;
-  font-weight: 800;
-  font-size: 16px;
+  font-family: $font-logo;
+  font-weight: $font-weight-bold;
+  font-size: $font-size-28;
+  color: $color-brand-primary;
 
   @include hoverable {
     &:hover {
@@ -24,22 +31,10 @@
   }
 }
 
-.credit-badge--gold {
-  background: $color-gold;
-  color: $color-neutral-100;
-}
-
-.credit-badge--silver {
-  background: $color-silver;
-  color: $color-neutral-100;
-}
-
-.credit-badge--bronze {
-  background: $color-bronze;
-  color: $color-neutral-100;
-}
-
-.credit-badge--bust {
-  background: $color-bust-100;
-  color: $color-neutral-100;
+.credit-badge__secondary {
+  margin-left: $spacing-4;
+  font-family: $font-body;
+  font-weight: $font-weight-regular;
+  font-size: $font-size-14;
+  color: $color-gray-60;
 }

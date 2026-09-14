@@ -4,23 +4,23 @@
 // DEFAULT_REVEAL_BUDGET (2000), so these are meaningful as-is.
 export type AwardLevel = 'gold' | 'silver' | 'bronze' | 'bust'
 
-export const AWARD_LABELS: Record<AwardLevel, string> = {
-  gold: 'Gold',
-  silver: 'Silver',
-  bronze: 'Bronze',
-  bust: 'Bust',
-}
-
-export const AWARD_MESSAGES: Record<AwardLevel, string> = {
-  gold: 'Wow! Amazing! You won the Gold award!',
-  silver: 'Great job! You won the Silver award!',
-  bronze: 'Not too shabby. You won the Bronze award!',
-  bust: 'Oh no! You busted. Better luck next time.',
-}
-
 export function getAwardLevel(score: number): AwardLevel {
   if (score < 0) return 'bust'
   if (score >= 1200) return 'gold'
   if (score >= 600) return 'silver'
   return 'bronze'
+}
+
+// v0.2.0 presents award tiers as a 0-3 star rating rather than
+// Gold/Silver/Bronze/Bust text. Reuses the existing thresholds above
+// unchanged — only the presentation differs.
+const AWARD_STAR_COUNTS: Record<AwardLevel, 0 | 1 | 2 | 3> = {
+  gold: 3,
+  silver: 2,
+  bronze: 1,
+  bust: 0,
+}
+
+export function getStarCount(score: number): 0 | 1 | 2 | 3 {
+  return AWARD_STAR_COUNTS[getAwardLevel(score)]
 }

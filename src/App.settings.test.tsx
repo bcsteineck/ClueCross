@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { toDateKey } from './core/archiveCalendar'
 import { isDateCompleted } from './core/completionTracking'
-import { markOnboardingCompleted } from './core/onboardingCompletion'
 import { dogsPuzzle } from './data/dogsPuzzle'
 
 // jsdom's default test origin doesn't provide a working localStorage, so
@@ -61,11 +60,6 @@ vi.mock('./data/archivePuzzles', async () => {
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', createMemoryStorage())
-  // This file exercises the Settings drawer, not onboarding — without this,
-  // stubbing a real (empty) localStorage makes every render here look like
-  // a genuine first visit, and the Onboarding modal would open alongside
-  // whatever dialog each test is actually asserting on.
-  markOnboardingCompleted()
 })
 
 afterEach(() => {
@@ -205,55 +199,6 @@ describe('Settings drawer', () => {
   })
 })
 
-describe('Mobile menu', () => {
-  async function openMenu(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole('button', { name: /open menu/i }))
-  }
-
-  it('opens into the menu view, listing Archive and Settings', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await openMenu(user)
-    const dialog = screen.getByRole('dialog', { name: /menu/i })
-    expect(within(dialog).getByRole('button', { name: /^archive$/i })).toBeTruthy()
-  })
-
-  it('navigates to the settings view in place, without closing the drawer', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await openMenu(user)
-    const dialog = screen.getByRole('dialog', { name: /menu/i })
-    await user.click(within(dialog).getByRole('button', { name: /^settings$/i }))
-
-    expect(screen.getByRole('dialog', { name: /settings/i })).toBeTruthy()
-    expect(screen.getByRole('checkbox', { name: /reduce motion/i })).toBeTruthy()
-  })
-
-  it('returns to the menu view via the back button, without closing the drawer', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await openMenu(user)
-    let dialog = screen.getByRole('dialog', { name: /menu/i })
-    await user.click(within(dialog).getByRole('button', { name: /^settings$/i }))
-    await user.click(screen.getByRole('button', { name: /back to menu/i }))
-
-    dialog = screen.getByRole('dialog', { name: /menu/i })
-    expect(within(dialog).getByRole('button', { name: /^archive$/i })).toBeTruthy()
-  })
-
-  it('has no back button when settings is opened directly from the desktop header', async () => {
-    const user = userEvent.setup()
-    render(<App />)
-
-    await user.click(screen.getByRole('button', { name: /^settings$/i }))
-    expect(screen.getByRole('dialog', { name: /settings/i })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /back to menu/i })).toBeNull()
-  })
-})
-
 describe('Completion tracking', () => {
   it('marks a date completed once its puzzle is solved, distinct from the active date', async () => {
     const user = userEvent.setup()
@@ -271,15 +216,21 @@ describe('Completion tracking', () => {
     await user.click(screen.getByRole('button', { name: /open puzzle for august 4, 2026/i }))
 
     await user.click(screen.getByRole('button', { name: /^archive$/i }))
+    // Filled entirely by typing with no reveals, so the score stays at the
+    // full starting budget (2000) — a 3-star result.
     expect(
-      screen.getByRole('button', { name: /august 5, 2026 \(completed\)/i }),
+      screen.getByRole('button', { name: /august 5, 2026 \(completed, 3 out of 3 stars\)/i }),
     ).toBeTruthy()
     expect(
       screen.getByRole('button', { name: /august 4, 2026 \(currently viewing\)/i }),
     ).toBeTruthy()
   })
 
-  it('resetting the current puzzle does not un-mark it as completed', async () => {
+  // Vitest runs with import.meta.env.DEV true by default (see the next
+  // describe block for the opposite, production-like case), so this
+  // exercises the same dev-only override a real developer gets locally —
+  // not the general-player experience.
+  it('dev override: resetting an already-completed puzzle does not un-mark it as completed', async () => {
     const user = userEvent.setup()
     render(<App />)
 
@@ -294,5 +245,55 @@ describe('Completion tracking', () => {
     await user.click(screen.getByRole('button', { name: /^reset$/i }))
 
     expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
+  })
+})
+
+describe('Completion tracking (production build, no dev override)', () => {
+  beforeEach(() => {
+    vi.stubEnv('DEV', false)
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('disables resetting an already-completed puzzle for a general player', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    for (const cell of Object.values(dogsPuzzle.cells)) {
+      await user.click(getCell(cell.id))
+      await user.keyboard(cell.correctLetter)
+    }
+    expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
+
+    await openSettings(user)
+    const resetButton = screen.getByRole('button', {
+      name: /reset current puzzle/i,
+    }) as HTMLButtonElement
+    expect(resetButton.disabled).toBe(true)
+    expect(screen.getByText(/this puzzle is already complete/i)).toBeTruthy()
+
+    await user.click(resetButton)
+    expect(screen.queryByText(/reset your progress/i)).toBeNull()
+    expect(getCell(Object.keys(dogsPuzzle.cells)[0]).value).not.toBe('')
+  })
+
+  it('still allows resetting a puzzle that has not been completed yet', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(getCell('r0c0'))
+    await user.keyboard('S')
+
+    await openSettings(user)
+    const resetButton = screen.getByRole('button', {
+      name: /reset current puzzle/i,
+    }) as HTMLButtonElement
+    expect(resetButton.disabled).toBe(false)
+
+    await user.click(resetButton)
+    await user.click(screen.getByRole('button', { name: /^reset$/i }))
+    expect(getCell('r0c0').value).toBe('')
   })
 })

@@ -1,0 +1,66 @@
+@use '../../styles/tokens' as *;
+
+.reveal-history__empty {
+  margin: 0;
+  font-family: $font-body;
+  font-size: $font-size-14;
+  color: $color-gray-50;
+}
+
+.reveal-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-16;
+
+  + .button {
+    margin-top: $spacing-16;
+    border-top: $border-1 solid $color-gray-20;
+    width: 100%;
+    border-radius: 0;
+    padding-top: $spacing-16;
+
+    .button__label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: $spacing-4;
+    }
+  }
+}
+
+.reveal-history__row {
+  display: flex;
+  align-items: center;
+  gap: $spacing-12;
+  font-family: $font-body;
+  font-size: $font-size-14;
+}
+
+.reveal-history__avatar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-full;
+  background: $color-brand-secondary;
+  color: $color-gray-00;
+  font-family: $font-logo;
+  font-weight: $font-weight-medium;
+  text-transform: uppercase;
+  line-height: 1;
+  font-size: $font-size-16;
+}
+
+.reveal-history__cost {
+  font-weight: $font-weight-medium;
+}
+
+.reveal-history__cells {
+  margin-left: auto;
+  color: $color-gray-60;
+}

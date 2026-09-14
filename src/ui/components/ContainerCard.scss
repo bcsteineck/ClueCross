@@ -1,0 +1,29 @@
+@use '../../styles/tokens' as *;
+
+.container-card {
+  box-sizing: border-box;
+  background: $color-gray-00;
+  border-radius: $radius-16;
+  padding: $spacing-20;
+  @include hard-shadow($color-gray-30);
+}
+
+.container-card--default {
+  border: $border-1 solid $color-gray-30;
+}
+
+.container-card--shadow {
+  border: none;
+  box-shadow: $shadow-card;
+}
+
+// Shared heading style reused by every card that needs a small title
+// ("Your Score", "Progress", "Reveal History", "How it works") — keeps
+// that typography defined once instead of duplicated per card.
+.container-card__title {
+  margin: 0 0 $spacing-12;
+  font-family: $font-body;
+  font-size: $font-size-14;
+  font-weight: $font-weight-semibold;
+  color: $color-gray-70;
+}

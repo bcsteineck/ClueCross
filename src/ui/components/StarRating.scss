@@ -1,0 +1,13 @@
+@use '../../styles/tokens' as *;
+
+.star-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-4;
+  color: currentColor;
+  padding-top: $spacing-4;
+}
+
+.star-rating__star {
+  stroke: currentColor;
+}

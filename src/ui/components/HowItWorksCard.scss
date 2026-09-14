@@ -1,0 +1,25 @@
+@use '../../styles/tokens' as *;
+
+.how-it-works-card__toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: $color-gray-90;
+}
+
+.how-it-works-card__title {
+  margin: 0;
+}
+
+.how-it-works-card__body {
+  margin: $spacing-12 0 0;
+  font-family: $font-body;
+  font-size: $font-size-14;
+  color: $color-gray-70;
+  text-align: left;
+}

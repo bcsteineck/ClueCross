@@ -1,0 +1,63 @@
+@use '../../styles/tokens' as *;
+
+.letter-reveal-button {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-2;
+  width: 44px;
+  height: 44px;
+  border: $border-2 solid $color-gray-90;
+  border-radius: $radius-8;
+  background: $color-gray-00;
+  color: $color-gray-90;
+  cursor: pointer;
+  font-family: $font-logo;
+}
+
+.letter-reveal-button__letter {
+  font-size: $font-size-16;
+  font-weight: $font-weight-semibold;
+  text-transform: uppercase;
+}
+
+.letter-reveal-button__cost {
+  font-family: $font-body;
+  font-size: $font-size-12;
+  font-weight: $font-weight-regular;
+}
+
+.letter-reveal-button--default {
+  @include hoverable {
+    &:hover {
+      border-color: $color-brand-primary;
+      color: $color-brand-primary;
+    }
+  }
+
+  &:active {
+    background: $color-brand-primary-wash;
+    border-color: $color-brand-primary;
+    color: $color-brand-primary;
+  }
+}
+
+.letter-reveal-button--revealed {
+  border-color: $color-brand-secondary;
+  color: $color-brand-secondary;
+  background: $color-brand-secondary-wash;
+  cursor: default;
+
+  .letter-reveal-button__cost {
+    text-decoration: line-through;
+  }
+}
+
+.letter-reveal-button--disabled {
+  border-color: $color-gray-20;
+  background: $color-gray-20;
+  color: $color-gray-40;
+  cursor: default;
+}

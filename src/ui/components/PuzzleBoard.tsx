@@ -1,8 +1,10 @@
 import { useEffect, useImperativeHandle, useMemo, useRef } from 'react'
 import type { CSSProperties, KeyboardEvent, Ref } from 'react'
 import type { CellId, PuzzleDefinition } from '../../core/types'
+import { getNextCellInEntry, getPreviousCellInEntry } from '../../layout/autoAdvance'
 import { getAvailableDirectionsForCell } from '../../layout/entryDirection'
 import type { Direction } from '../../layout/entryDirection'
+import { getGridDimensions } from '../../layout/gridDimensions'
 import { getCellsInDirection } from '../../layout/spatialNavigation'
 import type { ArrowDirection } from '../../layout/spatialNavigation'
 import type { LayoutDefinition } from '../../layout/types'
@@ -60,17 +62,12 @@ export function PuzzleBoard({
 }: PuzzleBoardProps) {
   const inputRefs = useRef<Record<CellId, HTMLInputElement | null>>({})
 
-  // Grid dimensions, derived from cell positions so the mobile layout can
-  // size cells to fit the viewport (see PuzzleBoard.scss) without needing
-  // an explicit column/row count in LayoutDefinition.
-  const cols = useMemo(
-    () => Math.max(...Object.values(layout.cellPositions).map((position) => position.x)) + 1,
-    [layout],
-  )
-  const rows = useMemo(
-    () => Math.max(...Object.values(layout.cellPositions).map((position) => position.y)) + 1,
-    [layout],
-  )
+  // Grid dimensions, derived from cell positions so the board can size
+  // itself (see PuzzleBoard.scss) without needing an explicit column/row
+  // count in LayoutDefinition. MobileLayout.tsx computes the same thing
+  // independently (see there for why) — kept in sync via this shared
+  // helper rather than two copies of the same math.
+  const { cols, rows } = useMemo(() => getGridDimensions(layout), [layout])
 
   // Mirrors activeCellId in a ref so a mousedown handler (which fires
   // before the resulting focus event) can tell whether the clicked cell
@@ -126,10 +123,7 @@ export function PuzzleBoard({
       if (revealedLetters[letter]) {
         onImpossibleLetterAttempt(cellId, letter)
       }
-      const forward: ArrowDirection = activeDirection === 'across' ? 'right' : 'down'
-      const next = getCellsInDirection(layout, cellId, forward).find(
-        (id) => !lockedCellIds[id],
-      )
+      const next = getNextCellInEntry(puzzle, layout, cellId, activeDirection, lockedCellIds)
       if (next) {
         focusCell(next)
       }
@@ -149,10 +143,7 @@ export function PuzzleBoard({
       return
     }
 
-    const backward: ArrowDirection = activeDirection === 'across' ? 'left' : 'up'
-    const previous = getCellsInDirection(layout, cellId, backward).find(
-      (id) => !lockedCellIds[id],
-    )
+    const previous = getPreviousCellInEntry(puzzle, layout, cellId, activeDirection, lockedCellIds)
     if (previous) {
       onSetCellValue(previous, '')
       if (previous === impossibleCellId) {
@@ -195,13 +186,12 @@ export function PuzzleBoard({
   }))
 
   return (
-    <div className="puzzle-board">
-      <div
-        role="group"
-        aria-label="Puzzle board"
-        className="puzzle-board__grid"
-        style={{ '--cols': cols, '--rows': rows } as CSSProperties}
-      >
+    // --cols/--rows live here (not just on the grid below) so an ancestor
+    // scoped stylesheet (see MobilePuzzleView.scss) can also read them —
+    // custom properties only cascade downward, and this is the outermost
+    // element PuzzleBoard renders.
+    <div className="puzzle-board" style={{ '--cols': cols, '--rows': rows } as CSSProperties}>
+      <div role="group" aria-label="Puzzle board" className="puzzle-board__grid">
         {Object.keys(puzzle.cells).map((cellId) => (
           <Cell
             key={cellId}

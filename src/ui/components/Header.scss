@@ -1,67 +1,39 @@
 @use '../../styles/tokens' as *;
 
 .header {
+  box-sizing: border-box;
+  width: 100%;
+  background: $color-gray-00;
+  border-bottom: $border-1 solid $color-gray-30;
+}
+
+.header__inner {
+  @include desktop-content-width;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
+  padding-block: $spacing-16;
 }
 
 .header__logo {
+  display: flex;
+  align-items: center;
   border: none;
   margin: 0;
   padding: 0;
   background: none;
-  font-family: $font-logo;
-  font-weight: 800;
-  font-size: 32px;
-  letter-spacing: 0.64px;
-  color: $color-neutral-100;
   cursor: pointer;
+}
+
+.header__logo-image {
+  // Matches the SVG's natural aspect ratio (170:28); height alone is set
+  // so it scales like the text logo it replaced.
+  height: 28px;
+  width: auto;
 }
 
 .header__options {
   display: flex;
   align-items: center;
   gap: $spacing-32;
-}
-
-.header__menu-button {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  border-radius: $radius-4;
-  background: transparent;
-  color: $color-neutral-100;
-  cursor: pointer;
-}
-
-@include hoverable {
-  .header__menu-button:hover {
-    background: $color-neutral-50;
-  }
-}
-
-@include mobile {
-  .header__options {
-    display: none;
-  }
-
-  .header__menu-button {
-    display: flex;
-  }
-
-  .header__logo {
-    font-size: 28px;
-  }
-}
-
-@include compactLayout {
-  .header {
-    flex-shrink: 0;
-  }
 }

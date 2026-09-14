@@ -5,11 +5,13 @@
 .cell-tile {
   box-sizing: border-box;
   position: relative;
-  width: 28px;
-  height: 28px;
-  background: $color-neutral-0;
-  border: $border-2 solid $color-neutral-100;
-  border-radius: $radius-2;
+  // Fills its grid cell (sized by PuzzleBoard.scss's fr/aspect-ratio grid)
+  // rather than a fixed pixel size, so the whole board scales with its
+  // container at every breakpoint.
+  width: 100%;
+  height: 100%;
+  background: $color-gray-00;
+  border-radius: $radius-1;
 }
 
 .cell {
@@ -60,10 +62,20 @@
   pointer-events: none;
   font-family: $font-cell;
   font-weight: 500;
-  font-size: 20px;
+  // Scales with each cell's actual rendered width (~100cqw / cols, via the
+  // .puzzle-board container-query context in PuzzleBoard.scss) rather than
+  // a fixed size, since the grid itself is now fluid.
+  font-size: clamp(18px, calc(60cqw / var(--cols)), 24px);
+  // Without this, the global :root line-height (16px/1.375, a unitless
+  // ratio applied to whatever font-size inherits it) creates a line box
+  // taller than the font's own metrics call for, and flexbox centers that
+  // taller box rather than the glyph itself — visibly shifting the letter
+  // up by a px or two. `normal` uses the font's own vertical metrics
+  // instead, which centers the actual glyph correctly.
+  line-height: normal;
   letter-spacing: -0.4px;
   text-transform: uppercase;
-  color: $color-neutral-100;
+  color: $color-gray-90;
 }
 
 // Hover only affects the plain default cell. Each of these states is
@@ -75,7 +87,7 @@
   .cell-tile:hover:not(:has(.cell--active)):not(:has(.cell--locked)):not(:has(.cell--complete)):not(
       :has(.cell--impossible)
     ) {
-    background: $color-neutral-40;
+    background: $color-gray-10;
   }
 }
 
@@ -84,9 +96,14 @@
   cursor: default;
 }
 
+// Revealed/locked — a green wash, per the Figma Puzzle Cell "Revealed" state.
 .cell-tile:has(.cell--locked):not(:has(.cell--active)):not(:has(.cell:focus-visible)) {
-  background: $color-cyan-100;
-  border-color: $color-neutral-100;
+  background: $color-brand-secondary-wash;
+  color: $color-brand-secondary;
+
+  .cell__letter {
+    color: $color-brand-secondary;
+  }
 }
 
 .cell--complete:not(.cell--active):not(:focus-visible) {
@@ -94,9 +111,13 @@
   cursor: default;
 }
 
+// Whole-puzzle-complete — solid green fill with white text, per Figma.
 .cell-tile:has(.cell--complete):not(:has(.cell--active)):not(:has(.cell:focus-visible)) {
-  background: $color-highlight-100;
-  border-color: $color-highlight-100;
+  background: $color-brand-secondary;
+
+  .cell__letter {
+    color: $color-gray-00;
+  }
 }
 
 // The active/focused cell always shows this "you are here" treatment,
@@ -107,10 +128,15 @@
   outline: none;
 }
 
+// Selected/active — a purple wash, per the Figma Puzzle Cell "Selected" state.
 .cell-tile:has(.cell--active),
 .cell-tile:has(.cell:focus-visible) {
-  background: $color-highlight-100;
-  border-color: $color-neutral-100;
+  background: $color-brand-primary-wash;
+  color: $color-brand-primary;
+
+  .cell__letter {
+    color: $color-brand-primary;
+  }
 }
 
 .cell--locked.cell--active,
@@ -133,20 +159,12 @@
 .cell-tile:has(.cell--impossible),
 .cell-tile:has(.cell--impossible:focus-visible) {
   background: $color-bust-100;
-  border-color: $color-neutral-100;
 }
 
 @include compactLayout {
+  // Fully square corners read better than the sharp-but-rounded 1px radius
+  // once cells are this small.
   .cell-tile {
-    border-radius: 0;  
-  }
-
-  .cell-tile {
-    width: var(--cell-size);
-    height: var(--cell-size);
-  }
-
-  .cell__letter {
-    font-size: calc(var(--cell-size) * (20 / 28));
+    border-radius: 0;
   }
 }

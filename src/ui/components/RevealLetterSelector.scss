@@ -1,0 +1,47 @@
+@use '../../styles/tokens' as *;
+
+.reveal-letter-selector {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-24;
+  // No height of its own on either breakpoint — the ancestor each is
+  // actually nested in already matches the Puzzle board's exact footprint
+  // (.desktop-layout__center-card--reveal for desktop, see
+  // DesktopLayout.scss; .mobile-reveal-view__selector for mobile, see the
+  // override below), and centers this within it.
+}
+
+// On mobile, .mobile-reveal-view__selector is already sized to exactly
+// match .mobile-puzzle-view__board's footprint (see
+// MobileRevealView.scss/MobilePuzzleView.scss) — filling that exactly,
+// rather than relying on the approximate fixed min-height above, is what
+// keeps Cancel Reveal landing at the same height Reveal Letter did.
+.mobile-reveal-view__selector .reveal-letter-selector {
+  width: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.reveal-letter-selector__heading {
+  margin: 0;
+  font-family: $font-body;
+  font-size: $font-size-20;
+  font-weight: $font-weight-semibold;
+  color: $color-gray-90;
+}
+
+.reveal-letter-selector__grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: $spacing-8;
+}
+
+.reveal-letter-selector__footer {
+  margin: 0;
+  font-family: $font-body;
+  font-size: $font-size-14;
+  color: $color-gray-90;
+}

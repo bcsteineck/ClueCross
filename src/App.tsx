@@ -1,108 +1,132 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import type { GameState } from './core/gameEngine'
 import { toDateKey } from './core/archiveCalendar'
 import { isDateCompleted } from './core/completionTracking'
-import { hasCompletedOnboarding, markOnboardingCompleted } from './core/onboardingCompletion'
+import { getPuzzleResultStarCount } from './core/puzzleResults'
 import { getArchiveEntryForDate, getToday } from './data/archivePuzzles'
 import { dogsPuzzle } from './data/dogsPuzzle'
 import { dogsPuzzleLayout } from './layout/dogsPuzzleLayout'
+import { PuzzleSessionProvider } from './state/PuzzleSessionProvider'
+import { useIsMobile } from './state/useIsMobile'
 import { useReducedMotionPreference } from './state/useReducedMotionPreference'
 import './App.scss'
-import { ArchiveCalendar } from './ui/components/ArchiveCalendar'
-import { Header } from './ui/components/Header'
-import type { NavDrawerView } from './ui/components/NavDrawer'
+import { DesktopLayout } from './ui/components/DesktopLayout'
+import { MobileLayout } from './ui/components/MobileLayout'
 import { NavDrawer } from './ui/components/NavDrawer'
-import { Onboarding } from './ui/components/Onboarding'
-import { PuzzlePage } from './ui/components/PuzzlePage'
-
-type View = 'puzzle' | 'archive'
+import type { View } from './ui/view'
 
 function App() {
+  const isMobile = useIsMobile()
   const [view, setView] = useState<View>('puzzle')
   const [selectedDate, setSelectedDate] = useState<Date>(() => getToday())
-  const [drawer, setDrawer] = useState<NavDrawerView | null>(null)
-  const [resetNonce, setResetNonce] = useState(0)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Per-date, not global: resetting one date's puzzle must not invalidate
+  // the cached in-progress session of any other date.
+  const [resetGenerations, setResetGenerations] = useState<Record<string, number>>({})
   const [reduceMotion, setReduceMotion] = useReducedMotionPreference()
-  const [showOnboarding, setShowOnboarding] = useState(() => !hasCompletedOnboarding())
+  // Outlives the PuzzleSessionProvider remount boundary (below) so
+  // switching Archive dates and back restores exact in-session progress —
+  // see spec section 15 ("restores its existing saved state if previously
+  // played"). Session-only: a full page reload still resets, matching
+  // existing behavior for anything short of a completed puzzle.
+  const sessionCache = useRef<Record<string, GameState>>({})
 
   const entry = getArchiveEntryForDate(selectedDate) ?? {
     puzzle: dogsPuzzle,
     layout: dogsPuzzleLayout,
   }
+  const dateKey = toDateKey(selectedDate)
+  const resetGeneration = resetGenerations[dateKey] ?? 0
+  const isToday = dateKey === toDateKey(getToday())
+  // There's no reason for a player to replay a puzzle they've already
+  // completed — its archived result is permanent regardless (see
+  // completionTracking.ts/puzzleResults.ts) — so NavDrawer disables the
+  // reset control once this is true. Recomputed fresh on every render
+  // (including the one triggered by opening Settings), so it reflects a
+  // completion that just happened in this same session.
+  const currentPuzzleCompleted = isDateCompleted(dateKey, entry.puzzle.id)
 
   function handleSelectDate(date: Date) {
     setSelectedDate(date)
     setView('puzzle')
   }
 
-  // Archive doubles as a toggle: clicking it again while already viewing
-  // the archive returns to the puzzle, since selecting a date is otherwise
-  // the only way back.
-  function handleArchiveClick() {
-    setView((current) => (current === 'archive' ? 'puzzle' : 'archive'))
-  }
-
   function handleResetCurrentPuzzle() {
-    setResetNonce((n) => n + 1)
+    delete sessionCache.current[dateKey]
+    setResetGenerations((generations) => ({
+      ...generations,
+      [dateKey]: (generations[dateKey] ?? 0) + 1,
+    }))
   }
 
-  // Shared by Skip and Start Playing — either way, the player has seen
-  // onboarding and lands back on the puzzle they already had loaded.
-  function handleOnboardingClose() {
-    markOnboardingCompleted()
-    setShowOnboarding(false)
+  // Undefined means "not completed" — a real 0-star completed result
+  // (starCount 0) is a distinct, defined value from this, which is what
+  // lets the Archive calendar tell it apart from an unplayed placeholder
+  // (spec section 15).
+  const getDateStarCount = (date: Date): 0 | 1 | 2 | 3 | undefined => {
+    const dateEntry = getArchiveEntryForDate(date)
+    if (!dateEntry) return undefined
+    return getPuzzleResultStarCount(toDateKey(date), dateEntry.puzzle.id)
   }
 
   return (
     <div className="app">
-      <div className="app__content" inert={drawer !== null || showOnboarding || undefined}>
-        <Header
-          onLogoClick={() => setView('puzzle')}
-          onHowToPlayClick={() => setShowOnboarding(true)}
-          archiveActive={view === 'archive'}
-          onArchiveClick={handleArchiveClick}
-          settingsActive={drawer === 'settings'}
-          onSettingsClick={() => setDrawer('settings')}
-          onMenuClick={() => setDrawer('menu')}
-        />
-        {view === 'archive' ? (
-          <ArchiveCalendar
-            initialMonth={selectedDate}
-            activeDate={selectedDate}
-            onSelectDate={handleSelectDate}
-            isDateCompleted={(date) => {
-              const dateEntry = getArchiveEntryForDate(date)
-              return dateEntry !== undefined && isDateCompleted(toDateKey(date), dateEntry.puzzle.id)
-            }}
-          />
-        ) : (
-          <PuzzlePage
-            key={`${toDateKey(selectedDate)}-${resetNonce}`}
-            puzzle={entry.puzzle}
-            layout={entry.layout}
-            date={selectedDate}
-          />
-        )}
-        <footer className="app__copyright">© {new Date().getFullYear()} ClueCross</footer>
+      <div className="app__content" inert={settingsOpen || undefined}>
+        <PuzzleSessionProvider
+          key={`${dateKey}-${resetGeneration}`}
+          puzzle={entry.puzzle}
+          sessionKey={dateKey}
+          cache={sessionCache}
+          allowRestoringResult={resetGeneration === 0}
+        >
+          {(interaction) =>
+            isMobile ? (
+              <MobileLayout
+                view={view}
+                onViewChange={setView}
+                layout={entry.layout}
+                date={selectedDate}
+                isToday={isToday}
+                activeCellId={interaction.activeCellId}
+                activeDirection={interaction.activeDirection}
+                onActiveCellChange={interaction.onActiveCellChange}
+                onActiveDirectionChange={interaction.onActiveDirectionChange}
+                onLogoClick={() => setView('puzzle')}
+                settingsActive={settingsOpen}
+                onSettingsClick={() => setSettingsOpen(true)}
+                onSelectDate={handleSelectDate}
+                getDateStarCount={getDateStarCount}
+              />
+            ) : (
+              <DesktopLayout
+                view={view}
+                onViewChange={setView}
+                layout={entry.layout}
+                date={selectedDate}
+                isToday={isToday}
+                activeCellId={interaction.activeCellId}
+                activeDirection={interaction.activeDirection}
+                onActiveCellChange={interaction.onActiveCellChange}
+                onActiveDirectionChange={interaction.onActiveDirectionChange}
+                onLogoClick={() => setView('puzzle')}
+                settingsActive={settingsOpen}
+                onSettingsClick={() => setSettingsOpen(true)}
+                onSelectDate={handleSelectDate}
+                getDateStarCount={getDateStarCount}
+              />
+            )
+          }
+        </PuzzleSessionProvider>
       </div>
-      {drawer && (
+      {settingsOpen && (
         <NavDrawer
-          initialView={drawer}
-          onHowToPlayClick={() => {
-            setShowOnboarding(true)
-            setDrawer(null)
-          }}
-          archiveActive={view === 'archive'}
-          onArchiveClick={() => {
-            handleArchiveClick()
-            setDrawer(null)
-          }}
           reduceMotion={reduceMotion}
           onReduceMotionChange={setReduceMotion}
           onResetCurrentPuzzle={handleResetCurrentPuzzle}
-          onClose={() => setDrawer(null)}
+          currentPuzzleCompleted={currentPuzzleCompleted}
+          onClose={() => setSettingsOpen(false)}
         />
       )}
-      {showOnboarding && <Onboarding onClose={handleOnboardingClose} />}
     </div>
   )
 }

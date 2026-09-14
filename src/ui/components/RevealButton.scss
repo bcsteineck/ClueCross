@@ -1,0 +1,74 @@
+@use '../../styles/tokens' as *;
+
+.reveal-button-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-8;
+  width: 100%;
+}
+
+.reveal-button {
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-20;
+  border: none;
+  border-radius: 100px;
+  cursor: pointer;
+  font-family: $font-logo;
+  color: $color-gray-00;
+}
+
+.reveal-button__label {
+  font-size: $font-size-24;
+  font-weight: $font-weight-medium;
+}
+
+// A caption below the button now, not on-button text — needs its own
+// readable-on-page-background color rather than the white the button
+// itself uses.
+.reveal-button__sublabel {
+  font-family: $font-body;
+  font-size: $font-size-14;
+  font-weight: $font-weight-regular;
+  color: $color-gray-90;
+}
+
+.reveal-button__sublabel--disabled {
+  color: $color-gray-50;
+}
+
+.reveal-button--default {
+  background: $color-brand-secondary;
+  border: solid 1px $color-brand-secondary-shadow;
+  @include hard-shadow($color-brand-secondary-shadow);
+
+  @include hoverable {
+    &:hover:not(:disabled) {
+      background: $color-brand-secondary-hover;
+    }
+  }
+}
+
+.reveal-button--cancel {
+  background: $color-brand-primary;
+  border: solid 1px $color-brand-primary-shadow;
+  @include hard-shadow($color-brand-primary-shadow);
+
+  @include hoverable {
+    &:hover:not(:disabled) {
+      background: $color-brand-primary-hover;
+    }
+  }
+}
+
+.reveal-button:disabled {
+  background: $color-gray-20;
+  color: $color-gray-50;
+  cursor: not-allowed;
+  box-shadow: -4px 4px 0px $color-gray-40;
+  border: solid 1px $color-gray-40;
+}

@@ -1,64 +1,55 @@
-import { Archive, Info, Menu, Settings } from 'lucide-react'
+import { Archive, Settings } from 'lucide-react'
 import { Button } from './Button'
 import './Header.scss'
 
 export interface HeaderProps {
   onLogoClick?: () => void
-  onHowToPlayClick?: () => void
   archiveActive?: boolean
   onArchiveClick?: () => void
   settingsActive?: boolean
   onSettingsClick?: () => void
-  onMenuClick?: () => void
 }
 
+// Desktop-only now — mobile has its own persistent header (MobileHeader)
+// with icon-only Info/Settings/Archive controls and no hamburger (spec
+// section 6). Desktop has no How-to-Play trigger here either (confirmed
+// absent in the Figma desktop header) — that role is filled by the right
+// column's collapsible How It Works card instead.
 export function Header({
   onLogoClick,
-  onHowToPlayClick,
   archiveActive,
   onArchiveClick,
   settingsActive,
   onSettingsClick,
-  onMenuClick,
 }: HeaderProps) {
   return (
     <div className="header">
-      <button type="button" className="header__logo" onClick={onLogoClick}>
-        ClueCross
-      </button>
-      <div className="header__options">
-        <Button
-          variant="text"
-          iconRight={<Info size={20} aria-hidden="true" />}
-          onClick={onHowToPlayClick}
-        >
-          How to Play
-        </Button>
-        <Button
-          variant="text"
-          active={archiveActive}
-          iconRight={<Archive size={20} aria-hidden="true" />}
-          onClick={onArchiveClick}
-        >
-          Archive
-        </Button>
-        <Button
-          variant="text"
-          active={settingsActive}
-          iconRight={<Settings size={20} aria-hidden="true" />}
-          onClick={onSettingsClick}
-        >
-          Settings
-        </Button>
+      {/* Full-bleed bar, edge to edge — this inner wrapper is what actually
+          centers and width-constrains the logo/nav, matching the dashboard
+          columns below (see desktop-content-width in _tokens.scss). */}
+      <div className="header__inner">
+        <button type="button" className="header__logo" onClick={onLogoClick}>
+          <img src="/images/logo/cc_logo.svg" alt="ClueCross" className="header__logo-image" />
+        </button>
+        <div className="header__options">
+          <Button
+            variant="text"
+            active={archiveActive}
+            iconRight={<Archive size={20} aria-hidden="true" />}
+            onClick={onArchiveClick}
+          >
+            Archive
+          </Button>
+          <Button
+            variant="text"
+            active={settingsActive}
+            iconRight={<Settings size={20} aria-hidden="true" />}
+            onClick={onSettingsClick}
+          >
+            Settings
+          </Button>
+        </div>
       </div>
-      <button
-        type="button"
-        className="header__menu-button"
-        aria-label="Open menu"
-        onClick={onMenuClick}
-      >
-        <Menu size={24} aria-hidden="true" />
-      </button>
     </div>
   )
 }

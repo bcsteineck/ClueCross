@@ -7,9 +7,9 @@
 }
 
 .select-field__label {
-  font-family: $font-clue;
-  font-weight: 400;
-  font-size: 16px;
+  font-family: $font-body;
+  font-weight: $font-weight-regular;
+  font-size: $font-size-16;
 }
 
 .select-field__label--hidden {
@@ -31,7 +31,7 @@
 }
 
 .select-field__label {
-  color: $color-neutral-100;
+  color: $color-gray-90;
 }
 
 .select-field__select {
@@ -40,13 +40,13 @@
   min-width: 120px;
   height: 48px;
   padding: $spacing-12 $spacing-32 $spacing-12 $spacing-16;
-  border: $border-2 solid $color-neutral-100;
-  border-radius: $radius-4;
-  background: $color-neutral-0;
-  font-family: $font-clue;
-  font-weight: 500;
-  font-size: 16px;
-  color: $color-neutral-100;
+  border: $border-1 solid $color-gray-30;
+  border-radius: $radius-8;
+  background: $color-gray-00;
+  font-family: $font-body;
+  font-weight: $font-weight-medium;
+  font-size: $font-size-16;
+  color: $color-gray-90;
   appearance: none;
   cursor: pointer;
 }
@@ -54,7 +54,7 @@
 .select-field__chevron {
   position: absolute;
   right: $spacing-16;
-  color: $color-neutral-100;
+  color: $color-gray-90;
   pointer-events: none;
   transition: transform 0.15s ease;
 }

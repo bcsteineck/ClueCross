@@ -1,0 +1,93 @@
+@use '../../styles/tokens' as *;
+
+.desktop-page {
+  display: flex;
+  flex-direction: column;
+  // At least the full viewport height, so the footer below reaches the
+  // actual bottom edge (rather than trailing right after the puzzle
+  // content) when that content alone is shorter than the viewport.
+  min-height: 100svh;
+}
+
+.desktop-layout {
+  @include desktop-content-width;
+  // Grows to fill whatever the header/footer bars don't use, which is what
+  // pushes the footer down to the bottom of .desktop-page.
+  flex: 1;
+  padding-block: $spacing-24 $spacing-32;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-20;
+}
+
+.desktop-layout__columns {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: $spacing-20;
+  align-items: start;
+}
+
+.desktop-layout__column {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-20;
+}
+
+.desktop-layout__column--left {
+  grid-column: 1;
+}
+
+.desktop-layout__column--center {
+  grid-column: 2 / span 2;
+}
+
+.desktop-layout__column--right {
+  grid-column: 4;
+}
+
+.desktop-layout__center-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+// Matches the Puzzle state's own board height (PuzzleBoard.scss's grid is
+// aspect-ratio: cols/rows, inset by the board's own 20px padding on top of
+// this card's 0 padding) so the card doesn't visibly resize when switching
+// between Puzzle and Reveal. Not applied to Archive, which isn't the same
+// footprint today and wasn't part of this fix.
+.desktop-layout__center-card--reveal {
+  aspect-ratio: var(--cols) / var(--rows);
+}
+
+.desktop-layout__copyright {
+  box-sizing: border-box;
+  width: 100%;
+  border-top: $border-1 solid $color-gray-30;
+}
+
+.desktop-layout__copyright-inner {
+  @include desktop-content-width;
+  padding-block: $spacing-20;
+  text-align: center;
+  font-family: $font-body;
+  font-size: $font-size-12;
+  color: $color-gray-50;
+}
+
+// Not the Phase 5 mobile design — just a safety net so the dashboard
+// doesn't render unusably squeezed at narrow widths in the interim before
+// the dedicated mobile layout lands.
+@include mobile {
+  .desktop-layout__columns {
+    grid-template-columns: 1fr;
+  }
+
+  .desktop-layout__column--left,
+  .desktop-layout__column--center,
+  .desktop-layout__column--right {
+    grid-column: 1;
+  }
+}

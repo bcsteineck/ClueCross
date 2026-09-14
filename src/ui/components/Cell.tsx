@@ -70,7 +70,10 @@ export function Cell({
         type="text"
         id={`cell-${cellId}`}
         autoComplete="off"
-        inputMode="none"
+        autoCorrect="off"
+        autoCapitalize="characters"
+        spellCheck={false}
+        inputMode="text"
         maxLength={1}
         value={value}
         readOnly={isLocked}
