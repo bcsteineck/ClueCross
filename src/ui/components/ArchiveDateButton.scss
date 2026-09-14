@@ -15,6 +15,11 @@
   background: $color-gray-00;
   color: $color-gray-90;
   cursor: pointer;
+
+  @include mobile {
+    gap: 0;
+    border-radius: $radius-4;
+  }
 }
 
 .archive-date .star-rating {
