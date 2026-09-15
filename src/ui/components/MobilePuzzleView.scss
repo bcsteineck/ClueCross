@@ -31,6 +31,7 @@
   // that doesn't fit, the page scrolls instead, the same as before.
   flex: 1 0 auto;
   border-top: $border-1 solid $color-gray-30;
+  background-color: $color-gray-10;
 }
 
 // Scoped to this view specifically — PuzzleBoard.scss's own defaults
