@@ -19,6 +19,7 @@ const FOCUSABLE_SELECTOR =
 export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) {
   const starCount = getStarCount(score)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const titleId = useId()
   // See NavDrawer's identical capture for why this is a lazy state
   // initializer rather than a plain read inside the effect below (stable
@@ -27,11 +28,15 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
 
   // Locks background scroll, moves focus into the dialog, and restores
   // both on close — the page behind genuinely can't be scrolled or
-  // interacted with while this is open.
+  // interacted with while this is open. Focuses the title, not the first
+  // focusable control (the close button) — a screen reader gets "Puzzle
+  // Complete!" first, and this modal popping up (it's not a response to any
+  // click) doesn't leave a focus-visible ring sitting on the close button,
+  // which reads as a stray highlight rather than a deliberate one.
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus()
+    titleRef.current?.focus()
 
     return () => {
       document.body.style.overflow = previousOverflow
@@ -53,8 +58,12 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
 
     const first = focusable[0]
     const last = focusable[focusable.length - 1]
+    // Initial focus lands on the title (see above), which isn't part of
+    // this focusable list — so "at the start of the trap" means either
+    // genuinely on `first`, or not on any tracked control yet at all.
+    const atStart = document.activeElement === first || !focusable.includes(document.activeElement as HTMLElement)
 
-    if (event.shiftKey && document.activeElement === first) {
+    if (event.shiftKey && atStart) {
       event.preventDefault()
       last.focus()
     } else if (!event.shiftKey && document.activeElement === last) {
@@ -80,7 +89,7 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
         onKeyDown={handleKeyDown}
       >
         <div className="result-modal__header">
-          <h2 id={titleId} className="result-modal__title">
+          <h2 ref={titleRef} id={titleId} tabIndex={-1} className="result-modal__title">
             Puzzle Complete!
           </h2>
           <button

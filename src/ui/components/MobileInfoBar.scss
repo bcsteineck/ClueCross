@@ -10,19 +10,22 @@
   padding: $spacing-12 $spacing-16;
   border-top: $border-1 solid $color-gray-30;
   border-bottom: $border-1 solid $color-gray-30;
+  background: $color-brand-primary-wash;
 }
 
 .mobile-info-bar__heading {
   margin: 0;
   min-width: 0;
   display: flex;
-  flex-direction: column;
+  gap: $spacing-4;
+  align-items: baseline;
 }
 
 // The heading above shrinks (and its own clue line ellipsizes) so this
 // never does, when there isn't room for both at their natural size.
 .mobile-info-bar > .button {
   flex-shrink: 0;
+  font-size: $font-size-16;
 }
 
 .mobile-info-bar__label {
@@ -37,9 +40,6 @@
   font-size: $font-size-18;
   font-weight: $font-weight-bold;
   color: $color-gray-90;
-  text-decoration: underline;
-  text-decoration-color: $color-brand-primary;
-  text-underline-offset: 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

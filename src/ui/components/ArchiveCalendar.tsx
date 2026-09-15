@@ -55,6 +55,11 @@ export function ArchiveCalendar({
         className="archive-calendar__body"
         role="group"
         aria-label={`Puzzle calendar for ${monthLabel}`}
+        // Lets MobileArchiveView focus this group programmatically on view
+        // entry (its own existing aria-label already gives a screen reader
+        // useful context) — tabIndex={-1} keeps it out of the normal Tab
+        // order, so this is never reachable via a real keyboard Tab.
+        tabIndex={-1}
       >
         <div className="archive-calendar__weekdays">
           {WEEKDAYS.map(({ short, full }, index) => (

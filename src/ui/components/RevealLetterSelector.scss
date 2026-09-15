@@ -30,6 +30,11 @@
   font-size: $font-size-20;
   font-weight: $font-weight-semibold;
   color: $color-gray-90;
+  // Focused programmatically on mount (see the component) purely so screen
+  // readers land somewhere sensible — a real keyboard Tab can never reach
+  // it (tabIndex={-1}), so there's no legitimate case where hiding its
+  // outline would hide a genuine keyboard-navigation cue.
+  outline: none;
 }
 
 .reveal-letter-selector__grid {

@@ -3,9 +3,14 @@
 .mobile-back-bar {
   box-sizing: border-box;
   width: 100%;
-  padding: $spacing-20 $spacing-16;
+  padding: 14px $spacing-16;
   border-bottom: $border-1 solid $color-gray-30;
   border-top: $border-1 solid $color-gray-30;
   display: flex;
   align-items: center;
+  background: $color-gray-10;
+}
+
+.mobile-back-bar .button {
+  font-size: $font-size-16;
 }

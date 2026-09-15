@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import './MobileHowToPlayView.scss'
 import { MobileBackBar } from './MobileBackBar'
 
@@ -9,11 +10,25 @@ export interface MobileHowToPlayViewProps {
 // back-nav shell as Stats/Archive, covering the full instructional content
 // required by spec section 19.
 export function MobileHowToPlayView({ onBack }: MobileHowToPlayViewProps) {
+  // Entering this view is a real navigation (Puzzle -> How to Play), so
+  // focus needs a logical landing point instead of staying on the
+  // now-hidden Puzzle content or falling back to <body> — the heading
+  // itself, not the Back button, so screen readers get this view's own
+  // context first (and so a normal tap here doesn't leave a focus-visible
+  // ring sitting on the Back button, which reads as a stray highlight
+  // rather than a deliberate one).
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    titleRef.current?.focus()
+  }, [])
+
   return (
     <div className="mobile-how-to-play-view">
       <MobileBackBar onBack={onBack} />
       <div className="mobile-how-to-play-view__content">
-        <h1 className="mobile-how-to-play-view__title">How to Play</h1>
+        <h1 ref={titleRef} tabIndex={-1} className="mobile-how-to-play-view__title">
+          How to Play
+        </h1>
         <ol className="mobile-how-to-play-view__steps">
           <li>Read the clue at the top of the puzzle.</li>
           <li>Fill in the interconnected words that all relate to that clue.</li>

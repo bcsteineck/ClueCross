@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { getStarCount } from '../../core/awardLevel'
 import { getProgress } from '../../core/progress'
 import { usePuzzleSession } from '../../state/PuzzleSessionContext'
@@ -21,6 +22,13 @@ export interface MobileStatsViewProps {
 export function MobileStatsView({ onBack }: MobileStatsViewProps) {
   const { state } = usePuzzleSession()
   const progress = getProgress(state)
+  // Entering this view is a real navigation, so focus needs a logical
+  // landing point (see MobileHowToPlayView for the full rationale) — the
+  // first heading here, rather than the Back button.
+  const titleRef = useRef<HTMLHeadingElement>(null)
+  useEffect(() => {
+    titleRef.current?.focus()
+  }, [])
 
   return (
     <div className="mobile-stats-view">
@@ -28,7 +36,9 @@ export function MobileStatsView({ onBack }: MobileStatsViewProps) {
 
       <div className="mobile-stats-view__score-band">
         <div className="mobile-stats-view__score-heading">
-          <h2 className="mobile-stats-view__title">Your Score</h2>
+          <h2 ref={titleRef} tabIndex={-1} className="mobile-stats-view__title">
+            Your Score
+          </h2>
           <StarRating count={getStarCount(state.score)} />
         </div>
         <p className="mobile-stats-view__score-value" data-testid="score-badge">

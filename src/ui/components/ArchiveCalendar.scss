@@ -11,6 +11,12 @@
   width: 100%;
   padding: $spacing-16 0;
   background: $color-gray-00;
+  // Mobile focuses this programmatically on view entry (see
+  // MobileArchiveView) purely so screen readers land somewhere sensible —
+  // a real keyboard Tab can never reach it (tabIndex={-1}), so there's no
+  // legitimate case where hiding its outline would hide a genuine
+  // keyboard-navigation cue.
+  outline: none;
 }
 
 .archive-calendar__weekdays,

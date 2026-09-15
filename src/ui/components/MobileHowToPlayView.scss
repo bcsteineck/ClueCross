@@ -18,6 +18,11 @@
   font-size: $font-size-24;
   font-weight: $font-weight-bold;
   color: $color-gray-90;
+  // Focused programmatically on mount (see the component) purely so
+  // screen readers land somewhere sensible — a real keyboard Tab can never
+  // reach it (tabIndex={-1}), so there's no legitimate case where hiding
+  // its own outline would hide a genuine keyboard-navigation cue.
+  outline: none;
 }
 
 .mobile-how-to-play-view__steps {

@@ -38,6 +38,7 @@ export function NavDrawer({
   const [confirmingReset, setConfirmingReset] = useState(false)
   const [open, setOpen] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
+  const titleRef = useRef<HTMLHeadingElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   // Captured once via a lazy state initializer rather than read inside the
@@ -70,8 +71,12 @@ export function NavDrawer({
     setOpen(true)
   }, [])
 
+  // Focuses the title, not the first focusable control (the close button)
+  // — a screen reader gets this dialog's own context first, and a normal
+  // tap-to-open doesn't leave a focus-visible ring sitting on the close
+  // button, which reads as a stray highlight rather than a deliberate one.
   useEffect(() => {
-    dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)?.focus()
+    titleRef.current?.focus()
   }, [])
 
   useEffect(() => {
@@ -94,8 +99,12 @@ export function NavDrawer({
 
     const first = focusable[0]
     const last = focusable[focusable.length - 1]
+    // Initial focus lands on the title (see above), which isn't part of
+    // this focusable list — so "at the start of the trap" means either
+    // genuinely on `first`, or not on any tracked control yet at all.
+    const atStart = document.activeElement === first || !focusable.includes(document.activeElement as HTMLElement)
 
-    if (event.shiftKey && document.activeElement === first) {
+    if (event.shiftKey && atStart) {
       event.preventDefault()
       last.focus()
     } else if (!event.shiftKey && document.activeElement === last) {
@@ -127,7 +136,7 @@ export function NavDrawer({
       >
         <div className="nav-drawer__header">
           <div className="nav-drawer__header-start">
-            <h2 id={titleId} className="nav-drawer__title">
+            <h2 ref={titleRef} id={titleId} tabIndex={-1} className="nav-drawer__title">
               Settings
             </h2>
           </div>

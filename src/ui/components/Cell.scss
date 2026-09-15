@@ -78,6 +78,21 @@
   color: $color-gray-90;
 }
 
+// Reinforces the active-cell background wash below, which reads as too
+// subtle a selection cue on its own — only rendered (see Cell.tsx) while
+// the cell is both active and still empty, so it never competes with an
+// actual letter for the same centered spot.
+.cell__dot {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 16%;
+  height: 16%;
+  border-radius: 50%;
+  background: $color-brand-primary;
+  pointer-events: none;
+}
+
 // Hover only affects the plain default cell. Each of these states is
 // scoped with :not() to be mutually exclusive with the others, so there's
 // no specificity tie-breaking between hover/locked/complete/active to get

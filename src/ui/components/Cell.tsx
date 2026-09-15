@@ -95,6 +95,10 @@ export function Cell({
       <span className="cell__letter" aria-hidden="true">
         {value}
       </span>
+      {/* The active-cell background wash alone reads as too subtle a
+          selection cue — this reinforces it, but only while there's
+          nothing else (a letter) already marking the cell. */}
+      {isActive && !value && <span className="cell__dot" aria-hidden="true" />}
     </div>
   )
 }
