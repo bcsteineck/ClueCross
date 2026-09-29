@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createSourcingRequest, DEFAULT_TARGET_COUNT } from './contract'
 import type { CandidateSourcingRequest } from './contract'
-import { buildSourcingPrompt, semanticRules } from './prompt'
+import { buildSourcingPrompt, semanticRules, targetRange } from './prompt'
 
 function request(input: Parameters<typeof createSourcingRequest>[0]): CandidateSourcingRequest {
   const result = createSourcingRequest(input)
@@ -45,7 +45,8 @@ describe('buildSourcingPrompt', () => {
     const prompt = buildSourcingPrompt(request({ clue: 'Dogs', context: 'Pet dogs, not wild canines' }))
     expect(prompt).toContain('Clue: Dogs')
     expect(prompt).toContain('Author context (for your understanding only): Pet dogs, not wild canines')
-    expect(prompt).toMatch(/about 60 strong candidates\. This is a target, not a quota: return fewer/)
+    expect(prompt).toMatch(/about 60 strong candidates\./)
+    expect(prompt).toContain('This is a target, not a quota')
     expect(buildSourcingPrompt(dogs)).not.toContain('Author context')
   })
 
@@ -79,14 +80,53 @@ describe('buildSourcingPrompt', () => {
     expect(prompt).toMatch(/If the clue is narrow, stay within it/)
   })
 
-  it('sets the priority order, quality over construction convenience, and the 3-letter floor', () => {
+  it('sets the priority order and quality over construction convenience', () => {
     const prompt = buildSourcingPrompt(dogs)
     const order = ['1. Direct semantic relevance', '2. Conceptual breadth', '3. Familiar, defensible', '4. Useful variety in answer length', '5. The target candidate count']
     const positions = order.map((line) => prompt.indexOf(line))
     expect(positions.every((p) => p >= 0)).toBe(true)
     expect(positions).toEqual([...positions].sort((a, b) => a - b))
     expect(prompt).toContain('never invent questionable short answers')
-    expect(prompt).toContain('at least 3 letters once spaces and punctuation are ignored')
+  })
+
+  it('states the 3–12 letter construction eligibility, how it is measured, and that ineligible answers are omitted, not forced', () => {
+    const prompt = buildSourcingPrompt(dogs)
+    expect(prompt).toContain('3 to 12 letters long once spaces, hyphens, and apostrophes are removed')
+    expect(prompt).toContain('those characters do not count toward the length')
+    expect(prompt).toContain('only the letters A–Z may remain')
+    expect(prompt).toContain('"Border Collie" → BORDERCOLLIE (12, eligible)')
+    expect(prompt).toContain('"Central Processing Unit" → CENTRALPROCESSINGUNIT (21, not eligible)')
+    expect(prompt).toContain('Omit any answer that is not eligible. Do not truncate, abbreviate, invent, rewrite, or weaken an answer to make it fit.')
+    // Nothing about board construction itself.
+    expect(prompt).not.toMatch(/intersect|grid|placement|density|geometry|letter frequency/i)
+  })
+
+  it('forbids abbreviations as a way around the length limit only when abbreviations are excluded', () => {
+    const exclude = buildSourcingPrompt(dogs)
+    expect(exclude).toContain('never substitute an abbreviation for an answer that is too long: omit "Central Processing Unit" rather than returning "CPU"')
+    const allow = buildSourcingPrompt(request({ clue: 'Computers', abbreviations: 'allow' }))
+    expect(allow).not.toContain('never substitute an abbreviation')
+    expect(allow).toContain('Abbreviations: ALLOWED. Only propose established, recognizable shortened forms.')
+  })
+
+  it('asks for natural short/medium/long variety without quotas, with relevance first', () => {
+    const prompt = buildSourcingPrompt(dogs)
+    expect(prompt).toContain('short (3–5 letters), medium (6–8), and longer (9–12)')
+    expect(prompt).toContain('Actively look for strong short and medium answers when the clue genuinely supports them')
+    expect(prompt).toContain('longer answers remain fully valid and useful')
+    expect(prompt).toContain('Never manufacture short answers, use weak associations')
+    expect(prompt).toContain('Semantic relevance always outranks any preferred length distribution')
+    expect(prompt).not.toMatch(/\d+%|at least \d+ short|exactly \d+/)
+  })
+
+  it('aims near the target, with an acceptable range, no padding, and fewer allowed', () => {
+    expect(targetRange(60)).toEqual({ low: 50, high: 70 })
+    const prompt = buildSourcingPrompt(dogs)
+    expect(prompt).toContain('Target: about 60 strong candidates. Roughly 50–70 is a good result when the clue supports that many')
+    expect(prompt).toContain('do not go beyond 70 just to offer extra options')
+    expect(prompt).toContain('return fewer, even fewer than 50')
+    expect(prompt).toContain('Quality matters more than the number.')
+    expect(buildSourcingPrompt(request({ clue: 'Dogs', targetCount: 45 }))).toContain('Roughly 38–53 is a good result')
   })
 
   it('asks only for answer, rationale and category — never construction data or scores', () => {

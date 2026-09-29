@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOGS_BREEDS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsBreedsCandidatePool.js'
 import { DOGS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsCandidatePool.js'
+import { CandidateSourcingError } from './sourcing/contract'
+import { FIXTURE_SOURCING_RESPONSE } from './sourcing/fixtureSource'
 import { WorkshopApp } from './WorkshopApp'
 
 afterEach(() => {
@@ -222,6 +224,7 @@ describe('WorkshopApp candidate sourcing and Pool Review', () => {
   async function sourceDogs(user: ReturnType<typeof userEvent.setup>) {
     await user.type(screen.getByLabelText('Clue'), 'Dogs')
     await user.click(screen.getByRole('radio', { name: 'Source from clue' }))
+    await user.selectOptions(screen.getByLabelText('Candidate source'), 'fixture')
     await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
     return screen.findByRole('region', { name: 'Pool Review' })
   }
@@ -235,7 +238,7 @@ describe('WorkshopApp candidate sourcing and Pool Review', () => {
     expect((screen.getByLabelText('Proper nouns') as HTMLSelectElement).value).toBe('exclude')
     expect((screen.getByLabelText('Abbreviations') as HTMLSelectElement).value).toBe('exclude')
     await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
-    expect(screen.getByRole('alert').textContent).toBe('Enter a clue.')
+    expect(screen.getByRole('alert').textContent).toBe('Error: Enter a clue.')
   })
 
   it('sends clue, author context and settings to the candidate source', async () => {
@@ -247,7 +250,7 @@ describe('WorkshopApp candidate sourcing and Pool Review', () => {
       },
     }
     const user = userEvent.setup()
-    render(<WorkshopApp candidateSource={spySource} />)
+    render(<WorkshopApp sources={{ live: spySource }} />)
     await user.type(screen.getByLabelText('Clue'), 'Car Brands')
     await user.click(screen.getByRole('radio', { name: 'Source from clue' }))
     await user.type(screen.getByLabelText('Author context (optional)'), 'Manufacturers only')
@@ -320,5 +323,95 @@ describe('WorkshopApp candidate sourcing and Pool Review', () => {
     for (const card of candidateCards()) {
       expect(card.textContent).not.toMatch(/\bBEAGLE\b|STBERNARD/)
     }
+  })
+})
+
+describe('WorkshopApp live sourcing', () => {
+  const fixturePayload = () => JSON.parse(JSON.stringify(FIXTURE_SOURCING_RESPONSE)) as unknown
+
+  async function startLive(sources: NonNullable<Parameters<typeof WorkshopApp>[0]>['sources']) {
+    const user = userEvent.setup()
+    render(<WorkshopApp sources={sources} />)
+    await user.type(screen.getByLabelText('Clue'), 'Dogs')
+    await user.click(screen.getByRole('radio', { name: 'Source from clue' }))
+    return user
+  }
+
+  it('defaults to the live source and feeds its payload through the existing review pipeline', async () => {
+    const live = { generate: vi.fn(() => Promise.resolve(fixturePayload())) }
+    const fixture = { generate: vi.fn() }
+    const user = await startLive({ live, fixture })
+    expect((screen.getByLabelText('Candidate source') as HTMLSelectElement).value).toBe('live')
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    const review = await screen.findByRole('region', { name: 'Pool Review' })
+    expect(review.querySelector('p')?.textContent).toMatch('35 candidates · 33 included · 6 flagged · 1 duplicate · 1 invalid')
+    expect(screen.getByText('33 usable answers')).toBeTruthy()
+    expect(fixture.generate).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
+  })
+
+  it('shows a loading state and ignores repeat submissions while a request is running', async () => {
+    let resolve!: (value: unknown) => void
+    const live = { generate: vi.fn(() => new Promise((r) => (resolve = r))) }
+    const user = await startLive({ live })
+    const button = screen.getByRole('button', { name: 'Source Candidates' })
+    await user.click(button)
+    expect(screen.getByRole('button', { name: 'Sourcing…' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('status').textContent).toMatch('Sourcing candidates…')
+    await user.click(screen.getByRole('button', { name: 'Sourcing…' }))
+    expect(live.generate).toHaveBeenCalledTimes(1)
+    resolve(fixturePayload())
+    await screen.findByRole('region', { name: 'Pool Review' })
+    expect(screen.getByRole('button', { name: 'Source Candidates' })).toHaveProperty('disabled', false)
+  })
+
+  it('on failure keeps the previous Pool Review, shows the error category, never falls back or generates', async () => {
+    const live = {
+      generate: vi
+        .fn()
+        .mockResolvedValueOnce(fixturePayload())
+        .mockRejectedValueOnce(new CandidateSourcingError('provider', 'The provider is rate limiting requests (HTTP 429).')),
+    }
+    const fixture = { generate: vi.fn() }
+    const user = await startLive({ live, fixture })
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    const review = await screen.findByRole('region', { name: 'Pool Review' })
+    await user.click(within(review).getByRole('checkbox', { name: 'Include Beagle' }))
+
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toBe(
+      'Provider error: The provider is rate limiting requests (HTTP 429). The previous Pool Review below is unchanged.',
+    )
+    // Same review, including the author's exclusion; no fixture fallback; no generation.
+    expect(screen.getByRole('region', { name: 'Pool Review' })).toBeTruthy()
+    expect(screen.getByText('32 usable answers')).toBeTruthy()
+    expect(fixture.generate).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
+
+    // Retrying is a deliberate click, and it works.
+    live.generate.mockResolvedValueOnce(fixturePayload())
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(live.generate).toHaveBeenCalledTimes(3)
+  })
+
+  it('labels configuration errors, and malformed payloads as response errors (not candidate invalidity)', async () => {
+    const live = {
+      generate: vi
+        .fn()
+        .mockRejectedValueOnce(new CandidateSourcingError('configuration', 'ANTHROPIC_API_KEY is not set for the Workshop server (.env.local).'))
+        .mockResolvedValueOnce({ answers: ['Beagle'] }),
+    }
+    const user = await startLive({ live })
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'Configuration error: ANTHROPIC_API_KEY is not set for the Workshop server (.env.local).',
+    )
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    await waitFor(() =>
+      expect(screen.getByRole('alert').textContent).toBe('Response error: Sourcing response has no candidates array.'),
+    )
+    expect(screen.queryByRole('region', { name: 'Pool Review' })).toBeNull()
   })
 })

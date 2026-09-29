@@ -79,7 +79,14 @@ export function semanticRules(request: CandidateSourcingRequest): { id: Semantic
   ]
 }
 
+// The acceptable spread around the target (50–70 for the default 60). This
+// is guidance for the model only: responses outside it are still processed.
+export function targetRange(targetCount: number): { low: number; high: number } {
+  return { low: Math.round((targetCount * 5) / 6), high: Math.round((targetCount * 7) / 6) }
+}
+
 export function buildSourcingPrompt(request: CandidateSourcingRequest): string {
+  const { low, high } = targetRange(request.targetCount)
   const lines: string[] = [
     'You are researching candidate answers for a ClueCross word puzzle. You propose candidates only; you do not build the puzzle.',
     '',
@@ -89,8 +96,9 @@ export function buildSourcingPrompt(request: CandidateSourcingRequest): string {
 
   lines.push(
     '',
-    `Target: about ${request.targetCount} strong candidates. This is a target, not a quota: return fewer if reaching it ` +
-      'would require weak, repetitive, loosely related, or obscure-for-the-sake-of-count answers.',
+    `Target: about ${request.targetCount} strong candidates. Roughly ${low}–${high} is a good result when the clue supports that many; ` +
+      `do not go beyond ${high} just to offer extra options. This is a target, not a quota: return fewer, even fewer than ${low}, ` +
+      'if reaching it would require weak, repetitive, loosely related, or obscure-for-the-sake-of-count answers. Quality matters more than the number.',
     '',
     'Priorities, in order:',
     '1. Direct semantic relevance to the clue.',
@@ -103,7 +111,24 @@ export function buildSourcingPrompt(request: CandidateSourcingRequest): string {
     'Rules:',
     ...semanticRules(request).map((rule, index) => `${index + 1}. ${rule.text}`),
     '',
-    'Every answer must contain at least 3 letters once spaces and punctuation are ignored.',
+    'Construction eligibility (a physical requirement; check it before proposing an answer):',
+    '- Every answer must be 3 to 12 letters long once spaces, hyphens, and apostrophes are removed; those characters do not count toward the length.',
+    '- After removing them, only the letters A–Z may remain.',
+    '- Examples: "Great Dane" → GREATDANE (9 letters, eligible); "Border Collie" → BORDERCOLLIE (12, eligible); ' +
+      '"Central Processing Unit" → CENTRALPROCESSINGUNIT (21, not eligible).',
+    '- Omit any answer that is not eligible. Do not truncate, abbreviate, invent, rewrite, or weaken an answer to make it fit.',
+  )
+  if (request.options.abbreviations === 'exclude') {
+    lines.push(
+      '- Because abbreviations are excluded, never substitute an abbreviation for an answer that is too long: omit "Central Processing Unit" rather than returning "CPU".',
+    )
+  }
+  lines.push(
+    '',
+    'Length variety: seek a healthy, natural mix of short (3–5 letters), medium (6–8), and longer (9–12) eligible answers. ' +
+      'Actively look for strong short and medium answers when the clue genuinely supports them; longer answers remain fully valid and useful. ' +
+      'Never manufacture short answers, use weak associations, or use shortened forms the rules above exclude just to change the mix. ' +
+      'Semantic relevance always outranks any preferred length distribution.',
     '',
     'Respond with JSON only, in exactly this shape:',
     '{ "candidates": [ { "answer": string, "rationale": string, "category": string } ] }',

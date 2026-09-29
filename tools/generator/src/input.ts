@@ -21,6 +21,12 @@ export type NormalizeResult = NormalizeSuccess | NormalizeFailure
 // length bands (3–5 / 6–8 / 9+) rely on this floor.
 const MIN_ANSWER_LENGTH = 3
 
+// Product rule: the current ClueCross authoring envelope is 12x12, so an
+// answer longer than 12 construction letters can never be placed across
+// or down. Such answers are ineligible — never truncated or rewritten.
+// Revisit alongside the envelope if it ever changes.
+const MAX_ANSWER_LENGTH = 12
+
 const VALID_WORD = /^[A-Z]+$/
 
 // Construction normalization: a human-readable answer ("Great Dane",
@@ -38,8 +44,8 @@ export function toConstructionForm(raw: string): string {
 
 export type AnswerNormalization = { ok: true; answer: string } | { ok: false; error: string }
 
-// The single definition of a valid puzzle answer: construction form, at
-// least MIN_ANSWER_LENGTH letters, A-Z only. No maximum length.
+// The single definition of a valid puzzle answer: construction form, A-Z
+// only, MIN_ANSWER_LENGTH to MAX_ANSWER_LENGTH letters inclusive.
 export function normalizeAnswer(raw: string): AnswerNormalization {
   const word = toConstructionForm(raw)
   if (word.length < MIN_ANSWER_LENGTH) {
@@ -47,6 +53,9 @@ export function normalizeAnswer(raw: string): AnswerNormalization {
   }
   if (!VALID_WORD.test(word)) {
     return { ok: false, error: `"${raw}" contains characters outside A-Z.` }
+  }
+  if (word.length > MAX_ANSWER_LENGTH) {
+    return { ok: false, error: `"${raw}" is too long (maximum ${MAX_ANSWER_LENGTH} letters).` }
   }
   return { ok: true, answer: word }
 }

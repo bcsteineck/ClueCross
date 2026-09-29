@@ -10,7 +10,15 @@ ClueCross authored answers must contain at least 3 playable letters.
 
 In the Workshop, a 2-letter candidate is an invalid entry: it is excluded before duplicate handling and pool statistics, so the candidate-pool length bands are 3–5 / 6–8 / 9+.
 
-There is no maximum answer length.
+The maximum is 12 letters (see Construction Eligibility below).
+
+---
+
+### Construction Eligibility
+
+The current authoring envelope is 12×12, so an answer's construction form must be 3–12 A–Z letters inclusive; a longer answer can never be placed. Longer answers are ineligible, never truncated or rewritten. This one generator rule applies to manual and sourced candidate pools alike.
+
+The sourcing prompt states the limit so the model omits ineligible answers (never abbreviating to fit when abbreviations are excluded). It asks for a natural mix of short, medium, and longer answers without quotas; semantic relevance remains primary. The target stays about 60 (roughly 50–70 is a good result); it is guidance, not a quota or a validation limit.
 
 ---
 
@@ -32,7 +40,17 @@ Sourcing rules: multi-word answers are allowed in their normal written form; no 
 
 Deterministic cleanup covers response structure, construction normalization and validity, and exact duplicates by construction form. Conservative singular/plural and -ING/-ED variant detection only raises review flags; nothing is removed automatically. Synonymy, relevance, obscurity, proper nouns, and abbreviations remain author judgments.
 
-No live AI provider is integrated yet; the Workshop uses a deterministic fixture source.
+The Workshop also keeps a deterministic fixture source for tests and credential-free development.
+
+---
+
+### Live Candidate Sourcing
+
+Live sourcing uses one provider (Anthropic) and one server-configured model (`ANTHROPIC_MODEL`), with no provider or model selection in the UI.
+
+The API key is server-side only. The Workshop browser calls its own `POST /api/sourcing` endpoint, served by the Workshop's Vite server; that endpoint builds the existing deterministic sourcing prompt, calls the provider, and returns the provider's payload, which the browser validates with the existing response parser. Credentials come from `.env.local` and are never `VITE_`-prefixed, so they never reach a bundle. Live sourcing is therefore available only while the Workshop runs locally.
+
+Failures are reported as configuration, provider, or response errors; the previous Pool Review is kept, nothing retries automatically, the fixture is never substituted, and generation never starts on its own. No caching or streaming.
 
 ---
 

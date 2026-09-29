@@ -101,6 +101,13 @@ describe('analyzeCandidatePool: counts and eligibility', () => {
     expect(analysis.usableAnswers).toEqual(['PUG'])
   })
 
+  it('treats answers over 12 construction letters as invalid, excluding them from usable statistics', () => {
+    const analysis = analyzeCandidatePool(['Border Collie', 'Great Pyrenees', 'Labrador Retriever', 'PUG'])
+    expect(analysis.usableAnswers).toEqual(['BORDERCOLLIE', 'PUG'])
+    expect(analysis.invalidEntries).toEqual(['Great Pyrenees', 'Labrador Retriever'])
+    expect(analysis.stats).toMatchObject({ usableCount: 2, shortCount: 1, longCount: 1, meanLength: 7.5, invalidCount: 2 })
+  })
+
   it('counts multi-word answers by their construction form, deduplicating across spellings', () => {
     const analysis = analyzeCandidatePool(['Great Dane', 'great-dane', 'Dog Park'])
     expect(analysis.usableAnswers).toEqual(['GREATDANE', 'DOGPARK'])

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { CandidateCard } from './CandidateCard'
 import { CandidateDetail } from './CandidateDetail'
@@ -9,8 +9,9 @@ import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE, analyzeCandidatePool, buildP
 import type { DiagnosticSeverity } from './poolDiagnostics'
 import { PoolReview } from './PoolReview'
 import { createSourcingRequest } from './sourcing/contract'
-import type { AbbreviationSetting, CandidateSource, ProperNounSetting } from './sourcing/contract'
+import type { AbbreviationSetting, CandidateSource, ProperNounSetting, SourcingErrorCategory } from './sourcing/contract'
 import { fixtureCandidateSource } from './sourcing/fixtureSource'
+import { createLiveCandidateSource } from './sourcing/liveSource'
 import { poolReviewEntries, setCandidateIncluded } from './sourcing/reviewPool'
 import { sourceCandidates } from './sourcing/sourceCandidates'
 import type { SourcedPool } from './sourcing/sourceCandidates'
@@ -28,13 +29,34 @@ const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', war
 //
 // The pool comes either from the manual list or from candidate sourcing
 // followed by human Pool Review; either way the same Pool Diagnostics
-// decide whether Generate is allowed. Sourcing never starts generation.
-interface WorkshopAppProps {
-  /** Defaults to the deterministic development fixture; no live provider exists yet. */
-  candidateSource?: CandidateSource
+// decide whether Generate is allowed. Sourcing never starts generation, and
+// a failed live request never falls back to the fixture.
+type SourceKind = 'live' | 'fixture'
+
+const SOURCE_DESCRIPTION: Record<SourceKind, string> = {
+  live: 'Live AI: candidates come from the model configured on the Workshop server. Each request is billed.',
+  fixture: 'Development fixture: returns the same sample Dogs candidates for any clue. No AI provider is called.',
 }
 
-export function WorkshopApp({ candidateSource = fixtureCandidateSource }: WorkshopAppProps = {}) {
+const ERROR_LABEL: Record<SourcingErrorCategory, string> = {
+  configuration: 'Configuration error',
+  provider: 'Provider error',
+  response: 'Response error',
+  request: 'Request error',
+}
+
+const defaultLiveSource = createLiveCandidateSource()
+
+interface WorkshopAppProps {
+  /** Injectable for tests; default to the live server endpoint and the deterministic fixture. */
+  sources?: { live?: CandidateSource; fixture?: CandidateSource }
+}
+
+export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
+  const candidateSources: Record<SourceKind, CandidateSource> = {
+    live: sources.live ?? defaultLiveSource,
+    fixture: sources.fixture ?? fixtureCandidateSource,
+  }
   const [clue, setClue] = useState('')
   const [poolSource, setPoolSource] = useState<'manual' | 'sourced'>('manual')
   const [poolText, setPoolText] = useState('')
@@ -42,8 +64,11 @@ export function WorkshopApp({ candidateSource = fixtureCandidateSource }: Worksh
   const [properNouns, setProperNouns] = useState<ProperNounSetting>('exclude')
   const [abbreviations, setAbbreviations] = useState<AbbreviationSetting>('exclude')
   const [sourcedPool, setSourcedPool] = useState<SourcedPool | null>(null)
+  const [sourceKind, setSourceKind] = useState<SourceKind>('live')
   const [sourcing, setSourcing] = useState(false)
-  const [sourcingError, setSourcingError] = useState<string | null>(null)
+  // Guards against a second submission before the `sourcing` state re-renders.
+  const sourcingInFlight = useRef(false)
+  const [sourcingError, setSourcingError] = useState<{ label: string; message: string } | null>(null)
   // Counts successful generations this session; batch N uses seed
   // "workshop-generation-N", so each press yields a new but reproducible batch.
   const [generationCount, setGenerationCount] = useState(0)
@@ -66,20 +91,22 @@ export function WorkshopApp({ candidateSource = fixtureCandidateSource }: Worksh
     .join(' ')
 
   async function handleSource() {
+    if (sourcingInFlight.current) return
     const request = createSourcingRequest({ clue, context, properNouns, abbreviations })
     if (!request.ok) {
-      setSourcingError(request.error)
+      setSourcingError({ label: 'Error', message: request.error })
       return
     }
+    sourcingInFlight.current = true
     setSourcingError(null)
     setSourcing(true)
     try {
-      const result = await sourceCandidates(candidateSource, request.request)
+      // The current Pool Review stays in place until a new one succeeds.
+      const result = await sourceCandidates(candidateSources[sourceKind], request.request)
       if (result.ok) setSourcedPool(result.pool)
-      else setSourcingError(result.error)
-    } catch {
-      setSourcingError('Candidate sourcing failed.')
+      else setSourcingError({ label: ERROR_LABEL[result.category], message: result.error })
     } finally {
+      sourcingInFlight.current = false
       setSourcing(false)
     }
   }
@@ -167,6 +194,7 @@ export function WorkshopApp({ candidateSource = fixtureCandidateSource }: Worksh
               </li>
               <li>All candidate words should already be considered valid answers to the clue.</li>
               <li>Separate words with new lines or commas. Multi-word answers are fine.</li>
+              <li>Each answer must be 3–12 letters (spaces, hyphens, and apostrophes don’t count) to fit the 12×12 board.</li>
             </ul>
           </div>
         ) : (
@@ -201,7 +229,21 @@ export function WorkshopApp({ candidateSource = fixtureCandidateSource }: Worksh
                 <option value="exclude">Exclude</option>
                 <option value="allow">Allow</option>
               </select>
+              <label htmlFor="ws-source-kind">Candidate source</label>
+              <select
+                id="ws-source-kind"
+                value={sourceKind}
+                onChange={(event) => setSourceKind(event.target.value as SourceKind)}
+                disabled={sourcing}
+                aria-describedby="ws-source-kind-hint"
+              >
+                <option value="live">Live AI</option>
+                <option value="fixture">Development fixture</option>
+              </select>
             </div>
+            <p id="ws-source-kind-hint" className="ws-muted">
+              {SOURCE_DESCRIPTION[sourceKind]}
+            </p>
             <button
               type="button"
               className="ws-button ws-button--secondary"
@@ -210,12 +252,13 @@ export function WorkshopApp({ candidateSource = fixtureCandidateSource }: Worksh
             >
               {sourcing ? 'Sourcing…' : 'Source Candidates'}
             </button>
-            <p className="ws-muted">
-              Development fixture: returns the same sample Dogs candidates for any clue. No AI provider is connected.
+            <p className="ws-muted" role="status">
+              {sourcing ? 'Sourcing candidates… a live request can take a minute or more.' : ''}
             </p>
             {sourcingError && (
               <div className="ws-errors" role="alert">
-                {sourcingError}
+                <strong>{sourcingError.label}:</strong> {sourcingError.message}
+                {sourcedPool && ' The previous Pool Review below is unchanged.'}
               </div>
             )}
             {sourcedPool && <PoolReview pool={sourcedPool} onToggleIncluded={handleToggleIncluded} />}

@@ -36,6 +36,12 @@ describe('parsePool', () => {
     expect(parsed.duplicatesRemoved).toEqual(['BEAGLE', 'BEAGLE', 'POODLE'])
   })
 
+  it('keeps manual entries of up to 12 construction letters and excludes longer ones', () => {
+    const parsed = parsePool('Border Collie\nCentral Processing Unit\nDOG')
+    expect(parsed.usableAnswers).toEqual(['BORDERCOLLIE', 'DOG'])
+    expect(parsed.invalidEntries).toEqual(['Central Processing Unit'])
+  })
+
   it('does not split on spaces: a multi-word entry is one answer in construction form', () => {
     const parsed = parsePool('BEAGLE\nHOT-DOG\nICE CREAM\nK9\nOX')
     expect(parsed.usableAnswers).toEqual(['BEAGLE', 'HOTDOG', 'ICECREAM'])

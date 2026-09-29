@@ -47,6 +47,23 @@ describe('normalizeAnswers', () => {
     expect(normalizeAnswer('O X')).toEqual({ ok: false, error: '"O X" is too short (minimum 3 letters).' })
   })
 
+  it('accepts 3 to 12 construction letters and rejects 13 or more, without truncating', () => {
+    expect(normalizeAnswer('DOG')).toEqual({ ok: true, answer: 'DOG' })
+    expect(normalizeAnswer('ABCDEFGHIJKL')).toEqual({ ok: true, answer: 'ABCDEFGHIJKL' })
+    expect(normalizeAnswer('ABCDEFGHIJKLM')).toEqual({ ok: false, error: '"ABCDEFGHIJKLM" is too long (maximum 12 letters).' })
+  })
+
+  it('measures multi-word answers by construction letters only (separators do not count)', () => {
+    expect(normalizeAnswer('Border Collie')).toEqual({ ok: true, answer: 'BORDERCOLLIE' })
+    // 13 characters as written, 12 construction letters: the space doesn't count.
+    expect(normalizeAnswer('Saint Bernard')).toEqual({ ok: true, answer: 'SAINTBERNARD' })
+    expect(normalizeAnswer('Great Pyrenees')).toEqual({ ok: false, error: '"Great Pyrenees" is too long (maximum 12 letters).' })
+    expect(normalizeAnswer('Central Processing Unit')).toEqual({
+      ok: false,
+      error: '"Central Processing Unit" is too long (maximum 12 letters).',
+    })
+  })
+
   it('treats answers that differ only by separators as duplicates', () => {
     const result = normalizeAnswers(['Great Dane', 'GREAT-DANE'])
     expect(result).toEqual({ ok: false, errors: ['"GREATDANE" is a duplicate answer.'] })

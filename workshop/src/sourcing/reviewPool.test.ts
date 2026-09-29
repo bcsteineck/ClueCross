@@ -45,6 +45,22 @@ describe('buildReviewCandidates: normalization', () => {
   })
 })
 
+describe('buildReviewCandidates: construction length', () => {
+  it('marks a sourced answer over 12 construction letters invalid and never includable, without truncating it', () => {
+    const [long, fits] = buildReviewCandidates(sourced('Central Processing Unit', 'Border Collie'))
+    expect(long).toMatchObject({
+      sourceAnswer: 'Central Processing Unit',
+      validity: 'invalid',
+      invalidReason: '"Central Processing Unit" is too long (maximum 12 letters).',
+      included: false,
+    })
+    expect(long.normalizedAnswer).toBeUndefined()
+    expect(setCandidateIncluded([long], long.id, true)[0].included).toBe(false)
+    expect(fits).toMatchObject({ normalizedAnswer: 'BORDERCOLLIE', length: 12, validity: 'valid', included: true })
+    expect(analyzeCandidatePool(poolReviewEntries([long, fits])).usableAnswers).toEqual(['BORDERCOLLIE'])
+  })
+})
+
 describe('buildReviewCandidates: exact duplicates', () => {
   it('collapses construction-form duplicates, keeping the first occurrence', () => {
     const [a, b, c] = buildReviewCandidates(sourced('Great Dane', 'GREAT DANE', 'great-dane'))
@@ -140,8 +156,21 @@ describe('sourcing pipeline with the fixture source', () => {
     expect(analysis.canGenerate).toBe(true)
   })
 
+  it('processes every candidate even beyond the prompt’s suggested range (no truncation at 70)', async () => {
+    const letters = (n: number) => String.fromCharCode(65 + Math.floor(n / 26)) + String.fromCharCode(65 + (n % 26))
+    const payload = { candidates: Array.from({ length: 72 }, (_, i) => ({ answer: `Word${letters(i)}`, rationale: 'r', category: 'c' })) }
+    const result = await sourceCandidates({ generate: () => Promise.resolve(payload) }, dogsRequest())
+    if (!result.ok) throw new Error(result.error)
+    expect(result.pool.candidates).toHaveLength(72)
+    expect(analyzeCandidatePool(poolReviewEntries(result.pool.candidates)).usableAnswers).toHaveLength(72)
+  })
+
   it('reports a malformed provider response as a sourcing failure', async () => {
     const broken = { generate: () => Promise.resolve({ answers: [] }) }
-    expect(await sourceCandidates(broken, dogsRequest())).toEqual({ ok: false, error: 'Sourcing response has no candidates array.' })
+    expect(await sourceCandidates(broken, dogsRequest())).toEqual({
+      ok: false,
+      category: 'response',
+      error: 'Sourcing response has no candidates array.',
+    })
   })
 })

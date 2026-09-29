@@ -76,3 +76,22 @@ export function createSourcingRequest(input: SourcingRequestInput): SourcingRequ
     },
   }
 }
+
+/**
+ * A categorized sourcing failure, raised by a CandidateSource:
+ * - configuration: the source isn't set up (e.g. server credential/model missing)
+ * - provider: the provider or network failed (auth, rate limit, timeout, outage, refusal)
+ * - response: the provider answered, but not with a usable sourcing response
+ * - request: the sourcing request itself was rejected as malformed
+ * Distinct from candidate-level invalidity (e.g. "OX"), which is decided later.
+ */
+export type SourcingErrorCategory = 'configuration' | 'provider' | 'response' | 'request'
+
+export class CandidateSourcingError extends Error {
+  readonly category: SourcingErrorCategory
+  constructor(category: SourcingErrorCategory, message: string) {
+    super(message)
+    this.name = 'CandidateSourcingError'
+    this.category = category
+  }
+}
