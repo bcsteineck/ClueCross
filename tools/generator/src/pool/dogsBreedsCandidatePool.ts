@@ -1,0 +1,36 @@
+// The 30-word Dogs (breeds) pool used in the post-geometry-fix manual
+// Workshop test, persisted verbatim (same words, same order) so the
+// high-answer-count experiment and any later ones use the exact pool.
+// Generator test/experiment data only.
+export const DOGS_BREEDS_CANDIDATE_POOL: string[] = [
+  'BEAGLE',
+  'POODLE',
+  'SHEPHERD',
+  'PITBULL',
+  'CORGI',
+  'LABRADOR',
+  'HUSKY',
+  'BULLDOG',
+  'BOXER',
+  'SHIHTZU',
+  'DACHSHUND',
+  'SCHNAUZER',
+  'ROTTWEILER',
+  'TERRIER',
+  'CHIHUAHUA',
+  'SPANIEL',
+  'COLLIE',
+  'MASTIFF',
+  'PUG',
+  'DALMATIAN',
+  'WHIPPET',
+  'BLOODHOUND',
+  'SETTER',
+  'DOBERMAN',
+  'GREYHOUND',
+  'NEWFOUNDLAND',
+  'SHEEPDOG',
+  'POINTER',
+  'POMERANIAN',
+  'WOLFHOUND',
+]

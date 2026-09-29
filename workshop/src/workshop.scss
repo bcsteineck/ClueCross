@@ -1,0 +1,406 @@
+// Workshop-only styles. Shares the game's design tokens (read-only) but
+// none of its component styles — a neutral authoring-tool look, not the
+// player-facing ClueCross design.
+@use '../../src/styles/tokens' as *;
+
+$ws-accent: $color-brand-primary;
+$ws-approved: $color-brand-secondary;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: $color-gray-10;
+  color: $color-gray-90;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+:focus-visible {
+  outline: 3px solid $ws-accent;
+  outline-offset: 2px;
+}
+
+.ws-app {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: $spacing-24 $spacing-16 $spacing-32;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-20;
+}
+
+.ws-header h1 {
+  font-size: 24px;
+}
+
+.ws-muted {
+  color: $color-gray-70;
+  margin: $spacing-4 0 0;
+  font-size: 13px;
+}
+
+.ws-panel {
+  background: $color-gray-00;
+  border: $border-1 solid $color-gray-20;
+  border-radius: $radius-8;
+  padding: $spacing-20;
+  min-width: 0;
+}
+
+.ws-panel__heading {
+  font-size: 18px;
+  margin-bottom: $spacing-12;
+}
+
+// Inputs
+
+.ws-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-16;
+  max-width: 720px;
+}
+
+.ws-field {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+
+  label {
+    font-weight: 600;
+  }
+
+  input,
+  textarea {
+    width: 100%;
+    font: inherit;
+    padding: $spacing-8;
+    border: $border-1 solid $color-gray-50;
+    border-radius: $radius-4;
+    background: $color-gray-00;
+    color: inherit;
+  }
+
+  textarea {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    resize: vertical;
+  }
+}
+
+.ws-guidance {
+  margin: $spacing-4 0 0;
+  padding-left: $spacing-20;
+  color: $color-gray-70;
+  font-size: 13px;
+}
+
+.ws-pool-count {
+  margin: 0;
+  font-weight: 600;
+}
+
+.ws-issues,
+.ws-errors {
+  border-left: 4px solid $color-gray-80;
+  background: $color-gray-10;
+  padding: $spacing-8 $spacing-12;
+
+  h3 {
+    font-size: 14px;
+  }
+
+  ul {
+    margin: $spacing-4 0 $spacing-8;
+    padding-left: $spacing-20;
+  }
+}
+
+.ws-errors ul {
+  margin: 0;
+}
+
+.ws-button {
+  align-self: flex-start;
+  font: inherit;
+  font-weight: 600;
+  padding: $spacing-8 $spacing-16;
+  border: 0;
+  border-radius: $radius-4;
+  background: $ws-accent;
+  color: $color-gray-00;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: $color-brand-primary-hover;
+  }
+
+  &:disabled {
+    background: $color-gray-20;
+    color: $color-gray-80;
+    cursor: default;
+  }
+}
+
+// Results: candidate grid beside a sticky detail panel on wide screens,
+// stacked on narrow ones.
+
+.ws-results {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  gap: $spacing-20;
+  align-items: start;
+
+  @media (max-width: 1000px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ws-detail-panel {
+  position: sticky;
+  top: $spacing-16;
+  max-height: calc(100vh - #{$spacing-32});
+  overflow-y: auto;
+
+  @media (max-width: 1000px) {
+    position: static;
+    max-height: none;
+  }
+}
+
+.ws-meta {
+  margin: 0 0 $spacing-16;
+  color: $color-gray-70;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.ws-card-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: $spacing-12;
+}
+
+.ws-card {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+  padding: $spacing-12;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: $color-gray-00;
+  border: $border-2 solid $color-gray-20;
+  border-radius: $radius-8;
+  cursor: pointer;
+
+  &:hover {
+    border-color: $color-gray-50;
+  }
+
+  // Selected: strong accent border plus a wash — and aria-pressed, so the
+  // state is never color-only.
+  &--selected,
+  &--selected:hover {
+    border-color: $ws-accent;
+    box-shadow: 0 0 0 2px $ws-accent;
+    background: $color-brand-primary-wash;
+  }
+}
+
+.ws-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: $spacing-8;
+  font-size: 13px;
+  color: $color-gray-70;
+}
+
+.ws-card__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2 $spacing-12;
+  font-size: 13px;
+}
+
+.ws-card__headline {
+  flex-basis: 100%;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.ws-card__words {
+  font-size: 12px;
+  color: $color-gray-70;
+  overflow-wrap: anywhere;
+}
+
+// Text badge, so "approved" is announced and visible without relying on color.
+.ws-badge {
+  display: inline-block;
+  margin-left: $spacing-8;
+  padding: $spacing-2 $spacing-8;
+  border-radius: $radius-full;
+  background: $ws-approved;
+  color: $color-gray-00;
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.ws-card__header .ws-badge {
+  margin-left: 0;
+}
+
+// Board preview: a square frame; the candidate's own bounding grid is
+// fitted inside it at its true aspect ratio, so cell size scales with
+// the candidate's dimensions while every preview shares one area.
+
+.ws-board {
+  width: 100%;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-gray-10;
+  border-radius: $radius-4;
+  padding: 6%;
+  container-type: inline-size;
+}
+
+.ws-board__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 1fr);
+  grid-template-rows: repeat(var(--rows), 1fr);
+  gap: 2px;
+  width: calc(100% * var(--cols) / var(--max));
+  aspect-ratio: var(--cols) / var(--rows);
+}
+
+.ws-board__cell {
+  grid-column: var(--x);
+  grid-row: var(--y);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $color-gray-00;
+  border: $border-1 solid $color-gray-80;
+  border-radius: $radius-2;
+  font-weight: 700;
+  font-size: calc(100cqi / var(--max) * 0.5);
+  line-height: 1;
+  color: $color-gray-90;
+}
+
+// Selected-candidate detail
+
+.ws-detail {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+}
+
+.ws-detail__heading {
+  font-size: 18px;
+}
+
+.ws-detail__board {
+  max-width: 440px;
+}
+
+.ws-detail__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: $spacing-8;
+  margin: 0;
+
+  div {
+    padding: $spacing-8;
+    background: $color-gray-10;
+    border-radius: $radius-4;
+  }
+
+  dt {
+    font-size: 12px;
+    color: $color-gray-70;
+  }
+
+  dd {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+  }
+}
+
+.ws-detail__subheading {
+  font-size: 14px;
+  margin-top: $spacing-4;
+}
+
+.ws-word-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-4;
+
+  li {
+    padding: $spacing-2 $spacing-8;
+    border: $border-1 solid $color-gray-40;
+    border-radius: $radius-4;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+  }
+
+  &--muted li {
+    border-style: dashed;
+    color: $color-gray-70;
+  }
+}
+
+.ws-metrics {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: $spacing-2 $spacing-16;
+  margin: 0;
+  font-size: 13px;
+
+  dt {
+    color: $color-gray-70;
+  }
+
+  dd {
+    margin: 0;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+
+  &--debug dd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+  }
+}
+
+.ws-detail__approve {
+  border-top: $border-1 solid $color-gray-20;
+  padding-top: $spacing-12;
+}
