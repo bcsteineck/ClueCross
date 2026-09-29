@@ -14,6 +14,28 @@ There is no maximum answer length.
 
 ---
 
+### Construction Normalization
+
+An answer's construction form removes spaces, hyphens, and apostrophes, then uppercases ("Great Dane", "great-dane" → GREATDANE). Every other non-letter (digits, periods, accents) stays invalid rather than being silently rewritten.
+
+This is one generator rule used by both manual Workshop input and candidate sourcing, so multi-word answers are valid and answers that differ only by those separators are exact duplicates. The human-readable form is kept alongside the construction form.
+
+---
+
+### Candidate Sourcing v1
+
+A sourcing provider is a candidate researcher, not a puzzle constructor: it proposes answers, each with a one-sentence rationale and a category. Deterministic code checks mechanical facts, the author makes semantic judgments in Pool Review, and the generator constructs.
+
+Requests carry the clue, optional author-only context, and explicit author settings for proper nouns and for abbreviations/shortened forms (both default to Exclude; never inferred from the clue). The target is about 60 candidates, and quality outranks the count.
+
+Sourcing rules: multi-word answers are allowed in their normal written form; no singular and plural of the same concept; no synonym or morphological padding; every answer directly related to the clue; legitimate uncommon terms allowed, but the recognizable term preferred when otherwise equal; broad clues explore directly related subcategories, narrow clues stay focused.
+
+Deterministic cleanup covers response structure, construction normalization and validity, and exact duplicates by construction form. Conservative singular/plural and -ING/-ED variant detection only raises review flags; nothing is removed automatically. Synonymy, relevance, obscurity, proper nouns, and abbreviations remain author judgments.
+
+No live AI provider is integrated yet; the Workshop uses a deterministic fixture source.
+
+---
+
 ## 2026-07-31
 
 ### Puzzle Rendering

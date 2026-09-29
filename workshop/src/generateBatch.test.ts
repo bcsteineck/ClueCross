@@ -44,7 +44,7 @@ describe('generateBatch', () => {
   })
 
   it('generates from usable answers only: duplicates removed, invalid entries excluded', () => {
-    const noisy = parsePool(`${DOGS_CANDIDATE_POOL.join('\n')}\nHOT-DOG\nbeagle\nOX`)
+    const noisy = parsePool(`${DOGS_CANDIDATE_POOL.join('\n')}\nK9\nbeagle\nOX`)
     const result = generateBatch('Dogs', noisy, 1)
     expect(result.ok).toBe(true)
     if (!result.ok) return

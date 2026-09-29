@@ -5,8 +5,15 @@ import { CandidateDetail } from './CandidateDetail'
 import { MAX_DISPLAYED_CANDIDATES, WORKSHOP_GENERATION_CONFIG, generateBatch } from './generateBatch'
 import type { WorkshopBatch } from './generateBatch'
 import { parsePool } from './parsePool'
-import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE, buildPoolSummary } from './poolDiagnostics'
+import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE, analyzeCandidatePool, buildPoolSummary } from './poolDiagnostics'
 import type { DiagnosticSeverity } from './poolDiagnostics'
+import { PoolReview } from './PoolReview'
+import { createSourcingRequest } from './sourcing/contract'
+import type { AbbreviationSetting, CandidateSource, ProperNounSetting } from './sourcing/contract'
+import { fixtureCandidateSource } from './sourcing/fixtureSource'
+import { poolReviewEntries, setCandidateIncluded } from './sourcing/reviewPool'
+import { sourceCandidates } from './sourcing/sourceCandidates'
+import type { SourcedPool } from './sourcing/sourceCandidates'
 
 // Pool summary, then errors, warnings and info, then Generate. Severity is
 // spelled out in text so it never relies on color alone.
@@ -18,9 +25,25 @@ const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', war
 // selection and approval live only in this component's state, and a new
 // batch clears both so approval never appears to outlive what it
 // approved.
-export function WorkshopApp() {
+//
+// The pool comes either from the manual list or from candidate sourcing
+// followed by human Pool Review; either way the same Pool Diagnostics
+// decide whether Generate is allowed. Sourcing never starts generation.
+interface WorkshopAppProps {
+  /** Defaults to the deterministic development fixture; no live provider exists yet. */
+  candidateSource?: CandidateSource
+}
+
+export function WorkshopApp({ candidateSource = fixtureCandidateSource }: WorkshopAppProps = {}) {
   const [clue, setClue] = useState('')
+  const [poolSource, setPoolSource] = useState<'manual' | 'sourced'>('manual')
   const [poolText, setPoolText] = useState('')
+  const [context, setContext] = useState('')
+  const [properNouns, setProperNouns] = useState<ProperNounSetting>('exclude')
+  const [abbreviations, setAbbreviations] = useState<AbbreviationSetting>('exclude')
+  const [sourcedPool, setSourcedPool] = useState<SourcedPool | null>(null)
+  const [sourcing, setSourcing] = useState(false)
+  const [sourcingError, setSourcingError] = useState<string | null>(null)
   // Counts successful generations this session; batch N uses seed
   // "workshop-generation-N", so each press yields a new but reproducible batch.
   const [generationCount, setGenerationCount] = useState(0)
@@ -29,12 +52,41 @@ export function WorkshopApp() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [approvedId, setApprovedId] = useState<string | null>(null)
 
-  const pool = useMemo(() => parsePool(poolText), [poolText])
+  const pool = useMemo(
+    () =>
+      poolSource === 'manual'
+        ? parsePool(poolText)
+        : analyzeCandidatePool(poolReviewEntries(sourcedPool?.candidates ?? [])),
+    [poolSource, poolText, sourcedPool],
+  )
   const summary = buildPoolSummary(pool.stats)
   const blockingIds = pool.diagnostics
     .filter((diagnostic) => diagnostic.severity === 'error')
     .map((diagnostic) => `ws-diagnostic-${diagnostic.code}`)
     .join(' ')
+
+  async function handleSource() {
+    const request = createSourcingRequest({ clue, context, properNouns, abbreviations })
+    if (!request.ok) {
+      setSourcingError(request.error)
+      return
+    }
+    setSourcingError(null)
+    setSourcing(true)
+    try {
+      const result = await sourceCandidates(candidateSource, request.request)
+      if (result.ok) setSourcedPool(result.pool)
+      else setSourcingError(result.error)
+    } catch {
+      setSourcingError('Candidate sourcing failed.')
+    } finally {
+      setSourcing(false)
+    }
+  }
+
+  function handleToggleIncluded(id: string, included: boolean) {
+    setSourcedPool((current) => current && { ...current, candidates: setCandidateIncluded(current.candidates, id, included) })
+  }
 
   function handleGenerate(event: FormEvent) {
     event.preventDefault()
@@ -71,37 +123,113 @@ export function WorkshopApp() {
           <input id="ws-clue" type="text" value={clue} onChange={(event) => setClue(event.target.value)} />
         </div>
 
-        <div className="ws-field">
-          <label htmlFor="ws-pool">Candidate words</label>
-          <textarea
-            id="ws-pool"
-            rows={10}
-            value={poolText}
-            onChange={(event) => setPoolText(event.target.value)}
-            aria-describedby="ws-pool-guidance ws-pool-summary"
-            placeholder={'BEAGLE\nPOODLE\nCOLLIE\n…'}
-            spellCheck={false}
-          />
-          <ul id="ws-pool-guidance" className="ws-guidance">
-            <li>
-              {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers} answers will be
-              selected for a generated puzzle (never more than the number of candidate words).
-            </li>
-            <li>
-              At least {MIN_USABLE_ANSWERS} unique valid words are required; {RECOMMENDED_POOL_SIZE}+ are recommended.
-            </li>
-            <li>All candidate words should already be considered valid answers to the clue.</li>
-            <li>Separate words with new lines or commas.</li>
-          </ul>
-          <div id="ws-pool-summary" className="ws-pool-summary">
-            <p className="ws-pool-summary__headline">{summary.headline}</p>
-            <ul className="ws-pool-summary__bands">
-              <li>{summary.short}</li>
-              <li>{summary.medium}</li>
-              <li>{summary.long}</li>
-              <li>{summary.average}</li>
+        <fieldset className="ws-field ws-source">
+          <legend>Candidate pool</legend>
+          <label>
+            <input
+              type="radio"
+              name="ws-pool-source"
+              checked={poolSource === 'manual'}
+              onChange={() => setPoolSource('manual')}
+            />{' '}
+            Enter manually
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="ws-pool-source"
+              checked={poolSource === 'sourced'}
+              onChange={() => setPoolSource('sourced')}
+            />{' '}
+            Source from clue
+          </label>
+        </fieldset>
+
+        {poolSource === 'manual' ? (
+          <div className="ws-field">
+            <label htmlFor="ws-pool">Candidate words</label>
+            <textarea
+              id="ws-pool"
+              rows={10}
+              value={poolText}
+              onChange={(event) => setPoolText(event.target.value)}
+              aria-describedby="ws-pool-guidance ws-pool-summary"
+              placeholder={'BEAGLE\nPOODLE\nCOLLIE\n…'}
+              spellCheck={false}
+            />
+            <ul id="ws-pool-guidance" className="ws-guidance">
+              <li>
+                {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers} answers will be
+                selected for a generated puzzle (never more than the number of candidate words).
+              </li>
+              <li>
+                At least {MIN_USABLE_ANSWERS} unique valid words are required; {RECOMMENDED_POOL_SIZE}+ are recommended.
+              </li>
+              <li>All candidate words should already be considered valid answers to the clue.</li>
+              <li>Separate words with new lines or commas. Multi-word answers are fine.</li>
             </ul>
           </div>
+        ) : (
+          <div className="ws-field ws-sourcing">
+            <label htmlFor="ws-context">Author context (optional)</label>
+            <input
+              id="ws-context"
+              type="text"
+              value={context}
+              onChange={(event) => setContext(event.target.value)}
+              aria-describedby="ws-context-hint"
+            />
+            <p id="ws-context-hint" className="ws-muted">
+              Author-only clarification for sourcing. Never shown to players.
+            </p>
+            <div className="ws-sourcing__options">
+              <label htmlFor="ws-proper-nouns">Proper nouns</label>
+              <select
+                id="ws-proper-nouns"
+                value={properNouns}
+                onChange={(event) => setProperNouns(event.target.value as ProperNounSetting)}
+              >
+                <option value="exclude">Exclude</option>
+                <option value="allow">Allow</option>
+              </select>
+              <label htmlFor="ws-abbreviations">Abbreviations</label>
+              <select
+                id="ws-abbreviations"
+                value={abbreviations}
+                onChange={(event) => setAbbreviations(event.target.value as AbbreviationSetting)}
+              >
+                <option value="exclude">Exclude</option>
+                <option value="allow">Allow</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              className="ws-button ws-button--secondary"
+              onClick={() => void handleSource()}
+              disabled={sourcing}
+            >
+              {sourcing ? 'Sourcing…' : 'Source Candidates'}
+            </button>
+            <p className="ws-muted">
+              Development fixture: returns the same sample Dogs candidates for any clue. No AI provider is connected.
+            </p>
+            {sourcingError && (
+              <div className="ws-errors" role="alert">
+                {sourcingError}
+              </div>
+            )}
+            {sourcedPool && <PoolReview pool={sourcedPool} onToggleIncluded={handleToggleIncluded} />}
+          </div>
+        )}
+
+        <div id="ws-pool-summary" className="ws-pool-summary">
+          <p className="ws-pool-summary__headline">{summary.headline}</p>
+          <ul className="ws-pool-summary__bands">
+            <li>{summary.short}</li>
+            <li>{summary.medium}</li>
+            <li>{summary.long}</li>
+            <li>{summary.average}</li>
+          </ul>
         </div>
 
         {SEVERITY_ORDER.map((severity) => {

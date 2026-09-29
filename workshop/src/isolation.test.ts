@@ -94,4 +94,12 @@ describe('production game / Workshop isolation', () => {
       expect(source, path).not.toMatch(/localStorage|sessionStorage|indexedDB/)
     }
   })
+
+  it('Workshop candidate sourcing has no network access, provider SDK, or credentials (fixture only)', () => {
+    for (const [path, source] of Object.entries(workshopSources)) {
+      if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
+      expect(source, path).not.toMatch(/\bfetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon/)
+      expect(source, path).not.toMatch(/openai|anthropic|api[_-]?key|secret|bearer/i)
+    }
+  })
 })

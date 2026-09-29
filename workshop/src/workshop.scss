@@ -83,7 +83,8 @@ h3 {
     font-weight: 600;
   }
 
-  input,
+  // Text fields only: radios and checkboxes keep their natural size.
+  input:not([type='radio']):not([type='checkbox']),
   textarea {
     width: 100%;
     font: inherit;
@@ -98,6 +99,107 @@ h3 {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     resize: vertical;
   }
+}
+
+// Pool source choice and sourcing settings
+
+.ws-source {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: $spacing-4 $spacing-16;
+
+  legend {
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: $spacing-4;
+    width: 100%;
+  }
+
+  label {
+    font-weight: 400;
+  }
+}
+
+.ws-sourcing__options {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 160px);
+  gap: $spacing-8 $spacing-12;
+  align-items: center;
+  margin: $spacing-8 0;
+
+  select {
+    font: inherit;
+    padding: $spacing-4 $spacing-8;
+    border: $border-1 solid $color-gray-50;
+    border-radius: $radius-4;
+    background: $color-gray-00;
+    color: inherit;
+  }
+}
+
+.ws-button--secondary {
+  background: $color-gray-00;
+  color: $ws-accent;
+  box-shadow: inset 0 0 0 $border-2 $ws-accent;
+
+  &:hover:not(:disabled):not([aria-disabled='true']) {
+    background: $color-brand-primary-wash;
+  }
+}
+
+// Pool Review
+
+.ws-review {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+  margin-top: $spacing-12;
+
+  h3 {
+    font-size: 16px;
+  }
+}
+
+.ws-review__scroll {
+  overflow-x: auto;
+  max-height: 480px;
+  overflow-y: auto;
+  border: $border-1 solid $color-gray-20;
+  border-radius: $radius-4;
+}
+
+.ws-review__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+
+  th,
+  td {
+    text-align: left;
+    vertical-align: top;
+    padding: $spacing-4 $spacing-8;
+    border-bottom: $border-1 solid $color-gray-20;
+  }
+
+  thead th {
+    position: sticky;
+    top: 0;
+    background: $color-gray-10;
+  }
+}
+
+// Not included: dimmed, and the unchecked box / review note carry the meaning.
+.ws-review__row--out td {
+  color: $color-gray-70;
+}
+
+.ws-review__construction {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  color: $color-gray-70;
 }
 
 .ws-guidance {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeAnswers } from './input'
+import { normalizeAnswer, normalizeAnswers } from './input'
 
 describe('normalizeAnswers', () => {
   it('accepts a valid list of answers', () => {
@@ -24,12 +24,32 @@ describe('normalizeAnswers', () => {
     expect(result.errors[0]).toMatch(/at least one answer/i)
   })
 
-  it('rejects answers containing non-letter characters', () => {
-    const result = normalizeAnswers(['CAT', 'DOG2', 'RA-T'])
+  it('rejects answers containing non-letter characters other than separators', () => {
+    const result = normalizeAnswers(['CAT', 'DOG2', 'St. Bernard', 'Café'])
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.errors.some((e) => e.includes('DOG2'))).toBe(true)
-    expect(result.errors.some((e) => e.includes('RA-T'))).toBe(true)
+    expect(result.errors).toEqual([
+      '"DOG2" contains characters outside A-Z.',
+      '"St. Bernard" contains characters outside A-Z.',
+      '"Café" contains characters outside A-Z.',
+    ])
+  })
+
+  it('normalizes multi-word answers to construction form by removing spaces, hyphens, and apostrophes', () => {
+    expect(normalizeAnswer('Great Dane')).toEqual({ ok: true, answer: 'GREATDANE' })
+    expect(normalizeAnswer('great-dane')).toEqual({ ok: true, answer: 'GREATDANE' })
+    expect(normalizeAnswer('  Border\tCollie ')).toEqual({ ok: true, answer: 'BORDERCOLLIE' })
+    expect(normalizeAnswer('Dog’s Bed')).toEqual({ ok: true, answer: 'DOGSBED' })
+    expect(normalizeAnswer("Dog's Bed")).toEqual({ ok: true, answer: 'DOGSBED' })
+  })
+
+  it('applies the 3-letter minimum after separators are removed', () => {
+    expect(normalizeAnswer('O X')).toEqual({ ok: false, error: '"O X" is too short (minimum 3 letters).' })
+  })
+
+  it('treats answers that differ only by separators as duplicates', () => {
+    const result = normalizeAnswers(['Great Dane', 'GREAT-DANE'])
+    expect(result).toEqual({ ok: false, errors: ['"GREATDANE" is a duplicate answer.'] })
   })
 
   it('rejects answers shorter than 3 letters', () => {

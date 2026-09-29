@@ -2,9 +2,9 @@
 // entries and analyzes them (see poolDiagnostics.ts).
 //
 // Entries are separated by newlines or commas (the two ways authors
-// actually paste lists). Spaces are NOT separators: "ICE CREAM" stays one
-// entry and is excluded as invalid by the generator's own A-Z rule, rather
-// than being quietly split into two unrelated answers.
+// actually paste lists). Spaces are NOT entry separators: "ICE CREAM" stays
+// one multi-word answer (construction form ICECREAM, via the generator's
+// own normalization) rather than being split into two unrelated answers.
 
 import { analyzeCandidatePool } from './poolDiagnostics'
 import type { CandidatePoolAnalysis } from './poolDiagnostics'

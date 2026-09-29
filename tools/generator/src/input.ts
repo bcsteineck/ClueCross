@@ -23,7 +23,35 @@ const MIN_ANSWER_LENGTH = 3
 
 const VALID_WORD = /^[A-Z]+$/
 
-// Answers must be unique (case-insensitive, after trimming/normalizing)
+// Construction normalization: a human-readable answer ("Great Dane",
+// "great-dane", "Dog's Bed") becomes its construction form (GREATDANE,
+// DOGSBED) by removing the characters that separate or join words but
+// occupy no puzzle cell — whitespace, hyphens, and straight/curly
+// apostrophes — and uppercasing. Deliberately narrow: every other
+// non-letter (digits, periods, accents, other dashes) is left in place so
+// the A-Z rule rejects it visibly rather than silently rewriting the answer.
+const CONSTRUCTION_SEPARATORS = /[\s\-'’]/g
+
+export function toConstructionForm(raw: string): string {
+  return raw.replace(CONSTRUCTION_SEPARATORS, '').toUpperCase()
+}
+
+export type AnswerNormalization = { ok: true; answer: string } | { ok: false; error: string }
+
+// The single definition of a valid puzzle answer: construction form, at
+// least MIN_ANSWER_LENGTH letters, A-Z only. No maximum length.
+export function normalizeAnswer(raw: string): AnswerNormalization {
+  const word = toConstructionForm(raw)
+  if (word.length < MIN_ANSWER_LENGTH) {
+    return { ok: false, error: `"${raw}" is too short (minimum ${MIN_ANSWER_LENGTH} letters).` }
+  }
+  if (!VALID_WORD.test(word)) {
+    return { ok: false, error: `"${raw}" contains characters outside A-Z.` }
+  }
+  return { ok: true, answer: word }
+}
+
+// Answers must be unique (after construction normalization)
 // and are rejected rather than silently deduplicated: a caller-supplied
 // list that repeats a word is more likely a mistake than an intent to
 // place the same word twice, and silently dropping the repeat would place
@@ -38,16 +66,12 @@ export function normalizeAnswers(rawAnswers: string[]): NormalizeResult {
   const seen = new Set<string>()
 
   for (const raw of rawAnswers) {
-    const word = raw.trim().toUpperCase()
-
-    if (word.length < MIN_ANSWER_LENGTH) {
-      errors.push(`"${raw}" is too short (minimum ${MIN_ANSWER_LENGTH} letters).`)
+    const result = normalizeAnswer(raw)
+    if (!result.ok) {
+      errors.push(result.error)
       continue
     }
-    if (!VALID_WORD.test(word)) {
-      errors.push(`"${raw}" contains characters outside A-Z.`)
-      continue
-    }
+    const word = result.answer
     if (seen.has(word)) {
       errors.push(`"${word}" is a duplicate answer.`)
       continue

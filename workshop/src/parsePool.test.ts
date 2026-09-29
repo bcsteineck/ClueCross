@@ -36,9 +36,9 @@ describe('parsePool', () => {
     expect(parsed.duplicatesRemoved).toEqual(['BEAGLE', 'BEAGLE', 'POODLE'])
   })
 
-  it('does not split on spaces: a multi-word entry is excluded as invalid, never silently split', () => {
+  it('does not split on spaces: a multi-word entry is one answer in construction form', () => {
     const parsed = parsePool('BEAGLE\nHOT-DOG\nICE CREAM\nK9\nOX')
-    expect(parsed.usableAnswers).toEqual(['BEAGLE'])
-    expect(parsed.invalidEntries).toEqual(['HOT-DOG', 'ICE CREAM', 'K9', 'OX'])
+    expect(parsed.usableAnswers).toEqual(['BEAGLE', 'HOTDOG', 'ICECREAM'])
+    expect(parsed.invalidEntries).toEqual(['K9', 'OX'])
   })
 })

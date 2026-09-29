@@ -96,9 +96,16 @@ describe('analyzeCandidatePool: counts and eligibility', () => {
   })
 
   it('uses the generator’s rules: non A–Z and fewer than 3 letters are invalid (trimmed value kept)', () => {
-    const analysis = analyzeCandidatePool([' OX ', 'HOT-DOG', 'ICE CREAM', 'PUG'])
-    expect(analysis.invalidEntries).toEqual(['OX', 'HOT-DOG', 'ICE CREAM'])
+    const analysis = analyzeCandidatePool([' OX ', 'K9', 'St. Bernard', 'PUG'])
+    expect(analysis.invalidEntries).toEqual(['OX', 'K9', 'St. Bernard'])
     expect(analysis.usableAnswers).toEqual(['PUG'])
+  })
+
+  it('counts multi-word answers by their construction form, deduplicating across spellings', () => {
+    const analysis = analyzeCandidatePool(['Great Dane', 'great-dane', 'Dog Park'])
+    expect(analysis.usableAnswers).toEqual(['GREATDANE', 'DOGPARK'])
+    expect(analysis.duplicatesRemoved).toEqual(['GREATDANE'])
+    expect(analysis.stats).toMatchObject({ mediumCount: 1, longCount: 1 })
   })
 
   it('cleanup that leaves fewer than 10 blocks generation and reports what was removed', () => {
