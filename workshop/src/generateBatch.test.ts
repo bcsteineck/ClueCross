@@ -34,7 +34,8 @@ describe('generateBatch', () => {
     const nine = parsePool(DOGS_CANDIDATE_POOL.slice(0, 9).join('\n'))
     const result = generateBatch('Dogs', nine, 1)
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.errors.join(' ')).toMatch(/at least 10 valid candidate words \(currently 9\)/)
+    if (!result.ok) expect(result.errors).toEqual([nine.diagnostics[0].message])
+    expect(nine.diagnostics[0]).toMatchObject({ code: 'not-enough-answers', severity: 'error' })
   })
 
   it('accepts a pool of exactly 10 valid unique words', () => {
@@ -42,11 +43,14 @@ describe('generateBatch', () => {
     expect(generateBatch('Dogs', ten, 1).ok).toBe(true)
   })
 
-  it('refuses to generate while invalid or duplicate words are present', () => {
-    const withInvalid = parsePool(`${DOGS_CANDIDATE_POOL.join('\n')}\nHOT-DOG`)
-    const withDuplicate = parsePool(`${DOGS_CANDIDATE_POOL.join('\n')}\nBEAGLE`)
-    expect(generateBatch('Dogs', withInvalid, 1).ok).toBe(false)
-    expect(generateBatch('Dogs', withDuplicate, 1).ok).toBe(false)
+  it('generates from usable answers only: duplicates removed, invalid entries excluded', () => {
+    const noisy = parsePool(`${DOGS_CANDIDATE_POOL.join('\n')}\nHOT-DOG\nbeagle\nOX`)
+    const result = generateBatch('Dogs', noisy, 1)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.batch.pool).toEqual(DOGS_CANDIDATE_POOL)
+    // Same batch as the clean pool: excluded/removed entries play no part.
+    expect(result.batch.candidates).toEqual(generateOk(1).candidates)
   })
 
   it('uses the 12x12 envelope, 10–16 answers, 100 trials, and the generator’s 10,000-attempt default', () => {

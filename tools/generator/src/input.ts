@@ -14,11 +14,12 @@ export interface NormalizeFailure {
 
 export type NormalizeResult = NormalizeSuccess | NormalizeFailure
 
-// A word shorter than this has no meaningful across/down direction (an
-// entry needs at least 2 cells to be axis-aligned at all — see the
-// production app's deriveEntryDirection, which returns null below 2
-// cells), so it can never be placed as a proper answer by this engine.
-const MIN_ANSWER_LENGTH = 2
+// Product rule: ClueCross answers are at least 3 letters (matching every
+// existing hand-authored puzzle). Geometrically 2 cells would suffice —
+// the production app's deriveEntryDirection only needs 2 — but 2-letter
+// answers are deliberately excluded, and the Workshop's candidate-pool
+// length bands (3–5 / 6–8 / 9+) rely on this floor.
+const MIN_ANSWER_LENGTH = 3
 
 const VALID_WORD = /^[A-Z]+$/
 

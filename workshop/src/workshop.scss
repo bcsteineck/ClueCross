@@ -107,29 +107,68 @@ h3 {
   font-size: 13px;
 }
 
-.ws-pool-count {
+.ws-pool-summary {
+  margin-top: $spacing-4;
+}
+
+.ws-pool-summary__headline {
   margin: 0;
   font-weight: 600;
 }
 
-.ws-issues,
+.ws-pool-summary__bands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-2 $spacing-16;
+  font-size: 13px;
+  color: $color-gray-70;
+}
+
+// Pool diagnostics and submit errors. Severity is also written out as a
+// text label ("Error:", "Warning:", "Note:"), so the border weight/shade is
+// reinforcement, not the only signal.
+.ws-diagnostics,
+.ws-errors ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-diagnostics > li,
 .ws-errors {
-  border-left: 4px solid $color-gray-80;
+  border-left: 4px solid $color-gray-50;
   background: $color-gray-10;
   padding: $spacing-8 $spacing-12;
+  font-size: 14px;
+}
 
-  h3 {
-    font-size: 14px;
+.ws-diagnostics {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+
+  details {
+    margin-top: $spacing-4;
+    font-size: 13px;
   }
 
-  ul {
-    margin: $spacing-4 0 $spacing-8;
+  details ul {
+    margin: $spacing-4 0 0;
     padding-left: $spacing-20;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
 }
 
-.ws-errors ul {
-  margin: 0;
+.ws-diagnostics--error > li,
+.ws-errors {
+  border-left-color: $color-gray-90;
+}
+
+.ws-diagnostics--warning > li {
+  border-left-color: $color-gray-70;
 }
 
 .ws-button {
@@ -143,11 +182,12 @@ h3 {
   color: $color-gray-00;
   cursor: pointer;
 
-  &:hover:not(:disabled) {
+  &:hover:not(:disabled):not([aria-disabled='true']) {
     background: $color-brand-primary-hover;
   }
 
-  &:disabled {
+  &:disabled,
+  &[aria-disabled='true'] {
     background: $color-gray-20;
     color: $color-gray-80;
     cursor: default;

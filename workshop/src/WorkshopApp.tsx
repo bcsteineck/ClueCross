@@ -5,6 +5,13 @@ import { CandidateDetail } from './CandidateDetail'
 import { MAX_DISPLAYED_CANDIDATES, WORKSHOP_GENERATION_CONFIG, generateBatch } from './generateBatch'
 import type { WorkshopBatch } from './generateBatch'
 import { parsePool } from './parsePool'
+import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE, buildPoolSummary } from './poolDiagnostics'
+import type { DiagnosticSeverity } from './poolDiagnostics'
+
+// Pool summary, then errors, warnings and info, then Generate. Severity is
+// spelled out in text so it never relies on color alone.
+const SEVERITY_ORDER: DiagnosticSeverity[] = ['error', 'warning', 'info']
+const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', warning: 'Warning', info: 'Note' }
 
 // Session-only authoring loop: clue + word pool -> candidate batch ->
 // select -> approve. Nothing here persists, publishes, or writes files;
@@ -23,6 +30,11 @@ export function WorkshopApp() {
   const [approvedId, setApprovedId] = useState<string | null>(null)
 
   const pool = useMemo(() => parsePool(poolText), [poolText])
+  const summary = buildPoolSummary(pool.stats)
+  const blockingIds = pool.diagnostics
+    .filter((diagnostic) => diagnostic.severity === 'error')
+    .map((diagnostic) => `ws-diagnostic-${diagnostic.code}`)
+    .join(' ')
 
   function handleGenerate(event: FormEvent) {
     event.preventDefault()
@@ -66,7 +78,7 @@ export function WorkshopApp() {
             rows={10}
             value={poolText}
             onChange={(event) => setPoolText(event.target.value)}
-            aria-describedby="ws-pool-guidance ws-pool-count"
+            aria-describedby="ws-pool-guidance ws-pool-summary"
             placeholder={'BEAGLE\nPOODLE\nCOLLIE\n…'}
             spellCheck={false}
           />
@@ -75,42 +87,46 @@ export function WorkshopApp() {
               {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers} answers will be
               selected for a generated puzzle (never more than the number of candidate words).
             </li>
-            <li>Pools of mostly long words may produce few or no candidates.</li>
-            <li>For useful variety, provide more than {WORKSHOP_GENERATION_CONFIG.maxAnswers} candidate words.</li>
+            <li>
+              At least {MIN_USABLE_ANSWERS} unique valid words are required; {RECOMMENDED_POOL_SIZE}+ are recommended.
+            </li>
             <li>All candidate words should already be considered valid answers to the clue.</li>
             <li>Separate words with new lines or commas.</li>
           </ul>
-          <p id="ws-pool-count" className="ws-pool-count">
-            {pool.words.length} candidate {pool.words.length === 1 ? 'word' : 'words'}
-          </p>
+          <div id="ws-pool-summary" className="ws-pool-summary">
+            <p className="ws-pool-summary__headline">{summary.headline}</p>
+            <ul className="ws-pool-summary__bands">
+              <li>{summary.short}</li>
+              <li>{summary.medium}</li>
+              <li>{summary.long}</li>
+              <li>{summary.average}</li>
+            </ul>
+          </div>
         </div>
 
-        {(pool.invalid.length > 0 || pool.duplicates.length > 0) && (
-          <div className="ws-issues">
-            {pool.invalid.length > 0 && (
-              <>
-                <h3>Invalid words</h3>
-                <ul>
-                  {pool.invalid.map((item, index) => (
-                    <li key={`${item.raw}-${index}`}>{item.reason}</li>
-                  ))}
-                </ul>
-              </>
-            )}
-            {pool.duplicates.length > 0 && (
-              <>
-                <h3>Duplicate words</h3>
-                <ul>
-                  {pool.duplicates.map((item) => (
-                    <li key={item.word}>
-                      {item.word} appears {item.count} times
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
-          </div>
-        )}
+        {SEVERITY_ORDER.map((severity) => {
+          const diagnostics = pool.diagnostics.filter((diagnostic) => diagnostic.severity === severity)
+          if (diagnostics.length === 0) return null
+          return (
+            <ul key={severity} className={`ws-diagnostics ws-diagnostics--${severity}`}>
+              {diagnostics.map((diagnostic) => (
+                <li key={diagnostic.code} id={`ws-diagnostic-${diagnostic.code}`}>
+                  <strong>{SEVERITY_LABEL[severity]}:</strong> {diagnostic.message}
+                  {diagnostic.entries && (
+                    <details>
+                      <summary>Show entries</summary>
+                      <ul>
+                        {diagnostic.entries.map((entry, index) => (
+                          <li key={`${entry}-${index}`}>{entry}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )
+        })}
 
         {errors.length > 0 && (
           <div className="ws-errors" role="alert">
@@ -122,7 +138,14 @@ export function WorkshopApp() {
           </div>
         )}
 
-        <button type="submit" className="ws-button">
+        {/* aria-disabled rather than disabled, so the button stays focusable and
+            its reason (the blocking error) is announced with it. */}
+        <button
+          type="submit"
+          className="ws-button"
+          aria-disabled={!pool.canGenerate}
+          aria-describedby={blockingIds || undefined}
+        >
           Generate Candidates
         </button>
       </form>

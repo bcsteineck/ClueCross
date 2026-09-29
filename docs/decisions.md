@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-09-28
+
+### Minimum Answer Length
+
+ClueCross authored answers must contain at least 3 playable letters.
+
+2-letter answers are invalid generator input. Existing puzzles are unaffected; none use 2-letter answers.
+
+In the Workshop, a 2-letter candidate is an invalid entry: it is excluded before duplicate handling and pool statistics, so the candidate-pool length bands are 3–5 / 6–8 / 9+.
+
+There is no maximum answer length.
+
+---
+
 ## 2026-07-31
 
 ### Puzzle Rendering

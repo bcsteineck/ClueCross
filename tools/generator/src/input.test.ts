@@ -32,11 +32,15 @@ describe('normalizeAnswers', () => {
     expect(result.errors.some((e) => e.includes('RA-T'))).toBe(true)
   })
 
-  it('rejects answers shorter than 2 letters', () => {
-    const result = normalizeAnswers(['CAT', 'A'])
+  it('rejects answers shorter than 3 letters', () => {
+    const result = normalizeAnswers(['CAT', 'A', 'OX'])
     expect(result.ok).toBe(false)
     if (result.ok) return
-    expect(result.errors.some((e) => e.includes('too short'))).toBe(true)
+    expect(result.errors).toEqual(['"A" is too short (minimum 3 letters).', '"OX" is too short (minimum 3 letters).'])
+  })
+
+  it('accepts a 3-letter answer', () => {
+    expect(normalizeAnswers(['CAT', 'PUG'])).toEqual({ ok: true, answers: ['CAT', 'PUG'] })
   })
 
   it('rejects duplicate answers, case-insensitively, rather than silently deduplicating', () => {

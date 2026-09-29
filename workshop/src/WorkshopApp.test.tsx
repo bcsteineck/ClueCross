@@ -33,14 +33,41 @@ async function generate(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('WorkshopApp inputs', () => {
-  it('shows the normalized candidate count and flags invalid and duplicate words', async () => {
+  it('shows the pool summary and diagnostics in order: errors, warnings, info', async () => {
     const user = await setup()
     await user.click(screen.getByLabelText('Candidate words'))
     await user.paste('beagle, poodle\nPOODLE\nhot-dog\n\n')
 
-    expect(screen.getByText('2 candidate words')).toBeTruthy()
-    expect(screen.getByText(/"hot-dog" contains characters outside A-Z/)).toBeTruthy()
-    expect(screen.getByText('POODLE appears 2 times')).toBeTruthy()
+    expect(screen.getByText('2 usable answers')).toBeTruthy()
+    expect(screen.getByText('3–5: 0')).toBeTruthy()
+    expect(screen.getByText('6–8: 2')).toBeTruthy()
+    expect(screen.getByText('9+: 0')).toBeTruthy()
+    expect(screen.getByText('Average: 6.0 letters')).toBeTruthy()
+
+    const items = [...document.querySelectorAll('.ws-diagnostics > li')].map((li) => li.textContent ?? '')
+    expect(items.map((text) => text.split(':')[0])).toEqual(['Error', 'Warning', 'Note', 'Note'])
+    expect(items[0]).toMatch('Not enough candidate answers')
+    expect(items[1]).toMatch('Few short answers. Only 0%')
+    expect(items[2]).toMatch('1 duplicate entry removed.')
+    expect(items[3]).toMatch('1 invalid entry excluded.')
+    expect(screen.getByText('hot-dog')).toBeTruthy()
+  })
+
+  it('marks Generate unavailable while the pool has an error, and blocks it on submit', async () => {
+    const user = await setup()
+    await user.type(screen.getByLabelText('Clue'), 'Dogs')
+    const button = screen.getByRole('button', { name: 'Generate Candidates' })
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.getAttribute('aria-describedby')).toBe('ws-diagnostic-not-enough-answers')
+
+    await generate(user)
+    expect(screen.getByRole('alert').textContent).toMatch('Not enough candidate answers')
+    expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
+
+    await user.click(screen.getByLabelText('Candidate words'))
+    await user.paste(DOGS_CANDIDATE_POOL.join('\n'))
+    expect(button.getAttribute('aria-disabled')).toBe('false')
+    expect(button.hasAttribute('aria-describedby')).toBe(false)
   })
 
   it('requires a clue before generating', async () => {

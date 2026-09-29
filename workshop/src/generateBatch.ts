@@ -8,7 +8,7 @@ import type {
   PoolCandidate,
   PoolSelectionDiversityStats,
 } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
-import type { ParsedPool } from './parsePool'
+import type { CandidatePoolAnalysis } from './poolDiagnostics'
 
 // The 12x12 envelope is the primary ClueCross size constraint: a ceiling,
 // not a target — actual puzzles are often smaller.
@@ -50,24 +50,22 @@ export interface WorkshopBatch {
 
 export type GenerateBatchResult = { ok: true; batch: WorkshopBatch } | { ok: false; errors: string[] }
 
-export function validateInputs(clue: string, pool: ParsedPool): string[] {
+// The clue is required here; everything about the pool itself — including
+// the 10-answer minimum — comes from the pool analysis, where only
+// error-severity diagnostics block generation (duplicates are removed and
+// invalid entries excluded, both reported as info).
+export function validateInputs(clue: string, pool: CandidatePoolAnalysis): string[] {
   const errors: string[] = []
   if (clue.trim().length === 0) {
     errors.push('Enter a clue.')
   }
-  if (pool.invalid.length > 0 || pool.duplicates.length > 0) {
-    errors.push('Fix the invalid or duplicate candidate words listed above.')
-  }
-  if (pool.words.length < WORKSHOP_GENERATION_CONFIG.minAnswers) {
-    errors.push(
-      `Provide at least ${WORKSHOP_GENERATION_CONFIG.minAnswers} valid candidate words ` +
-        `(currently ${pool.words.length}).`,
-    )
+  for (const diagnostic of pool.diagnostics) {
+    if (diagnostic.severity === 'error') errors.push(diagnostic.message)
   }
   return errors
 }
 
-export function generateBatch(clue: string, pool: ParsedPool, generationNumber: number): GenerateBatchResult {
+export function generateBatch(clue: string, pool: CandidatePoolAnalysis, generationNumber: number): GenerateBatchResult {
   const errors = validateInputs(clue, pool)
   if (errors.length > 0) return { ok: false, errors }
 
@@ -75,7 +73,7 @@ export function generateBatch(clue: string, pool: ParsedPool, generationNumber: 
   const start = performance.now()
   const result = generateCandidatePoolSelection({
     mode: 'candidate-pool',
-    candidatePool: pool.words,
+    candidatePool: pool.usableAnswers,
     seed,
     ...WORKSHOP_GENERATION_CONFIG,
   })
