@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 
+# Generated generator-tooling artifacts (experiment JSON/HTML reports) —
+# analogous to dist, not source.
+tools/generator/output
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

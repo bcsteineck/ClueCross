@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "workshop": "vite --config vite.workshop.config.ts",
+    "workshop:build": "tsc -p tsconfig.workshop.json && vite build --config vite.workshop.config.ts"
   },
   "dependencies": {
     "lucide-react": "^1.27.0",

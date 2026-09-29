@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "declaration": false,
+    "noEmitOnError": true
+  },
+  "include": ["src/**/*.ts"],
+  // src/assemble/** imports the production PuzzleDefinition/LayoutDefinition
+  // types from ../../../../src (type-only) to build real runtime data — see
+  // the Phase 2 checkpoint report for why that can't be emitted through this
+  // nodenext build without either modifying production files (not allowed)
+  // or letting rootDir widen and pull copies of production files into
+  // dist/. It's still typechecked (see the Phase 2 report's verification
+  // command) and exercised by tests via vitest's own bundler resolution,
+  // same as *.test.ts below.
+  "exclude": ["src/**/*.test.ts", "src/assemble/**", "dist"]
+}
