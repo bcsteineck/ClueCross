@@ -94,4 +94,25 @@ describe('production game / Workshop isolation', () => {
       expect(source, path).not.toMatch(/localStorage|sessionStorage|indexedDB/)
     }
   })
+
+  it('Workshop browser code talks only to its own sourcing endpoint, never a provider or credential', () => {
+    for (const [path, source] of Object.entries(workshopSources)) {
+      if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
+      // The one allowed network call is the live source's POST to /api/sourcing.
+      if (path !== '/workshop/src/sourcing/liveSource.ts') {
+        expect(source, path).not.toMatch(/\bfetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon/)
+      }
+      expect(source, path).not.toMatch(/https?:\/\/|api\.anthropic\.com|openai/i)
+      expect(source, path).not.toMatch(/anthropic|api[_-]?key|secret|bearer|x-api-key|import\.meta\.env/i)
+      expect(importSpecifiers(source).filter((s) => /server/.test(s)), path).toEqual([])
+    }
+    const liveSource = workshopSources['/workshop/src/sourcing/liveSource.ts']
+    expect(liveSource).toMatch(/SOURCING_ENDPOINT = '\/api\/sourcing'/)
+    expect(liveSource.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
+  })
+
+  it('credentials stay server-side: no VITE_ credential variables or config-time defines', () => {
+    expect(workshopViteConfig).not.toMatch(/VITE_\w*(KEY|TOKEN|SECRET|MODEL)|\bdefine\s*:/)
+    expect(workshopViteConfig).toMatch(/process\.env\.ANTHROPIC_API_KEY/)
+  })
 })

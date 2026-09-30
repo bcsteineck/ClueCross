@@ -355,6 +355,28 @@ export function rankPlaceableWords(scored: ScoredWord[], rng: Rng): ScoredWord[]
   })
 }
 
+// Optional, observe-only search telemetry for experiments. Passing it never
+// changes any decision, RNG draw, budget accounting, or result; it only
+// records where the search went and where it spent its attempts.
+export interface ConstructionTelemetry {
+  /** Partial states visited (search() calls). */
+  nodes: number
+  /** Most answers placed simultaneously in any visited state. */
+  maxPlaced: number
+  /** Visited states where no remaining word had any legal placement. */
+  deadEnds: number
+  /** Answers placed at the first such dead end, or null if none occurred. */
+  firstDeadEndPlaced: number | null
+  /** Index = answers already placed: states visited at that depth. */
+  nodesByPlaced: number[]
+  /** Index = answers already placed: attempts spent scoring states at that depth. */
+  attemptsByPlaced: number[]
+}
+
+export function createConstructionTelemetry(): ConstructionTelemetry {
+  return { nodes: 0, maxPlaced: 0, deadEnds: 0, firstDeadEndPlaced: null, nodesByPlaced: [], attemptsByPlaced: [] }
+}
+
 // Recursively places the remaining words in no fixed order: at each level
 // it (re-)scores every still-unplaced word against the *current* partial
 // grid, ranks whichever ones are currently placeable, and tries them —
@@ -368,15 +390,31 @@ function search(
   config: Pick<GeneratorConfig, 'maxWidth' | 'maxHeight'>,
   rng: Rng,
   counter: AttemptCounter,
+  telemetry?: ConstructionTelemetry,
 ): SearchResult {
+  const placed = state.placedAnswers.length
+  if (telemetry) {
+    telemetry.nodes += 1
+    telemetry.maxPlaced = Math.max(telemetry.maxPlaced, placed)
+    telemetry.nodesByPlaced[placed] = (telemetry.nodesByPlaced[placed] ?? 0) + 1
+  }
   if (remaining.length === 0) return state
 
-  const isFirstPlacement = state.placedAnswers.length === 0
+  const isFirstPlacement = placed === 0
+  const attemptsBefore = counter.used
   const scored = scoreRemainingWords(remaining, state, config, rng, counter, isFirstPlacement)
+  if (telemetry) telemetry.attemptsByPlaced[placed] = (telemetry.attemptsByPlaced[placed] ?? 0) + counter.used - attemptsBefore
   if (scored === 'budget-exhausted') return 'budget-exhausted'
 
   const ranked = rankPlaceableWords(scored, rng)
-  if (ranked.length === 0) return null // nothing remaining can be placed right now
+  if (ranked.length === 0) {
+    // nothing remaining can be placed right now
+    if (telemetry) {
+      telemetry.deadEnds += 1
+      telemetry.firstDeadEndPlaced ??= placed
+    }
+    return null
+  }
 
   for (const entry of ranked) {
     const nextRemaining = remaining.filter((word) => word !== entry.word)
@@ -402,7 +440,7 @@ function search(
         ],
       }
 
-      const result = search(nextRemaining, nextState, config, rng, counter)
+      const result = search(nextRemaining, nextState, config, rng, counter, telemetry)
       if (result === 'budget-exhausted') return 'budget-exhausted'
       if (result) return result
       // Dead end further down the recursion — try the next candidate for
@@ -450,7 +488,7 @@ function toResult(state: SearchState, attemptsUsed: number): ConstructionSuccess
   }
 }
 
-export function constructFixedAnswerPuzzle(config: GeneratorConfig): ConstructionResult {
+export function constructFixedAnswerPuzzle(config: GeneratorConfig, telemetry?: ConstructionTelemetry): ConstructionResult {
   const normalized = normalizeAnswers(config.answers)
   if (!normalized.ok) {
     return { ok: false, reason: `Invalid input: ${normalized.errors.join(' ')}`, attemptsUsed: 0 }
@@ -461,7 +499,7 @@ export function constructFixedAnswerPuzzle(config: GeneratorConfig): Constructio
   const counter: AttemptCounter = { used: 0, limit: maxAttempts }
 
   const initialState: SearchState = { grid: new Map(), bounds: null, placedAnswers: [] }
-  const result = search(normalized.answers, initialState, config, rng, counter)
+  const result = search(normalized.answers, initialState, config, rng, counter, telemetry)
 
   if (result === 'budget-exhausted') {
     return {

@@ -4,6 +4,7 @@ import {
   cellKey,
   checkGeometryInvariant,
   constructFixedAnswerPuzzle,
+  createConstructionTelemetry,
   findCandidates,
   rankPlaceableWords,
   scoreRemainingWords,
@@ -760,5 +761,34 @@ describe('authored-run-extension regression: real construction-level reproductio
       expect(occupied.has(cellKey(before.x, before.y))).toBe(false)
       expect(occupied.has(cellKey(after.x, after.y))).toBe(false)
     }
+  })
+})
+
+describe('ConstructionTelemetry (observe-only)', () => {
+  it('never changes construction results, attempts, or failure reasons', () => {
+    const cases = [
+      { answers: ['COLLIE', 'CORGI', 'LEASH', 'COLLAR', 'FETCH', 'BARK', 'TREAT', 'KENNEL'], seed: 'probe-2', maxAttempts: 10000 },
+      { answers: ['BARK', 'GROOM', 'FETCH', 'BONE', 'PUPPY', 'COLLAR', 'CORGI'], seed: 'dogs-budget-experiment-1-trial-1-construct', maxAttempts: 10000 },
+      { answers: CHAIN_ANSWERS, seed: 'x', maxAttempts: 2 },
+    ]
+    for (const c of cases) {
+      const config = { mode: 'fixed-answer' as const, maxWidth: 12, maxHeight: 12, ...c }
+      const telemetry = createConstructionTelemetry()
+      expect(constructFixedAnswerPuzzle(config, telemetry)).toEqual(constructFixedAnswerPuzzle(config))
+      expect(telemetry.nodes).toBeGreaterThan(0)
+    }
+  })
+
+  it('records depth reached and where attempts were spent', () => {
+    const telemetry = createConstructionTelemetry()
+    const result = constructFixedAnswerPuzzle(
+      { mode: 'fixed-answer', answers: ['BARK', 'GROOM', 'FETCH', 'BONE', 'PUPPY', 'COLLAR', 'CORGI'], seed: 'dogs-budget-experiment-1-trial-1-construct', maxAttempts: 10000, maxWidth: 12, maxHeight: 12 },
+      telemetry,
+    )
+    expect(result.ok).toBe(false)
+    expect(telemetry.maxPlaced).toBeGreaterThan(0)
+    expect(telemetry.maxPlaced).toBeLessThan(7)
+    expect(telemetry.attemptsByPlaced.reduce((a, b) => a + (b ?? 0), 0)).toBe(result.attemptsUsed)
+    expect(telemetry.nodesByPlaced.reduce((a, b) => a + (b ?? 0), 0)).toBe(telemetry.nodes)
   })
 })

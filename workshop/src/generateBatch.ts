@@ -3,12 +3,15 @@
 // No search, placement, or metrics logic lives here.
 
 import { mobileCellSizePx } from '../../tools/generator/src/experiment/renderHtml.js'
-import { generateCandidatePoolSelection } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
+import {
+  generateCandidatePoolSelection,
+  SELECTED_CONSTRUCTION_RESTARTS,
+} from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import type {
   PoolCandidate,
   PoolSelectionDiversityStats,
 } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
-import type { ParsedPool } from './parsePool'
+import type { CandidatePoolAnalysis } from './poolDiagnostics'
 
 // The 12x12 envelope is the primary ClueCross size constraint: a ceiling,
 // not a target — actual puzzles are often smaller.
@@ -20,8 +23,10 @@ import type { ParsedPool } from './parsePool'
 // size, so a 10–15-word pool never attempts impossible subset sizes.
 // Pools dominated by long words may yield few or no candidates in this
 // range; that's reported as-is, with no fallback to smaller answer counts.
-// maxAttempts is deliberately omitted: every trial uses the generator's
-// own default (DEFAULT_MAX_ATTEMPTS).
+// Each subset trial runs deterministic construction restarts (5 × 2,000
+// attempts, stopping at the first success) instead of one 10,000-attempt
+// search; the 10,000-attempt maximum per trial is unchanged. See
+// docs/decisions.md, "Deterministic Construction Restarts".
 export const WORKSHOP_GENERATION_CONFIG = {
   maxWidth: 12,
   maxHeight: 12,
@@ -29,6 +34,7 @@ export const WORKSHOP_GENERATION_CONFIG = {
   maxAnswers: 16,
   // Internal subset trials per batch.
   maxSubsetTrials: 100,
+  constructionRestarts: SELECTED_CONSTRUCTION_RESTARTS,
 } as const
 
 export const MAX_DISPLAYED_CANDIDATES = 20
@@ -50,24 +56,22 @@ export interface WorkshopBatch {
 
 export type GenerateBatchResult = { ok: true; batch: WorkshopBatch } | { ok: false; errors: string[] }
 
-export function validateInputs(clue: string, pool: ParsedPool): string[] {
+// The clue is required here; everything about the pool itself — including
+// the 10-answer minimum — comes from the pool analysis, where only
+// error-severity diagnostics block generation (duplicates are removed and
+// invalid entries excluded, both reported as info).
+export function validateInputs(clue: string, pool: CandidatePoolAnalysis): string[] {
   const errors: string[] = []
   if (clue.trim().length === 0) {
     errors.push('Enter a clue.')
   }
-  if (pool.invalid.length > 0 || pool.duplicates.length > 0) {
-    errors.push('Fix the invalid or duplicate candidate words listed above.')
-  }
-  if (pool.words.length < WORKSHOP_GENERATION_CONFIG.minAnswers) {
-    errors.push(
-      `Provide at least ${WORKSHOP_GENERATION_CONFIG.minAnswers} valid candidate words ` +
-        `(currently ${pool.words.length}).`,
-    )
+  for (const diagnostic of pool.diagnostics) {
+    if (diagnostic.severity === 'error') errors.push(diagnostic.message)
   }
   return errors
 }
 
-export function generateBatch(clue: string, pool: ParsedPool, generationNumber: number): GenerateBatchResult {
+export function generateBatch(clue: string, pool: CandidatePoolAnalysis, generationNumber: number): GenerateBatchResult {
   const errors = validateInputs(clue, pool)
   if (errors.length > 0) return { ok: false, errors }
 
@@ -75,7 +79,7 @@ export function generateBatch(clue: string, pool: ParsedPool, generationNumber: 
   const start = performance.now()
   const result = generateCandidatePoolSelection({
     mode: 'candidate-pool',
-    candidatePool: pool.words,
+    candidatePool: pool.usableAnswers,
     seed,
     ...WORKSHOP_GENERATION_CONFIG,
   })
