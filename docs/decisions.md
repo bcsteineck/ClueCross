@@ -54,6 +54,21 @@ Failures are reported as configuration, provider, or response errors; the previo
 
 ---
 
+### Sourcing Effort
+
+Candidate Sourcing sends Anthropic `effort: "low"`. Adaptive thinking stays implicit: the request sends no `thinking` field and does not disable it.
+
+In a controlled comparison (one live "Desserts" request each, `claude-sonnet-5`, same prompt and settings):
+
+| | Input tokens | Output tokens | Thinking tokens | Duration | Candidates |
+|---|---|---|---|---|---|
+| Default effort (high) | 1,807 | 9,261 | 6,078 | 78.5 s | 65 |
+| Low effort | 1,807 | 2,665 | 0 | 19.7 s | 65 |
+
+Low effort cut output tokens by about 71% and latency by about 75%. Manual review found candidate quality comparable, and the low-effort pool produced valid puzzle candidates. This is a single comparison, not a general benchmark; revisit if sourcing quality degrades.
+
+---
+
 ## 2026-07-31
 
 ### Puzzle Rendering

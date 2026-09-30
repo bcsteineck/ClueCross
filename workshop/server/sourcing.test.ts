@@ -83,7 +83,14 @@ describe('sourcing endpoint: provider request', () => {
     expect(body.messages[0].content).toContain('Proper nouns: ALLOWED.')
     expect(body.messages[0].content).toContain('Abbreviations: ALLOWED.')
     expect(body.messages[0].content).toContain('about 45 strong candidates')
-    expect(body.output_config).toEqual({ format: { type: 'json_schema', schema: SOURCING_RESPONSE_SCHEMA } })
+    // Low effort, with the structured-output format unchanged.
+    expect(body.output_config).toEqual({ effort: 'low', format: { type: 'json_schema', schema: SOURCING_RESPONSE_SCHEMA } })
+    // The rest of the contract is unchanged: no thinking override, no tools,
+    // no caching, same token limit, nothing else in the body.
+    expect(Object.keys(body).sort()).toEqual(['max_tokens', 'messages', 'model', 'output_config'])
+    expect(body.max_tokens).toBe(16000)
+    expect(body).not.toHaveProperty('thinking')
+    expect(JSON.stringify(body)).not.toContain('cache_control')
     expect(Object.keys(SOURCING_RESPONSE_SCHEMA.properties.candidates.items.properties)).toEqual(['answer', 'rationale', 'category'])
   })
 

@@ -18,6 +18,9 @@ const ANTHROPIC_VERSION = '2023-06-01'
 // the model's own reasoning; non-streaming, so kept within HTTP timeouts.
 const MAX_TOKENS = 16000
 export const PROVIDER_TIMEOUT_MS = 120_000
+// Sourcing is list research, not deep reasoning; at the default effort,
+// measured thinking was ~66% of output tokens.
+export const SOURCING_EFFORT = 'low'
 
 // Mirrors CandidateSourcingResponse. Asks for nothing deterministic code or
 // the author owns (normalized forms, validity, scores, inclusion).
@@ -102,7 +105,9 @@ export async function sourceWithAnthropic(
         model: config.model,
         max_tokens: MAX_TOKENS,
         messages: [{ role: 'user', content: buildSourcingPrompt(request) }],
-        output_config: { format: { type: 'json_schema', schema: SOURCING_RESPONSE_SCHEMA } },
+        // Effort only: adaptive thinking stays on (`thinking` is deliberately
+        // not sent), but at low effort it spends far fewer output tokens.
+        output_config: { effort: SOURCING_EFFORT, format: { type: 'json_schema', schema: SOURCING_RESPONSE_SCHEMA } },
       }),
       signal: AbortSignal.timeout(config.timeoutMs ?? PROVIDER_TIMEOUT_MS),
     })
