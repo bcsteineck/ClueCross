@@ -183,28 +183,29 @@ describe('WorkshopApp approval', () => {
 })
 
 describe('WorkshopApp small and empty batches', () => {
-  it('handles 2, then 3, then 0 candidates with correct numbering, selection, and approval resets', async () => {
-    // The long-word breed pool at 10–16 answers: batches 1, 2, 3 find
-    // 2, 3 and 0 candidates respectively.
+  it('handles 1, then 4, then 1, then 0 candidates with correct numbering, selection, and approval resets', async () => {
+    // The long-word breed pool at 10–16 answers: batches 1–4 find 1, 4, 1
+    // and 0 candidates respectively.
     const user = await setup()
     await user.type(screen.getByLabelText('Clue'), 'Dogs')
     await user.click(screen.getByLabelText('Candidate words'))
     await user.paste(DOGS_BREEDS_CANDIDATE_POOL.join('\n'))
 
     await generate(user)
-    expect(screen.getByRole('heading', { name: 'Generated Candidates (2)' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Generated Candidates (1)' })).toBeTruthy()
     await user.click(candidateCards()[0])
     await user.click(screen.getByRole('button', { name: 'Approve Candidate' }))
     expect(screen.getByRole('region', { name: /Selected Candidate 1/ })).toBeTruthy()
     expect(candidateCards()[0].textContent).toMatch('Approved')
 
     await generate(user)
-    expect(screen.getByRole('heading', { name: 'Generated Candidates (3)' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Generated Candidates (4)' })).toBeTruthy()
     const cards = candidateCards()
     expect(cards.map((card) => card.textContent?.match(/Candidate \d+/)?.[0])).toEqual([
       'Candidate 1',
       'Candidate 2',
       'Candidate 3',
+      'Candidate 4',
     ])
     expect(cards.every((card) => card.getAttribute('aria-pressed') === 'false')).toBe(true)
     expect(cards.some((card) => card.textContent?.includes('Approved'))).toBe(false)
@@ -212,11 +213,15 @@ describe('WorkshopApp small and empty batches', () => {
     expect(screen.getByRole('region', { name: /Selected Candidate 3/ })).toBeTruthy()
 
     await generate(user)
+    expect(screen.getByRole('heading', { name: 'Generated Candidates (1)' })).toBeTruthy()
+    expect(screen.getByText('Select a candidate to inspect it.')).toBeTruthy()
+
+    await generate(user)
     const region = screen.getByRole('region', { name: /Generated Candidates \(0\)/ })
     expect(within(region).queryAllByRole('button')).toHaveLength(0)
     expect(within(region).getByText(/No valid candidates with 10–16 answers were found/)).toBeTruthy()
     expect(screen.getByText('Select a candidate to inspect it.')).toBeTruthy()
-    expect(screen.getByText(/seed workshop-generation-3/)).toBeTruthy()
+    expect(screen.getByText(/seed workshop-generation-4/)).toBeTruthy()
   })
 })
 

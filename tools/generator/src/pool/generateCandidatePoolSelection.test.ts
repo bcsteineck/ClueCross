@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { generateCandidatePoolSelection } from './generateCandidatePoolSelection'
+import {
+  constructionRestartSeed,
+  generateCandidatePoolSelection,
+  SELECTED_CONSTRUCTION_RESTARTS,
+} from './generateCandidatePoolSelection'
+import type { CandidatePoolSelectionConfig } from './generateCandidatePoolSelection'
+import { DESSERTS_OBSERVED_11 } from './dessertsCandidatePool'
+import { constructFixedAnswerPuzzle } from '../placement/backtrack'
+import { computeMetrics } from '../metrics/metrics'
 import { compareCandidatesStructurally } from './compare'
 import { DOGS_CANDIDATE_POOL } from './dogsCandidatePool'
 import { buildPuzzle } from '../assemble/buildPuzzle'
@@ -482,5 +490,113 @@ describe('generateCandidatePoolSelection: no incidental entries (rich fixture)',
       expect(matchDerivedEntriesToAuthored(placedAnswers, positions)).toEqual({ ok: true })
       expect(candidate.metrics.derivedEntries.incidentalEntryCount).toBe(0)
     }
+  })
+})
+
+describe('generateCandidatePoolSelection: deterministic construction restarts', () => {
+  // A single fixed 11-answer subset known to be constructible, so every
+  // trial attempts the same words and only the construction seed varies.
+  const config = (seed: string, trials: number): CandidatePoolSelectionConfig => ({
+    mode: 'candidate-pool',
+    candidatePool: DESSERTS_OBSERVED_11,
+    seed,
+    minAnswers: 11,
+    maxAnswers: 11,
+    maxSubsetTrials: trials,
+    maxWidth: 12,
+    maxHeight: 12,
+    constructionRestarts: SELECTED_CONSTRUCTION_RESTARTS,
+  })
+  const run = (seed: string, trials: number) => {
+    const result = generateCandidatePoolSelection(config(seed, trials))
+    if (!result.ok) throw new Error(result.reason)
+    return result
+  }
+  const single = (answers: string[], seed: string) =>
+    constructFixedAnswerPuzzle({ mode: 'fixed-answer', answers, seed, maxWidth: 12, maxHeight: 12, maxAttempts: 2000 })
+
+  it('is the selected 5 × 2,000 strategy (10,000 maximum per subset trial)', () => {
+    expect(SELECTED_CONSTRUCTION_RESTARTS).toEqual({ restarts: 5, attemptsPerRestart: 2000 })
+  })
+
+  it('keeps restart 0 on the existing construction seed and derives distinct seeds for restarts 1–4', () => {
+    expect([0, 1, 2, 3, 4].map((k) => constructionRestartSeed('s-trial-0-construct', k))).toEqual([
+      's-trial-0-construct',
+      's-trial-0-construct:restart:1',
+      's-trial-0-construct:restart:2',
+      's-trial-0-construct:restart:3',
+      's-trial-0-construct:restart:4',
+    ])
+  })
+
+  it('stops at the first successful restart: restart 2 succeeds, so restarts 3 and 4 never run', () => {
+    const [trial] = run('restart-test-1', 1).subsetTrials
+    const base = 'restart-test-1-trial-0-construct'
+    expect(trial.ok).toBe(true)
+    if (!trial.ok) return
+    expect(trial.restarts?.map((r) => [r.restart, r.seed, r.ok])).toEqual([
+      [0, base, false],
+      [1, `${base}:restart:1`, false],
+      [2, `${base}:restart:2`, true],
+    ])
+    expect(trial.restarts?.slice(0, 2).map((r) => r.attempts)).toEqual([2000, 2000])
+    expect(trial.attemptsUsed).toBe(4000 + trial.restarts![2].attempts)
+    // Provenance: the recorded seed reproduces the construction directly.
+    expect(trial.seed).toBe(`${base}:restart:2`)
+    expect(trial.construction).toEqual(single(trial.attemptedSubset, trial.seed))
+  })
+
+  it('runs every restart as a fresh search of the same subset with a 2,000-attempt ceiling', () => {
+    const [trial] = run('restart-test-1', 1).subsetTrials
+    for (const restart of trial.restarts ?? []) {
+      // Identical to an independent single search: nothing carries over between restarts.
+      const standalone = single(trial.attemptedSubset, restart.seed)
+      expect(standalone.ok).toBe(restart.ok)
+      expect(Math.min(standalone.attemptsUsed, 2000)).toBe(restart.attempts)
+    }
+  })
+
+  it('fails a subset only after all five restarts, never exceeding 10,000 attempts, then continues to the next trial', () => {
+    const { subsetTrials } = run('restart-test-7', 2)
+    const [failed, next] = subsetTrials
+    expect(failed.ok).toBe(false)
+    if (failed.ok) return
+    expect(failed.restarts).toHaveLength(5)
+    expect(failed.restarts?.every((r) => !r.ok && r.attempts === 2000)).toBe(true)
+    expect(failed.attemptsUsed).toBe(10000)
+    expect(failed.reason).toBe(
+      'All 5 construction restarts failed (5 × 2000 attempts): 5 search budget exhausted, 0 no legal connected arrangement.',
+    )
+    expect(new Set(failed.restarts?.map((r) => r.seed)).size).toBe(5)
+    expect(next.trialIndex).toBe(1)
+    expect(next.ok).toBe(true)
+  })
+
+  it('keeps every invariant, deduplicates as before, and is deterministic', () => {
+    const result = run('restart-test-7', 6)
+    expect(generateCandidatePoolSelection(config('restart-test-7', 6))).toEqual(result)
+    expect(result.candidates.length).toBeGreaterThan(0)
+    for (const candidate of result.candidates) {
+      expect(candidate.construction.placedAnswers.map((a) => a.word).sort()).toEqual([...DESSERTS_OBSERVED_11].sort())
+      const metrics = computeMetrics(candidate.construction, { maxWidth: 12, maxHeight: 12 })
+      expect(metrics.derivedEntries.incidentalEntryCount).toBe(0)
+      expect(metrics.derivedEntries.derivedEntryCount).toBe(metrics.content.authoredAnswerCount)
+    }
+    expect(new Set(result.candidates.map((c) => c.identitySignature)).size).toBe(result.candidates.length)
+    const viable = result.subsetTrials.filter((t) => t.ok).map((t) => t.trialIndex)
+    expect(result.candidates.flatMap((c) => c.sourceTrialIndices).sort((a, b) => a - b)).toEqual(viable)
+  })
+
+  it('rejects maxAttempts together with constructionRestarts, and leaves single-search trials unchanged', () => {
+    expect(generateCandidatePoolSelection({ ...config('x', 1), maxAttempts: 10000 })).toEqual({
+      ok: false,
+      reason: 'Set either maxAttempts or constructionRestarts, not both.',
+    })
+    const { constructionRestarts: _unused, ...singleConfig } = config('restart-test-1', 1)
+    void _unused
+    const plain = generateCandidatePoolSelection({ ...singleConfig, maxAttempts: 10000 })
+    if (!plain.ok) throw new Error(plain.reason)
+    expect(plain.subsetTrials[0]).not.toHaveProperty('restarts')
+    expect(plain.subsetTrials[0].seed).toBe('restart-test-1-trial-0-construct')
   })
 })

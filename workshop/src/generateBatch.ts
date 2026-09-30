@@ -3,7 +3,10 @@
 // No search, placement, or metrics logic lives here.
 
 import { mobileCellSizePx } from '../../tools/generator/src/experiment/renderHtml.js'
-import { generateCandidatePoolSelection } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
+import {
+  generateCandidatePoolSelection,
+  SELECTED_CONSTRUCTION_RESTARTS,
+} from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import type {
   PoolCandidate,
   PoolSelectionDiversityStats,
@@ -20,8 +23,10 @@ import type { CandidatePoolAnalysis } from './poolDiagnostics'
 // size, so a 10–15-word pool never attempts impossible subset sizes.
 // Pools dominated by long words may yield few or no candidates in this
 // range; that's reported as-is, with no fallback to smaller answer counts.
-// maxAttempts is deliberately omitted: every trial uses the generator's
-// own default (DEFAULT_MAX_ATTEMPTS).
+// Each subset trial runs deterministic construction restarts (5 × 2,000
+// attempts, stopping at the first success) instead of one 10,000-attempt
+// search; the 10,000-attempt maximum per trial is unchanged. See
+// docs/decisions.md, "Deterministic Construction Restarts".
 export const WORKSHOP_GENERATION_CONFIG = {
   maxWidth: 12,
   maxHeight: 12,
@@ -29,6 +34,7 @@ export const WORKSHOP_GENERATION_CONFIG = {
   maxAnswers: 16,
   // Internal subset trials per batch.
   maxSubsetTrials: 100,
+  constructionRestarts: SELECTED_CONSTRUCTION_RESTARTS,
 } as const
 
 export const MAX_DISPLAYED_CANDIDATES = 20

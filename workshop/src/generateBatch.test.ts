@@ -14,8 +14,8 @@ import {
 import { parsePool } from './parsePool'
 
 const dogsPool = parsePool(DOGS_CANDIDATE_POOL.join('\n'))
-// Long-word pool: at 10–16 answers, batch 3 finds no candidates and batch 2
-// finds three — real small/empty results, not mocks.
+// Long-word pool: at 10–16 answers, batch 4 finds no candidates and batch 2
+// finds four — real small/empty results, not mocks.
 const breedsPool = parsePool(DOGS_BREEDS_CANDIDATE_POOL.join('\n'))
 
 function generateOk(generationNumber: number, pool = dogsPool) {
@@ -53,17 +53,19 @@ describe('generateBatch', () => {
     expect(result.batch.candidates).toEqual(generateOk(1).candidates)
   })
 
-  it('uses the 12x12 envelope, 10–16 answers, 100 trials, and the generator’s 10,000-attempt default', () => {
+  it('uses the 12x12 envelope, 10–16 answers, 100 trials, and 5 × 2,000 construction restarts (10,000 maximum)', () => {
     expect(WORKSHOP_GENERATION_CONFIG).toEqual({
       maxWidth: 12,
       maxHeight: 12,
       minAnswers: 10,
       maxAnswers: 16,
       maxSubsetTrials: 100,
+      constructionRestarts: { restarts: 5, attemptsPerRestart: 2000 },
     })
-    // No override: every trial inherits the generator default.
+    // The per-trial maximum stays equal to the generator's single-search default.
+    const { restarts, attemptsPerRestart } = WORKSHOP_GENERATION_CONFIG.constructionRestarts
+    expect(restarts * attemptsPerRestart).toBe(DEFAULT_MAX_ATTEMPTS)
     expect('maxAttempts' in WORKSHOP_GENERATION_CONFIG).toBe(false)
-    expect(DEFAULT_MAX_ATTEMPTS).toBe(10000)
     expect(generateOk(1).diversity.subsetTrialsAttempted).toBe(100)
 
     const batch = generateOk(1)
@@ -154,14 +156,14 @@ describe('generateBatch', () => {
   })
 
   it('returns an empty batch (no fallback to fewer answers) when nothing fits', () => {
-    const batch = generateOk(3, breedsPool)
+    const batch = generateOk(4, breedsPool)
     expect(batch.candidates).toEqual([])
     expect(batch.diversity.subsetTrialsAttempted).toBe(100)
   })
 
   it('returns fewer than 20 candidates when that is all the batch finds', () => {
     const batch = generateOk(2, breedsPool)
-    expect(batch.candidates).toHaveLength(3)
+    expect(batch.candidates).toHaveLength(4)
     for (const candidate of batch.candidates) {
       expect(candidate.answerCount).toBeGreaterThanOrEqual(10)
       expect(candidate.metrics.derivedEntries.incidentalEntryCount).toBe(0)

@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-09-29
+
+### Deterministic Construction Restarts
+
+Single long construction searches often got trapped behind early placement choices: stretching one search from 10,000 to 20,000 or 50,000 attempts rescued few subsets. An equal-budget comparison (1×10k, 2×5k, 5×2k, 10×1k) tested restarting instead.
+
+Decision: each Workshop subset trial runs up to 5 deterministic construction restarts of 2,000 attempts (10,000 maximum, unchanged). Every restart searches the same subset from scratch with its own seed — restart 0 keeps the existing construction seed, later restarts append `:restart:<k>` — and the trial stops at the first success.
+
+Evidence: on 300 fresh Desserts subsets, 5×2k built 30 vs 17 for 1×10k (+76%), improving at both 10 and 11 answers; it rescued 19 subsets 1×10k missed and lost 6 it found, at about 8% more runtime, with unchanged geometry. 10×1k was too short for many viable searches (successes typically need just over 1,000 attempts).
+
+Manual Workshop testing with real curated pools was satisfactory, and the strategy was accepted.
+
+Caveat: the evidence comes mainly from one difficult pool. Restarts fix search trajectory only — not answer-count pressure, long answers, compactness/density, or the fixed-subset architecture. Pool-aware construction remains a future experiment.
+
+---
+
 ## 2026-09-28
 
 ### Minimum Answer Length

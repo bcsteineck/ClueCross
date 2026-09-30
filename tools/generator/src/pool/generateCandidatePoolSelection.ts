@@ -43,9 +43,39 @@ import { normalizeAnswers } from '../input.js'
 import { computeMetrics } from '../metrics/metrics.js'
 import { constructFixedAnswerPuzzle } from '../placement/backtrack.js'
 import { createRng, shuffle } from '../rng.js'
-import type { ConstructionSuccess } from '../types.js'
+import type { ConstructionResult, ConstructionSuccess } from '../types.js'
 
 const DEFAULT_MAX_SUBSET_TRIALS = 100
+
+/**
+ * Deterministic construction restarts for one subset trial: up to `restarts`
+ * independent searches of the same answer subset, each from scratch with a
+ * hard `attemptsPerRestart` ceiling, stopping at the first success.
+ */
+export interface ConstructionRestarts {
+  restarts: number
+  attemptsPerRestart: number
+}
+
+/**
+ * The selected Workshop strategy: 5 restarts × 2,000 attempts (10,000
+ * maximum per subset trial). Chosen by an equal-budget comparison of
+ * 1×10k / 2×5k / 5×2k / 10×1k; see docs/decisions.md.
+ */
+export const SELECTED_CONSTRUCTION_RESTARTS: ConstructionRestarts = { restarts: 5, attemptsPerRestart: 2_000 }
+
+/** Restart 0 keeps the trial's existing construction seed; restart k ≥ 1 appends `:restart:k`. */
+export function constructionRestartSeed(constructionSeed: string, restart: number): string {
+  return restart === 0 ? constructionSeed : `${constructionSeed}:restart:${restart}`
+}
+
+export interface RestartAttempt {
+  restart: number
+  seed: string
+  ok: boolean
+  /** Attempts actually performed, at most attemptsPerRestart. */
+  attempts: number
+}
 
 export interface CandidatePoolSelectionConfig {
   mode: 'candidate-pool'
@@ -53,8 +83,10 @@ export interface CandidatePoolSelectionConfig {
   maxWidth: number
   maxHeight: number
   seed: number | string
-  /** Phase 1's own per-construction placement-attempt budget, reused unchanged and passed through to every trial's constructFixedAnswerPuzzle call. Defaults to Phase 1's own default (10000) when omitted. */
+  /** Phase 1's own per-construction placement-attempt budget, reused unchanged and passed through to every trial's constructFixedAnswerPuzzle call. Defaults to Phase 1's own default (10000) when omitted. Not allowed together with constructionRestarts. */
   maxAttempts?: number
+  /** When set, each subset trial runs deterministic construction restarts instead of one search (see ConstructionRestarts). Omitted = one search, exactly as before. */
+  constructionRestarts?: ConstructionRestarts
   /** How many distinct subset trials this call will attempt in total — bounds the OUTER loop, separate from maxAttempts (which bounds placement work WITHIN one trial). Defaults to 100. */
   maxSubsetTrials?: number
   /** Hard floor: a trial is never attempted with fewer than this many words. */
@@ -76,12 +108,16 @@ export interface CandidatePoolSelectionConfig {
 
 export interface SubsetTrialSuccess {
   trialIndex: number
+  /** The construction seed; with restarts, the seed of the restart that produced this construction. */
   seed: string
   /** The exact words this trial attempted to place — always fully placed on success (fixed-answer mode has no partial success). */
   attemptedSubset: string[]
   ok: true
+  /** With restarts: attempts performed across all restarts run. */
   attemptsUsed: number
   construction: ConstructionSuccess
+  /** Present only when construction restarts are configured. */
+  restarts?: RestartAttempt[]
 }
 
 export interface SubsetTrialFailure {
@@ -91,6 +127,8 @@ export interface SubsetTrialFailure {
   ok: false
   attemptsUsed: number
   reason: string
+  /** Present only when construction restarts are configured. */
+  restarts?: RestartAttempt[]
 }
 
 export type SubsetTrial = SubsetTrialSuccess | SubsetTrialFailure
@@ -179,6 +217,15 @@ function validateConfig(
       reason: `maxAnswers (${config.maxAnswers}) must be >= minAnswers (${config.minAnswers}).`,
     }
   }
+  if (config.constructionRestarts) {
+    const { restarts, attemptsPerRestart } = config.constructionRestarts
+    if (!Number.isInteger(restarts) || restarts < 1 || !Number.isInteger(attemptsPerRestart) || attemptsPerRestart < 1) {
+      return { ok: false, reason: 'constructionRestarts.restarts and attemptsPerRestart must be positive integers.' }
+    }
+    if (config.maxAttempts !== undefined) {
+      return { ok: false, reason: 'Set either maxAttempts or constructionRestarts, not both.' }
+    }
+  }
   if (config.minAnswers > normalized.answers.length) {
     return {
       ok: false,
@@ -200,6 +247,54 @@ function sortedRecord(values: Record<string, number>): Record<string, number> {
     sorted[key] = values[key]
   }
   return sorted
+}
+
+interface SubsetConstruction {
+  result: ConstructionResult
+  seed: string
+  attemptsUsed: number
+  restarts?: RestartAttempt[]
+}
+
+// One subset trial's construction: a single search (no restarts configured,
+// unchanged behavior), or up to N independent restarts of the unchanged
+// single-search constructor — each from scratch with its own seed and a hard
+// per-restart ceiling — stopping at the first success.
+function constructSubset(
+  answers: string[],
+  constructionSeed: string,
+  config: CandidatePoolSelectionConfig,
+): SubsetConstruction {
+  const base = { mode: 'fixed-answer' as const, answers, maxWidth: config.maxWidth, maxHeight: config.maxHeight }
+  const plan = config.constructionRestarts
+  if (!plan) {
+    const result = constructFixedAnswerPuzzle({ ...base, seed: constructionSeed, maxAttempts: config.maxAttempts })
+    return { result, seed: constructionSeed, attemptsUsed: result.attemptsUsed }
+  }
+
+  const restarts: RestartAttempt[] = []
+  let exhausted = 0
+  for (let restart = 0; restart < plan.restarts; restart++) {
+    const seed = constructionRestartSeed(constructionSeed, restart)
+    const result = constructFixedAnswerPuzzle({ ...base, seed, maxAttempts: plan.attemptsPerRestart })
+    restarts.push({ restart, seed, ok: result.ok, attempts: Math.min(result.attemptsUsed, plan.attemptsPerRestart) })
+    const attemptsUsed = restarts.reduce((total, r) => total + r.attempts, 0)
+    if (result.ok) return { result, seed, attemptsUsed, restarts }
+    if (/budget exhausted/i.test(result.reason)) exhausted += 1
+  }
+  const attemptsUsed = restarts.reduce((total, r) => total + r.attempts, 0)
+  return {
+    result: {
+      ok: false,
+      reason:
+        `All ${plan.restarts} construction restarts failed (${plan.restarts} × ${plan.attemptsPerRestart} attempts): ` +
+        `${exhausted} search budget exhausted, ${plan.restarts - exhausted} no legal connected arrangement.`,
+      attemptsUsed,
+    },
+    seed: constructionSeed,
+    attemptsUsed,
+    restarts,
+  }
 }
 
 function isSuccess(trial: SubsetTrial): trial is SubsetTrialSuccess {
@@ -236,14 +331,8 @@ export function generateCandidatePoolSelection(
     const targetSize = sizes[trialIndex % sizes.length]
     const attemptedSubset = shuffle(normalizedPool, subsetRng).slice(0, targetSize)
 
-    const result = constructFixedAnswerPuzzle({
-      mode: 'fixed-answer',
-      answers: attemptedSubset,
-      maxWidth: config.maxWidth,
-      maxHeight: config.maxHeight,
-      seed: constructionSeed,
-      maxAttempts: config.maxAttempts,
-    })
+    const { result, seed, attemptsUsed, restarts } = constructSubset(attemptedSubset, constructionSeed, config)
+    const restartLog = restarts ? { restarts } : {}
 
     if (result.ok) {
       // Re-verify authored-answer recoverability explicitly (see the
@@ -254,20 +343,22 @@ export function generateCandidatePoolSelection(
       if (assignment.ok) {
         subsetTrials.push({
           trialIndex,
-          seed: constructionSeed,
+          seed,
           attemptedSubset,
           ok: true,
-          attemptsUsed: result.attemptsUsed,
+          attemptsUsed,
           construction: result,
+          ...restartLog,
         })
       } else {
         const words = assignment.unrecoverableAnswers.map((answer) => answer.word).join(', ')
         subsetTrials.push({
           trialIndex,
-          seed: constructionSeed,
+          seed,
           attemptedSubset,
           ok: false,
-          attemptsUsed: result.attemptsUsed,
+          attemptsUsed,
+          ...restartLog,
           reason:
             `Construction succeeded but authored answer(s) could not be recovered as an exact ` +
             `derived playable entry: ${words}. This should not happen after Phase 1's authored-` +
@@ -277,11 +368,12 @@ export function generateCandidatePoolSelection(
     } else {
       subsetTrials.push({
         trialIndex,
-        seed: constructionSeed,
+        seed,
         attemptedSubset,
         ok: false,
-        attemptsUsed: result.attemptsUsed,
+        attemptsUsed,
         reason: result.reason,
+        ...restartLog,
       })
     }
   }
