@@ -13,6 +13,7 @@
     "workshop:build": "tsc -p tsconfig.workshop.json && vite build --config vite.workshop.config.ts"
   },
   "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
     "lucide-react": "^1.27.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

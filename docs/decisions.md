@@ -2,6 +2,31 @@
 
 ## 2026-09-30
 
+### Publishing v1
+
+A validated Final Puzzle is published from the Workshop to Neon Postgres, which is provisioned through the Vercel-managed integration and accessed with `@neondatabase/serverless`. Publishing runs only on the local Workshop server, over a direct (unpooled) connection. Browser code never receives database credentials, and there is no public write endpoint.
+
+Neon branches are separated by purpose:
+
+- `main` is the permanent production puzzle calendar. It is empty and stays untouched until the first real publication.
+- `dev` is for local Workshop development.
+- `test` is for destructive automated tests, which refuse to run without that branch's marker table.
+
+The five legacy puzzles are development fixtures and are not migrated.
+
+A publication is identified by `puzzleId`, `fingerprintVersion`, and `contentFingerprint`:
+
+- the same ID with the same fingerprint is an idempotent success;
+- the same ID with a different fingerprint is a conflict, and the stored record is never overwritten.
+
+Dates are permanent and unique. A new puzzle takes the next eligible future date after the latest one and never shifts existing dates. A puzzle dated D releases at 10:00 PM America/New_York on D−1, judged by trusted database time. Status is derived from that rule, never stored.
+
+Publishing runs in SERIALIZABLE transactions with at most three fresh attempts. Database constraints back this up: uniqueness, plus a guard that rejects any date whose release has already passed. Developer Export remains the fallback.
+
+The player's switch to reading from the database is a separate milestone. Until then the player is unchanged and the Workshop stays connected to `dev`. Deploying the Workshop and adding authentication are out of scope.
+
+---
+
 ### Final Puzzle v1
 
 Approving a Workshop candidate opens a session-only Final Puzzle stage: the author sets the puzzle ID and clue, and the Workshop assembles, validates, and exports the puzzle. There is no new persisted format. The artifact is the existing `{ PuzzleDefinition, LayoutDefinition }` pair, built by the generator's `buildPuzzle` with `DEFAULT_REVEAL_BUDGET`.

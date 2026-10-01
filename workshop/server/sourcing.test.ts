@@ -259,4 +259,12 @@ describe('sourcing middleware', () => {
       body: { error: { category: 'configuration' } },
     })
   })
+
+  it('still rejects bodies over 16 KB as unreadable (unchanged by the shared HTTP helpers)', async () => {
+    expect(await call('POST', '/api/sourcing', 'x'.repeat(16 * 1024 + 1))).toEqual({
+      status: 400,
+      body: { error: { category: 'request', message: 'Request body could not be read.' } },
+      next: false,
+    })
+  })
 })

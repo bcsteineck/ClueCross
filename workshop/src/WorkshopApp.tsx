@@ -4,6 +4,9 @@ import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandi
 import { CandidateCard } from './CandidateCard'
 import { CandidateDetail } from './CandidateDetail'
 import { FinalPuzzle } from './FinalPuzzle'
+import { createPublishingClient } from './publishing/publishingClient'
+import type { PublishingClient } from './publishing/publishingClient'
+import type { PublishedState } from './PublishSection'
 import { suggestPuzzleId } from './finalPuzzle/finalPuzzle'
 import type { FinalPuzzleInputs } from './finalPuzzle/finalPuzzle'
 import { MAX_DISPLAYED_CANDIDATES, WORKSHOP_GENERATION_CONFIG, generateBatch } from './generateBatch'
@@ -50,13 +53,16 @@ const ERROR_LABEL: Record<SourcingErrorCategory, string> = {
 }
 
 const defaultLiveSource = createLiveCandidateSource()
+const defaultPublisher = createPublishingClient()
 
 interface WorkshopAppProps {
   /** Injectable for tests; default to the live server endpoint and the deterministic fixture. */
   sources?: { live?: CandidateSource; fixture?: CandidateSource }
+  /** Injectable for tests; defaults to the Workshop server's publishing endpoints. */
+  publisher?: PublishingClient
 }
 
-export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
+export function WorkshopApp({ sources = {}, publisher = defaultPublisher }: WorkshopAppProps = {}) {
   const candidateSources: Record<SourceKind, CandidateSource> = {
     live: sources.live ?? defaultLiveSource,
     fixture: sources.fixture ?? fixtureCandidateSource,
@@ -80,10 +86,12 @@ export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
   const [errors, setErrors] = useState<string[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // The approved candidate is the Final Puzzle; approving another replaces it.
+  // `published` survives Back → reopen for the session (publishing is durable).
   const [finalPuzzle, setFinalPuzzle] = useState<{
     candidate: PoolCandidate
     number: number
     inputs: FinalPuzzleInputs
+    published: PublishedState | null
   } | null>(null)
   const [stage, setStage] = useState<'review' | 'final'>('review')
   const approveButtonRef = useRef<HTMLButtonElement>(null)
@@ -155,7 +163,7 @@ export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
     // Re-opening the current Final Puzzle keeps the author's id and clue.
     if (candidate.identitySignature !== approvedId) {
       const clueDefault = batch?.clue ?? ''
-      setFinalPuzzle({ candidate, number, inputs: { id: suggestPuzzleId(clueDefault), clue: clueDefault } })
+      setFinalPuzzle({ candidate, number, inputs: { id: suggestPuzzleId(clueDefault), clue: clueDefault }, published: null })
     }
     setStage('final')
   }
@@ -189,6 +197,16 @@ export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
           inputs={finalPuzzle.inputs}
           onInputsChange={(inputs) => setFinalPuzzle({ ...finalPuzzle, inputs })}
           onBack={handleBack}
+          publisher={publisher}
+          published={finalPuzzle.published}
+          onPublished={(published) => {
+            // Applies only to the Final Puzzle that published, even if the
+            // author has moved on while the request was in flight.
+            const signature = finalPuzzle.candidate.identitySignature
+            setFinalPuzzle((current) =>
+              current && current.candidate.identitySignature === signature ? { ...current, published } : current,
+            )
+          }}
         />
       </div>
     )
