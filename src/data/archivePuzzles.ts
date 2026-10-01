@@ -10,6 +10,7 @@ import { dogsPuzzle } from './dogsPuzzle'
 import { flowerPuzzle } from './flowerPuzzle'
 import { fruitPuzzle } from './fruitPuzzle'
 import { magicPuzzle } from './magicPuzzle'
+import type { PuzzleId } from './puzzleIds'
 import { spacePuzzle } from './spacePuzzle'
 
 export interface ArchiveEntry {
@@ -23,7 +24,7 @@ const PUZZLES = {
   fruit: { puzzle: fruitPuzzle, layout: fruitPuzzleLayout },
   magic: { puzzle: magicPuzzle, layout: magicPuzzleLayout },
   flower: { puzzle: flowerPuzzle, layout: flowerPuzzleLayout },
-} satisfies Record<string, ArchiveEntry>
+} satisfies Record<PuzzleId, ArchiveEntry>
 
 // Explicit date schedule: each puzzle is assigned to exactly one day, as an
 // offset from "today" so fixtures stay relative to whenever the app is run
@@ -33,7 +34,7 @@ const PUZZLES = {
 // bump every existing row's offsetDays up by one. The newest puzzle is
 // always the current day's; older puzzles archive progressively further
 // back in the order they were added.
-const SCHEDULE: { offsetDays: number; puzzleId: keyof typeof PUZZLES }[] = [
+const SCHEDULE: { offsetDays: number; puzzleId: PuzzleId }[] = [
   { offsetDays: 0, puzzleId: 'flower' }, // today
   { offsetDays: 1, puzzleId: 'magic' }, // yesterday
   { offsetDays: 2, puzzleId: 'fruit' },

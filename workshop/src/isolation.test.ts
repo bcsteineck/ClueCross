@@ -8,7 +8,9 @@
 //   the game bundle.
 // - The Workshop has its own separate entry and config.
 // - Workshop code never imports production puzzle data or persistence/
-//   filesystem APIs, so approval can't write puzzle data.
+//   filesystem APIs, so approval can't write puzzle data. Its one read of
+//   src/data is the dependency-free production id list (src/data/
+//   puzzleIds.ts), used to reject a Final Puzzle id that already exists.
 
 import { describe, expect, it } from 'vitest'
 import gameIndexHtml from '/index.html?raw'
@@ -79,6 +81,10 @@ describe('production game / Workshop isolation', () => {
     expect(offenders).toEqual([])
   })
 
+  it('the production id list the Workshop reads is pure data with no imports', () => {
+    expect(importSpecifiers(gameSources['/src/data/puzzleIds.ts'])).toEqual([])
+  })
+
   it('the Workshop has its own entry and build config', () => {
     const scripts = [...workshopIndexHtml.matchAll(/<script[^>]*src="([^"]+)"/g)].map((match) => match[1])
     expect(scripts).toEqual(['/src/main.tsx'])
@@ -89,7 +95,7 @@ describe('production game / Workshop isolation', () => {
   it('Workshop code never imports puzzle data, Node APIs, or browser storage', () => {
     for (const [path, source] of Object.entries(workshopSources)) {
       if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
-      const specifiers = importSpecifiers(source)
+      const specifiers = importSpecifiers(source).filter((s) => !/src\/data\/puzzleIds$/.test(s))
       expect(specifiers.filter((s) => /src\/data|^node:|^fs$|^path$/.test(s)), path).toEqual([])
       expect(source, path).not.toMatch(/localStorage|sessionStorage|indexedDB/)
     }

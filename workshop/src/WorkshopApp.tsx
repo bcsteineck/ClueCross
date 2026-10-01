@@ -1,7 +1,11 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { CandidateCard } from './CandidateCard'
 import { CandidateDetail } from './CandidateDetail'
+import { FinalPuzzle } from './FinalPuzzle'
+import { suggestPuzzleId } from './finalPuzzle/finalPuzzle'
+import type { FinalPuzzleInputs } from './finalPuzzle/finalPuzzle'
 import { MAX_DISPLAYED_CANDIDATES, WORKSHOP_GENERATION_CONFIG, generateBatch } from './generateBatch'
 import type { WorkshopBatch } from './generateBatch'
 import { parsePool } from './parsePool'
@@ -22,10 +26,10 @@ const SEVERITY_ORDER: DiagnosticSeverity[] = ['error', 'warning', 'info']
 const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', warning: 'Warning', info: 'Note' }
 
 // Session-only authoring loop: clue + word pool -> candidate batch ->
-// select -> approve. Nothing here persists, publishes, or writes files;
-// selection and approval live only in this component's state, and a new
-// batch clears both so approval never appears to outlive what it
-// approved.
+// select -> approve -> Final Puzzle -> validate -> export. Nothing here
+// persists, publishes, or writes files; selection, approval, and the Final
+// Puzzle's id/clue live only in this component's state, and a new batch
+// clears them so approval never appears to outlive what it approved.
 //
 // The pool comes either from the manual list or from candidate sourcing
 // followed by human Pool Review; either way the same Pool Diagnostics
@@ -75,7 +79,24 @@ export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
   const [batch, setBatch] = useState<WorkshopBatch | null>(null)
   const [errors, setErrors] = useState<string[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [approvedId, setApprovedId] = useState<string | null>(null)
+  // The approved candidate is the Final Puzzle; approving another replaces it.
+  const [finalPuzzle, setFinalPuzzle] = useState<{
+    candidate: PoolCandidate
+    number: number
+    inputs: FinalPuzzleInputs
+  } | null>(null)
+  const [stage, setStage] = useState<'review' | 'final'>('review')
+  const approveButtonRef = useRef<HTMLButtonElement>(null)
+  const returningToReview = useRef(false)
+  const approvedId = finalPuzzle?.candidate.identitySignature ?? null
+
+  // Back from Final Puzzle returns focus to the approve control it came from.
+  useEffect(() => {
+    if (stage === 'review' && returningToReview.current) {
+      returningToReview.current = false
+      approveButtonRef.current?.focus()
+    }
+  }, [stage])
 
   const pool = useMemo(
     () =>
@@ -127,7 +148,21 @@ export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
     setGenerationCount(next)
     setBatch(result.batch)
     setSelectedId(null)
-    setApprovedId(null)
+    setFinalPuzzle(null)
+  }
+
+  function handleApprove(candidate: PoolCandidate, number: number) {
+    // Re-opening the current Final Puzzle keeps the author's id and clue.
+    if (candidate.identitySignature !== approvedId) {
+      const clueDefault = batch?.clue ?? ''
+      setFinalPuzzle({ candidate, number, inputs: { id: suggestPuzzleId(clueDefault), clue: clueDefault } })
+    }
+    setStage('final')
+  }
+
+  function handleBack() {
+    returningToReview.current = true
+    setStage('review')
   }
 
   const candidates = batch?.candidates ?? []
@@ -135,12 +170,33 @@ export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
   const selected = selectedIndex >= 0 ? candidates[selectedIndex] : null
   const approvedIndex = candidates.findIndex((candidate) => candidate.identitySignature === approvedId)
 
+  const header = (
+    <header className="ws-header">
+      <h1>ClueCross Workshop</h1>
+      <p className="ws-muted">Internal authoring tool. Not part of the ClueCross game.</p>
+    </header>
+  )
+
+  // Review state stays in this component while Final Puzzle is shown, so
+  // Back restores Candidate Review exactly as it was.
+  if (stage === 'final' && finalPuzzle) {
+    return (
+      <div className="ws-app">
+        {header}
+        <FinalPuzzle
+          candidate={finalPuzzle.candidate}
+          number={finalPuzzle.number}
+          inputs={finalPuzzle.inputs}
+          onInputsChange={(inputs) => setFinalPuzzle({ ...finalPuzzle, inputs })}
+          onBack={handleBack}
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="ws-app">
-      <header className="ws-header">
-        <h1>ClueCross Workshop</h1>
-        <p className="ws-muted">Internal authoring tool. Not part of the ClueCross game.</p>
-      </header>
+      {header}
 
       <form className="ws-panel ws-inputs" onSubmit={handleGenerate} noValidate>
         <h2 className="ws-panel__heading">Authoring inputs</h2>
@@ -365,7 +421,8 @@ export function WorkshopApp({ sources = {} }: WorkshopAppProps = {}) {
                 number={selectedIndex + 1}
                 batchSeed={batch.seed}
                 isApproved={selected.identitySignature === approvedId}
-                onApprove={() => setApprovedId(selected.identitySignature)}
+                onApprove={() => handleApprove(selected, selectedIndex + 1)}
+                approveButtonRef={approveButtonRef}
               />
             ) : (
               <p className="ws-muted">Select a candidate to inspect it.</p>
