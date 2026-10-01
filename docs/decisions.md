@@ -1,5 +1,36 @@
 # Decisions
 
+## 2026-09-30
+
+### Final Puzzle v1
+
+Approving a Workshop candidate opens a session-only Final Puzzle stage: the author sets the puzzle ID and clue, and the Workshop assembles, validates, and exports the puzzle. There is no new persisted format. The artifact is the existing `{ PuzzleDefinition, LayoutDefinition }` pair, built by the generator's `buildPuzzle` with `DEFAULT_REVEAL_BUDGET`.
+
+Export is gated by two validation layers:
+
+- The unchanged production `validatePuzzleDefinition`.
+- Workshop export validation, which covers:
+  - metadata: a slug ID of `a–z0–9` starting with a letter, not already a production ID or a reserved module name (`sample`, the fixture), and a non-empty clue;
+  - single `A–Z` letters;
+  - non-negative integer coordinates with a 0,0 origin and no shared positions;
+  - a board no larger than 20×20;
+  - full cell coverage, contiguous entries, and a connected board;
+  - the generator's zero-incidental-entry invariant, via `checkGeometryInvariant`.
+
+These stricter rules apply only to new generated puzzles. They stay out of the production validator because existing data (Space's "rasa") does not meet them. Subjective quality is never validated.
+
+Export is a temporary developer fallback, not the intended authoring workflow. It produces the two TypeScript modules people write by hand today (`src/data/<id>Puzzle.ts` and `src/layout/<id>PuzzleLayout.ts`) as browser downloads, plus a copyable registry snippet (`PUZZLE_IDS` line, imports, and `PUZZLES` entry). Adding the puzzle to the registry and the validator test, and committing, stay manual. The Workshop never writes production files.
+
+Publishing and scheduling are deliberately excluded and will be a separate milestone. In the intended model, approved puzzles get stable calendar dates, assigned in queue order, so adding a puzzle never shifts previously published ones. The current relative `offsetDays` schedule is known technical debt, and Final Puzzle doesn't tell authors to use it.
+
+`buildPuzzle` boundary: `tools/generator/src/assemble` imports production types from `src/`, which use extensionless imports and sit outside the generator's `rootDir`. The generator's standalone NodeNext build therefore keeps excluding it; no generator CLI needs assembly. It is typechecked under bundler resolution by `tsconfig.workshop.json`, which now includes it explicitly, and that config belongs to the Workshop, its runtime caller. This avoids editing production imports and duplicating production types or constants.
+
+Production IDs: the Workshop must not import puzzle data. `src/data/puzzleIds.ts` is a dependency-free list of production IDs. `archivePuzzles.ts` keys its registry with `satisfies Record<PuzzleId, ArchiveEntry>`, so TypeScript rejects any drift between the list and the registry. The cost is one extra manual line per new puzzle.
+
+Editing (moving, replacing, or removing answers; editing letters) and publishing remain out of scope until real usage shows what is needed. An author who dislikes a board goes back and approves a different candidate.
+
+---
+
 ## 2026-09-29
 
 ### Deterministic Construction Restarts

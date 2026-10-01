@@ -23,5 +23,9 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["workshop/src"]
+  // tools/generator/src/assemble is typechecked here, under bundler
+  // resolution: it imports the production PuzzleDefinition/LayoutDefinition
+  // (src/, extensionless imports) and the Workshop is its runtime caller.
+  // The generator's standalone nodenext build keeps excluding it.
+  "include": ["workshop/src", "tools/generator/src/assemble"]
 }

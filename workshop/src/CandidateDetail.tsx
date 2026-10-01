@@ -1,3 +1,4 @@
+import type { Ref } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import type { ConstructionSuccess } from '../../tools/generator/src/types.js'
 import { CandidateBoard } from './CandidateBoard'
@@ -9,6 +10,7 @@ interface CandidateDetailProps {
   batchSeed: string
   isApproved: boolean
   onApprove: () => void
+  approveButtonRef?: Ref<HTMLButtonElement>
 }
 
 function describeBoard(construction: ConstructionSuccess): string {
@@ -25,7 +27,14 @@ function formatPercent(value: number): string {
 }
 
 // Every number here is descriptive — no grades, thresholds, or colors.
-export function CandidateDetail({ candidate, number, batchSeed, isApproved, onApprove }: CandidateDetailProps) {
+export function CandidateDetail({
+  candidate,
+  number,
+  batchSeed,
+  isApproved,
+  onApprove,
+  approveButtonRef,
+}: CandidateDetailProps) {
   const { geometry, authoredIntersections, derivedEntries, letters } = candidate.metrics
   const mobileCellSize = formatMobileCellSize(geometry.boundingWidth, geometry.boundingHeight)
 
@@ -110,10 +119,13 @@ export function CandidateDetail({ candidate, number, batchSeed, isApproved, onAp
       </dl>
 
       <div className="ws-detail__approve">
-        <button type="button" className="ws-button" onClick={onApprove} disabled={isApproved}>
-          {isApproved ? 'Approved' : 'Approve Candidate'}
+        <button type="button" className="ws-button" onClick={onApprove} ref={approveButtonRef}>
+          {isApproved ? 'Open Final Puzzle' : 'Approve Candidate'}
         </button>
-        <p className="ws-muted">Approval is temporary in this version. It does not publish or save the puzzle.</p>
+        <p className="ws-muted">
+          Approving opens the Final Puzzle for validation and export. Nothing is saved or published, and approval
+          lasts only for this session.
+        </p>
       </div>
     </section>
   )

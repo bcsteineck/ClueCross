@@ -20,12 +20,11 @@
   },
   "include": ["src/**/*.ts"],
   // src/assemble/** imports the production PuzzleDefinition/LayoutDefinition
-  // types from ../../../../src (type-only) to build real runtime data — see
-  // the Phase 2 checkpoint report for why that can't be emitted through this
-  // nodenext build without either modifying production files (not allowed)
-  // or letting rootDir widen and pull copies of production files into
-  // dist/. It's still typechecked (see the Phase 2 report's verification
-  // command) and exercised by tests via vitest's own bundler resolution,
-  // same as *.test.ts below.
+  // from ../../../../src, whose extensionless imports and location outside
+  // rootDir can't go through this nodenext emit without changing production
+  // files or widening rootDir (pulling production copies into dist/). No
+  // generator CLI needs assembly, so it stays out of this build; its
+  // typecheck owner is tsconfig.workshop.json (bundler resolution), where
+  // the Workshop's Final Puzzle stage calls it. Tests run under vitest.
   "exclude": ["src/**/*.test.ts", "src/assemble/**", "dist"]
 }

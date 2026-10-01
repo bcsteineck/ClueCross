@@ -137,29 +137,163 @@ describe('WorkshopApp candidates', () => {
   })
 })
 
-describe('WorkshopApp approval', () => {
-  it('approves the selected candidate and keeps it approved while inspecting others', async () => {
+async function approve(user: ReturnType<typeof userEvent.setup>, cardIndex: number) {
+  await user.click(candidateCards()[cardIndex])
+  await user.click(screen.getByRole('button', { name: /Approve Candidate|Open Final Puzzle/ }))
+}
+
+function finalPuzzle() {
+  return screen.getByRole('region', { name: /Final Puzzle/ })
+}
+
+function validationStatus() {
+  return within(finalPuzzle()).getAllByRole('status')[0].textContent ?? ''
+}
+
+describe('WorkshopApp approval and Final Puzzle', () => {
+  it('approving opens the Final Puzzle with the batch clue, a suggested id, the board, and answers', async () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
     const user = await setup()
     await fillInputs(user)
     await generate(user)
+    await approve(user, 3)
 
-    const cards = candidateCards()
-    await user.click(cards[3])
-    await user.click(screen.getByRole('button', { name: 'Approve Candidate' }))
+    const region = finalPuzzle()
+    expect(within(region).getByRole('heading', { name: /Final Puzzle/ }).textContent).toMatch('Approved Candidate 4')
+    expect(document.activeElement).toBe(within(region).getByRole('heading', { name: /Final Puzzle/ }))
+    expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
+    expect((screen.getByLabelText('Clue') as HTMLInputElement).value).toBe('Dogs')
+    expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('dogs')
+    expect(within(region).getByRole('img', { name: /Final puzzle board, \d+ by \d+ grid/ })).toBeTruthy()
+    expect(within(region).getByText(/^Answers \(\d+\)$/)).toBeTruthy()
+    expect(within(region).getByText('Size')).toBeTruthy()
 
-    expect(screen.getByRole('button', { name: 'Approved' })).toHaveProperty('disabled', true)
-    expect(cards[3].textContent).toMatch('Approved')
-    expect(screen.getByText(/Approval is temporary in this version/)).toBeTruthy()
-
-    await user.click(cards[7])
-    expect(screen.getByRole('button', { name: 'Approve Candidate' })).toBeTruthy()
-    expect(cards[3].textContent).toMatch('Approved')
-    expect(cards[7].textContent).not.toMatch('Approved')
-    expect(screen.getByText(/Candidate 4 approved/)).toBeTruthy()
+    // The suggested id collides with the production Dogs puzzle.
+    expect(validationStatus()).toMatch('Validation errors (1)')
+    expect(validationStatus()).toMatch('Puzzle ID “dogs” is already used by a production puzzle.')
+    expect(screen.getByLabelText('Puzzle ID').getAttribute('aria-invalid')).toBe('true')
+    const blocked = within(region).getByRole('button', { name: 'Download Puzzle Modules' })
+    expect(blocked.getAttribute('aria-disabled')).toBe('true')
 
     // Session-only: nothing is persisted.
     expect(setItem).not.toHaveBeenCalled()
+  })
+
+  it('updates validation as the id and clue change, enabling export only when valid', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    await generate(user)
+    await approve(user, 0)
+
+    const id = screen.getByLabelText('Puzzle ID')
+    await user.clear(id)
+    expect(validationStatus()).toMatch('Puzzle ID is required.')
+    await user.type(id, 'Dogs-2')
+    expect(validationStatus()).toMatch('lowercase letters a–z and digits')
+    await user.clear(id)
+    await user.type(id, 'workshopdogs')
+    expect(validationStatus()).toMatch('Ready to export.')
+    expect(id.getAttribute('aria-invalid')).toBe('false')
+
+    const region = finalPuzzle()
+    expect(within(region).getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
+    expect(within(region).getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' })).toBeTruthy()
+    expect(within(region).getByText('Save as src/data/workshopdogsPuzzle.ts')).toBeTruthy()
+
+    const clue = screen.getByLabelText('Clue')
+    await user.clear(clue)
+    await user.type(clue, '   ')
+    expect(validationStatus()).toMatch('Clue is required.')
+    expect(within(region).queryByRole('button', { name: /Download workshopdogs/ })).toBeNull()
+    expect(within(region).getByRole('button', { name: 'Download Puzzle Modules' }).getAttribute('aria-disabled')).toBe(
+      'true',
+    )
+
+    await user.clear(clue)
+    await user.type(clue, "Man's best friend")
+    expect(validationStatus()).toMatch('Ready to export.')
+    expect(within(region).getByText(/clue: 'Man\\'s best friend'/)).toBeTruthy()
+  })
+
+  it('downloads each module with its filename, and copies the registry snippet', async () => {
+    const createObjectURL = vi.fn((blob: Blob) => {
+      void blob
+      return 'blob:export'
+    })
+    const revokeObjectURL = vi.fn()
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+    const downloads: string[] = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      downloads.push(this.download)
+    })
+
+    const user = await setup()
+    await fillInputs(user)
+    await generate(user)
+    await approve(user, 0)
+    await user.clear(screen.getByLabelText('Puzzle ID'))
+    await user.type(screen.getByLabelText('Puzzle ID'), 'workshopdogs')
+
+    await user.click(screen.getByRole('button', { name: 'Download workshopdogsPuzzle.ts' }))
+    await user.click(screen.getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' }))
+    expect(downloads).toEqual(['workshopdogsPuzzle.ts', 'workshopdogsPuzzleLayout.ts'])
+    const source = await createObjectURL.mock.calls[0][0].text()
+    expect(source).toMatch("export const workshopdogsPuzzle: PuzzleDefinition = {")
+    expect(source).toMatch('unlockBudget: DEFAULT_REVEAL_BUDGET,')
+
+    await user.click(screen.getByRole('button', { name: 'Copy Registry Snippet' }))
+    expect(await navigator.clipboard.readText()).toMatch(
+      'workshopdogs: { puzzle: workshopdogsPuzzle, layout: workshopdogsPuzzleLayout },',
+    )
+    expect(screen.getByText('Registry snippet copied.')).toBeTruthy()
+    expect(screen.getByText(/Add the new puzzle to src\/core\/validatePuzzleDefinition.test.ts/)).toBeTruthy()
+
+    // Export is a developer fallback; scheduling is left to a future publishing workflow.
+    const region = finalPuzzle()
+    expect(within(region).getByRole('heading', { name: 'Developer export' })).toBeTruthy()
+    expect(within(region).getByText(/^Temporary developer fallback\./)).toBeTruthy()
+    expect(within(region).getByText(/^Developer integration reference only\./)).toBeTruthy()
+    expect(within(region).getByRole('heading', { name: 'Manual developer integration' })).toBeTruthy()
+    expect(within(region).getByText(/^Publishing and scheduling are intentionally not included here\./)).toBeTruthy()
+    expect(within(region).getByText('Commit the integration changes.')).toBeTruthy()
+    expect(region.textContent).not.toMatch(/offsetDays|offset|SCHEDULE|bump|After exporting/)
+  })
+
+  it('Back returns to Candidate Review unchanged; reopening keeps edits; approving another candidate replaces it', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    await generate(user)
+    await approve(user, 3)
+    const firstBoard = within(finalPuzzle()).getByRole('img').innerHTML
+    await user.clear(screen.getByLabelText('Puzzle ID'))
+    await user.type(screen.getByLabelText('Puzzle ID'), 'edited')
+
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    expect(screen.queryByRole('region', { name: /Final Puzzle/ })).toBeNull()
+    const cards = candidateCards()
+    expect(cards).toHaveLength(20)
+    expect(cards[3].textContent).toMatch('Approved')
+    expect(cards[3].getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByText(/Candidate 4 approved/)).toBeTruthy()
+    expect((screen.getByLabelText('Clue') as HTMLInputElement).value).toBe('Dogs')
+    const reopen = screen.getByRole('button', { name: 'Open Final Puzzle' })
+    expect(document.activeElement).toBe(reopen)
+
+    await user.click(reopen)
+    expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('edited')
+    expect(within(finalPuzzle()).getByRole('img').innerHTML).toBe(firstBoard)
+
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    await approve(user, 7)
+    expect(within(finalPuzzle()).getByRole('heading', { name: /Final Puzzle/ }).textContent).toMatch(
+      'Approved Candidate 8',
+    )
+    expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('dogs')
+    expect(within(finalPuzzle()).getByRole('img').innerHTML).not.toBe(firstBoard)
+
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    expect(candidateCards()[7].textContent).toMatch('Approved')
+    expect(candidateCards()[3].textContent).not.toMatch('Approved')
   })
 
   it('a new generation clears selection and approval and uses the next seed', async () => {
@@ -167,8 +301,8 @@ describe('WorkshopApp approval', () => {
     await fillInputs(user)
     await generate(user)
 
-    await user.click(candidateCards()[0])
-    await user.click(screen.getByRole('button', { name: 'Approve Candidate' }))
+    await approve(user, 0)
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
     expect(candidateCards()[0].textContent).toMatch('Approved')
 
     await generate(user)
@@ -193,8 +327,8 @@ describe('WorkshopApp small and empty batches', () => {
 
     await generate(user)
     expect(screen.getByRole('heading', { name: 'Generated Candidates (1)' })).toBeTruthy()
-    await user.click(candidateCards()[0])
-    await user.click(screen.getByRole('button', { name: 'Approve Candidate' }))
+    await approve(user, 0)
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
     expect(screen.getByRole('region', { name: /Selected Candidate 1/ })).toBeTruthy()
     expect(candidateCards()[0].textContent).toMatch('Approved')
 

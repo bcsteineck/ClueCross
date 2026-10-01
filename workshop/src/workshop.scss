@@ -546,3 +546,123 @@ h3 {
   border-top: $border-1 solid $color-gray-20;
   padding-top: $spacing-12;
 }
+
+// Final Puzzle: inputs, validation, and export beside the read-only board.
+
+.ws-final__header {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+  margin-bottom: $spacing-16;
+
+  .ws-panel__heading {
+    margin-bottom: 0;
+  }
+}
+
+.ws-final__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 440px);
+  gap: $spacing-20;
+  align-items: start;
+
+  @media (max-width: 1000px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.ws-final__main,
+.ws-final__preview {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+  min-width: 0;
+}
+
+.ws-field__error {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ws-field input[aria-invalid='true'] {
+  border-color: $color-gray-90;
+  border-width: $border-2;
+}
+
+.ws-final__status p {
+  margin: 0;
+}
+
+.ws-final__status-ok {
+  border-left: 4px solid $ws-approved;
+  background: $color-gray-10;
+  padding: $spacing-8 $spacing-12;
+  font-size: 14px;
+}
+
+.ws-final__error-group {
+  margin-top: $spacing-8;
+
+  p {
+    font-weight: 600;
+  }
+
+  ul {
+    padding-left: $spacing-20;
+    list-style: disc;
+  }
+}
+
+.ws-final__downloads,
+.ws-final__steps {
+  margin: 0;
+  padding: 0;
+}
+
+.ws-final__downloads {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+
+  li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: $spacing-4 $spacing-12;
+  }
+
+  .ws-muted {
+    margin: 0;
+  }
+}
+
+.ws-final__steps {
+  padding-left: $spacing-20;
+  font-size: 14px;
+}
+
+.ws-final__source summary {
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ws-final__source pre,
+.ws-final__snippet {
+  margin: $spacing-4 0 0;
+  padding: $spacing-12;
+  max-height: 320px;
+  overflow: auto;
+  background: $color-gray-10;
+  border: $border-1 solid $color-gray-20;
+  border-radius: $radius-4;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.ws-muted-inline {
+  color: $color-gray-70;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 12px;
+}
