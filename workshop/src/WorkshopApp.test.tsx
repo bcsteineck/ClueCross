@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOGS_BREEDS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsBreedsCandidatePool.js'
 import { DOGS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsCandidatePool.js'
+import type { PreviewResponseBody, PublicationSummary, PublishRequest, PublishResponseBody } from './publishing/contract'
+import type { ClientResult, PublishingClient } from './publishing/publishingClient'
 import { CandidateSourcingError } from './sourcing/contract'
 import { FIXTURE_SOURCING_RESPONSE } from './sourcing/fixtureSource'
 import { WorkshopApp } from './WorkshopApp'
@@ -11,11 +13,52 @@ import { WorkshopApp } from './WorkshopApp'
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
-async function setup() {
+const NOT_CONFIGURED = { status: 'not-configured', message: 'Publishing is not configured on this Workshop server.' } as const
+
+function publicationOf(request: PublishRequest, publishDate = '2026-10-04'): PublicationSummary {
+  return {
+    puzzleId: request.id.trim(),
+    publishDate,
+    releaseInstant: publishDate === '2026-10-04' ? '2026-10-04T02:00:00.000Z' : '2026-10-09T02:00:00.000Z',
+    contentFingerprint: 'f'.repeat(64),
+    fingerprintVersion: 1,
+  }
+}
+
+const ESTIMATE: PreviewResponseBody = {
+  status: 'estimate',
+  estimate: { publishDate: '2026-10-04', releaseInstant: '2026-10-04T02:00:00.000Z', contentFingerprint: 'f'.repeat(64) },
+}
+
+// A fake PublishingClient: by default it estimates October 4 and creates
+// the publication; tests override either side.
+function fakePublisher(
+  options: {
+    preview?: (request: PublishRequest) => Promise<ClientResult<PreviewResponseBody>>
+    publish?: (request: PublishRequest) => Promise<ClientResult<PublishResponseBody>>
+  } = {},
+) {
+  return {
+    preview: vi.fn<PublishingClient['preview']>(options.preview ?? (async () => ({ ok: true, body: ESTIMATE }))),
+    publish: vi.fn<PublishingClient['publish']>(
+      options.publish ?? (async (request) => ({ ok: true, body: { status: 'created', publication: publicationOf(request) } })),
+    ),
+  }
+}
+
+// Mirrors the live Workshop server today: no durable store configured.
+const notConfiguredPublisher = () =>
+  fakePublisher({
+    preview: async () => ({ ok: true, body: NOT_CONFIGURED }),
+    publish: async () => ({ ok: true, body: NOT_CONFIGURED }),
+  })
+
+async function setup(publisher: PublishingClient = notConfiguredPublisher()) {
   const user = userEvent.setup()
-  render(<WorkshopApp />)
+  render(<WorkshopApp publisher={publisher} />)
   return user
 }
 
@@ -251,7 +294,12 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     // Export is a developer fallback; scheduling is left to a future publishing workflow.
     const region = finalPuzzle()
     expect(within(region).getByRole('heading', { name: 'Developer export' })).toBeTruthy()
-    expect(within(region).getByText(/^Temporary developer fallback\./)).toBeTruthy()
+    expect(
+      within(region).getByText(
+        'Fallback developer workflow. Download the production puzzle modules for manual integration if the publishing system is unavailable or manual integration is needed.',
+      ),
+    ).toBeTruthy()
+    expect(region.textContent).not.toMatch(/will use a separate publishing system/)
     expect(within(region).getByText(/^Developer integration reference only\./)).toBeTruthy()
     expect(within(region).getByRole('heading', { name: 'Manual developer integration' })).toBeTruthy()
     expect(within(region).getByText(/^Publishing and scheduling are intentionally not included here\./)).toBeTruthy()
@@ -552,5 +600,273 @@ describe('WorkshopApp live sourcing', () => {
       expect(screen.getByRole('alert').textContent).toBe('Response error: Sourcing response has no candidates array.'),
     )
     expect(screen.queryByRole('region', { name: 'Pool Review' })).toBeNull()
+  })
+})
+
+async function openReadyFinalPuzzle(publisher: PublishingClient, cardIndex = 0) {
+  const user = await setup(publisher)
+  await fillInputs(user)
+  await generate(user)
+  await approve(user, cardIndex)
+  await user.clear(screen.getByLabelText('Puzzle ID'))
+  await user.type(screen.getByLabelText('Puzzle ID'), 'workshopdogs')
+  return user
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+const IRREVERSIBLE = 'Published puzzles can’t be edited, rescheduled, or removed in v1.'
+
+describe('WorkshopApp publishing: preview', () => {
+  it('offers Publish only for a valid Final Puzzle, above Developer export, with a labeled estimate', async () => {
+    const publisher = fakePublisher()
+    const user = await setup(publisher)
+    await fillInputs(user)
+    await generate(user)
+    await approve(user, 0)
+
+    // The suggested id "dogs" is a reserved production id: not locally valid.
+    expect(screen.queryByRole('heading', { name: 'Publish' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Publish Puzzle' })).toBeNull()
+
+    await user.clear(screen.getByLabelText('Puzzle ID'))
+    await user.type(screen.getByLabelText('Puzzle ID'), 'workshopdogs')
+    expect(await screen.findByText('Expected: Scheduled for October 4, 2026')).toBeTruthy()
+    expect(screen.getByText('Releases October 3 at 10:00 PM ET.')).toBeTruthy()
+    expect(screen.getByText('Estimate only. The final date is assigned when you publish.')).toBeTruthy()
+
+    const publishHeading = screen.getByRole('heading', { name: 'Publish' })
+    const exportHeading = screen.getByRole('heading', { name: 'Developer export' })
+    expect(publishHeading.compareDocumentPosition(exportHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
+
+    const lastRequest = publisher.preview.mock.calls.at(-1)![0]
+    expect(lastRequest).toMatchObject({ id: 'workshopdogs', clue: 'Dogs' })
+    expect(lastRequest.construction.ok).toBe(true)
+  })
+
+  it('formats dates without shifting in non-Eastern machine timezones', async () => {
+    vi.stubEnv('TZ', 'Pacific/Kiritimati')
+    await openReadyFinalPuzzle(fakePublisher())
+    expect(await screen.findByText('Expected: Scheduled for October 4, 2026')).toBeTruthy()
+    expect(screen.getByText('Releases October 3 at 10:00 PM ET.')).toBeTruthy()
+  })
+
+  it('refreshes the debounced preview when the ID or clue changes', async () => {
+    const publisher = fakePublisher()
+    const user = await openReadyFinalPuzzle(publisher)
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+    const callsBefore = publisher.preview.mock.calls.length
+
+    await user.type(screen.getByLabelText('Clue'), ' Breeds')
+    await waitFor(() => expect(publisher.preview.mock.calls.at(-1)![0].clue).toBe('Dogs Breeds'))
+    // Seven keystrokes, far fewer requests.
+    expect(publisher.preview.mock.calls.length - callsBefore).toBeLessThan(3)
+  })
+
+  it('reports an existing publication of the same content and confirms it without a new publication', async () => {
+    const publisher = fakePublisher({
+      preview: async (request) => ({ ok: true, body: { status: 'existing', publication: publicationOf(request) } }),
+      publish: async (request) => ({ ok: true, body: { status: 'existing', publication: publicationOf(request) } }),
+    })
+    const user = await openReadyFinalPuzzle(publisher)
+    expect(await screen.findByText('Already scheduled for October 4, 2026.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Publish Puzzle' })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Confirm Existing Publication' }))
+    expect(screen.queryByRole('group', { name: /Publish “/ })).toBeNull() // no confirmation for a no-op
+    expect(publisher.publish).toHaveBeenCalledTimes(1)
+    expect(await screen.findByText('Already scheduled for October 4, 2026')).toBeTruthy()
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
+  })
+
+  it('surfaces a same-ID conflict before publishing and blocks Publish', async () => {
+    const publisher = fakePublisher({
+      preview: async () => ({
+        ok: true,
+        body: {
+          status: 'conflict',
+          message: 'server text',
+          existing: { puzzleId: 'workshopdogs', publishDate: '2026-10-09', releaseInstant: '2026-10-09T02:00:00.000Z' },
+        },
+      }),
+    })
+    await openReadyFinalPuzzle(publisher)
+    expect(
+      await screen.findByText(
+        'Puzzle ID “workshopdogs” is already scheduled for October 9, 2026 with different content. Published puzzles can’t be changed; choose a new ID.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Publish Puzzle' })).toHaveProperty('disabled', true)
+  })
+
+  it('makes not-configured unmistakable and never looks published', async () => {
+    const publisher = notConfiguredPublisher()
+    await openReadyFinalPuzzle(publisher)
+    expect(await screen.findByText(/Publishing isn’t configured on this Workshop server/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Publish Puzzle' })).toHaveProperty('disabled', true)
+    expect(screen.queryByText(/Scheduled for/)).toBeNull()
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
+  })
+})
+
+describe('WorkshopApp publishing: confirm and publish', () => {
+  it('asks for confirmation; Cancel sends nothing and returns focus', async () => {
+    const publisher = fakePublisher()
+    const user = await openReadyFinalPuzzle(publisher)
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+
+    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    const confirm = screen.getByRole('group', { name: 'Publish “Dogs” for October 4, 2026?' })
+    expect(within(confirm).getByText(/That date is an estimate; the server assigns the final date/)).toBeTruthy()
+    expect(within(confirm).getByText(new RegExp(IRREVERSIBLE))).toBeTruthy()
+    expect(document.activeElement).toBe(within(confirm).getByRole('button', { name: 'Cancel' }))
+
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('group', { name: /Publish “/ })).toBeNull()
+    expect(publisher.publish).not.toHaveBeenCalled()
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Publish Puzzle' })))
+  })
+
+  it('publishes exactly once despite a rapid double submit, shows Publishing…, then Scheduled and locks', async () => {
+    const pending = deferred<ClientResult<PublishResponseBody>>()
+    const publisher = fakePublisher({ publish: () => pending.promise })
+    const user = await openReadyFinalPuzzle(publisher)
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+
+    const confirmButton = within(screen.getByRole('group', { name: /Publish “Dogs”/ })).getByRole('button', { name: 'Publish' })
+    // Two clicks before React can re-render the disabled button: only the ref guard stops the second.
+    act(() => {
+      confirmButton.click()
+      confirmButton.click()
+    })
+    expect(publisher.publish).toHaveBeenCalledTimes(1)
+    const publishing = screen.getByRole('button', { name: 'Publishing…' })
+    expect(publishing).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveProperty('disabled', true)
+
+    await act(async () => {
+      pending.resolve({ ok: true, body: { status: 'created', publication: publicationOf(publisher.publish.mock.calls[0][0]) } })
+    })
+    expect(screen.getByText('Scheduled for October 4, 2026')).toBeTruthy()
+    expect(screen.getByText('Releases October 3 at 10:00 PM ET.')).toBeTruthy()
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
+    expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(true)
+    expect(screen.getByText('Published: the ID and clue are locked.')).toBeTruthy()
+    expect(publisher.publish).toHaveBeenCalledTimes(1)
+    expect(publisher.publish.mock.calls[0][0]).toMatchObject({ id: 'workshopdogs', clue: 'Dogs' })
+
+    // Developer export is still available after publishing.
+    expect(screen.getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' })).toBeTruthy()
+  })
+
+  it('shows an idempotent existing result as success and locks', async () => {
+    const publisher = fakePublisher({
+      publish: async (request) => ({ ok: true, body: { status: 'existing', publication: publicationOf(request) } }),
+    })
+    const user = await openReadyFinalPuzzle(publisher)
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish' }))
+    expect(await screen.findByText('Already scheduled for October 4, 2026')).toBeTruthy()
+    expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(true)
+  })
+
+  async function publishWith(body: PublishResponseBody | null) {
+    const publisher = fakePublisher({
+      publish: async () => (body ? { ok: true, body } : { ok: false, failure: 'network' }),
+    })
+    const user = await openReadyFinalPuzzle(publisher)
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish' }))
+    return publisher
+  }
+
+  it('shows a conflict from publish without locking', async () => {
+    await publishWith({
+      status: 'conflict',
+      message: 'server text',
+      existing: { puzzleId: 'workshopdogs', publishDate: '2026-10-09', releaseInstant: '2026-10-09T02:00:00.000Z' },
+    })
+    expect(
+      await screen.findByText(
+        'Puzzle ID “workshopdogs” is already scheduled for October 9, 2026 with different content. Published puzzles can’t be changed; choose a new ID.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
+  })
+
+  it('shows server-side validation errors', async () => {
+    await publishWith({
+      status: 'invalid',
+      errors: { metadata: [{ field: 'id', message: 'Puzzle ID is required.' }], production: ['Cell r0c0 has no letter.'], export: ['Geometry invariant violated.'] },
+    })
+    expect(await screen.findByText('The publishing server rejected this puzzle:')).toBeTruthy()
+    for (const text of ['Cell r0c0 has no letter.', 'Geometry invariant violated.']) expect(screen.getByText(text)).toBeTruthy()
+  })
+
+  it('shows busy as retryable', async () => {
+    await publishWith({ status: 'busy', message: 'server text' })
+    expect(await screen.findByText('Publishing is busy. Nothing was published; try again.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Publish Puzzle' })).toHaveProperty('disabled', false)
+  })
+
+  it('shows unavailable and not-configured outcomes without implying success', async () => {
+    await publishWith({ status: 'unavailable', message: 'Publishing is unavailable right now. Nothing was published; try again.' })
+    expect(await screen.findByText('Publishing is unavailable right now. Nothing was published; try again.')).toBeTruthy()
+    expect(screen.queryByText(/^Scheduled for/)).toBeNull()
+    cleanup()
+
+    await publishWith(NOT_CONFIGURED)
+    expect(await screen.findAllByText(/Publishing isn’t configured on this Workshop server/)).toHaveLength(1)
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
+  })
+
+  it('explains that an interrupted request is safe to retry', async () => {
+    await publishWith(null)
+    expect(await screen.findByText(/may or may not have been published\. Publishing again is safe/)).toBeTruthy()
+  })
+
+  it('confirms without a date when the preview could not be loaded', async () => {
+    const publisher = fakePublisher({ preview: async () => ({ ok: false, failure: 'network' }) })
+    const user = await openReadyFinalPuzzle(publisher)
+    expect(await screen.findByText('Couldn’t check the publishing schedule right now.')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    expect(screen.getByRole('group', { name: 'Publish “Dogs”?' })).toBeTruthy()
+  })
+})
+
+describe('WorkshopApp publishing: session state', () => {
+  it('keeps the published, locked state through Back and reopen; another candidate starts editable', async () => {
+    const publisher = fakePublisher()
+    const user = await openReadyFinalPuzzle(publisher, 3)
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish' }))
+    await screen.findByText('Scheduled for October 4, 2026')
+
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
+    expect(screen.getByText('Scheduled for October 4, 2026')).toBeTruthy()
+    expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('workshopdogs')
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
+    const previewCalls = publisher.preview.mock.calls.length
+
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    await approve(user, 7)
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
+    expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(false)
+    expect(screen.queryByText('Scheduled for October 4, 2026')).toBeNull()
+    expect(publisher.publish).toHaveBeenCalledTimes(1)
+    expect(publisher.preview.mock.calls.length).toBe(previewCalls) // "dogs" is invalid locally: no preview
   })
 })

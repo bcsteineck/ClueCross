@@ -17,6 +17,7 @@ import gameIndexHtml from '/index.html?raw'
 import gameViteConfig from '/vite.config.ts?raw'
 import workshopIndexHtml from '/workshop/index.html?raw'
 import workshopViteConfig from '/vite.workshop.config.ts?raw'
+import packageJsonText from '/package.json?raw'
 
 const gameSources = import.meta.glob<string>('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true })
 const workshopSources = import.meta.glob<string>('/workshop/src/**/*.{ts,tsx}', {
@@ -81,6 +82,28 @@ describe('production game / Workshop isolation', () => {
     expect(offenders).toEqual([])
   })
 
+  it('publishing rules in src/publishing are runtime-neutral and not yet used by the player', () => {
+    const files = Object.entries(gameSources).filter(
+      ([path]) => path.startsWith('/src/publishing/') && !path.endsWith('.test.ts'),
+    )
+    expect(files.length).toBeGreaterThan(0)
+    for (const [path, source] of files) {
+      // Only sibling modules and the production core/layout types.
+      expect(importSpecifiers(source).filter((s) => !/^\.\/|^\.\.\/(core|layout)\//.test(s)), path).toEqual([])
+      expect(source, path).not.toMatch(/process\.env|DATABASE_URL|neon|postgres/i)
+    }
+    expect([...gameImportGraph().reachedSources].filter((path) => path.startsWith('/src/publishing/'))).toEqual([])
+  })
+
+  it('the only database driver is Neon’s, and only server and test code import it', () => {
+    const packageJson = JSON.parse(packageJsonText) as Record<'dependencies' | 'devDependencies', Record<string, string>>
+    const names = Object.keys({ ...packageJson.dependencies, ...packageJson.devDependencies })
+    expect(names.filter((name) => /neon|postgres|^pg$|prisma|drizzle|kysely|^ws$/i.test(name))).toEqual(['@neondatabase/serverless'])
+    for (const [path, source] of [...Object.entries(gameSources), ...Object.entries(workshopSources)]) {
+      expect(importSpecifiers(source).filter((s) => /@neondatabase/.test(s)), path).toEqual([])
+    }
+  })
+
   it('the production id list the Workshop reads is pure data with no imports', () => {
     expect(importSpecifiers(gameSources['/src/data/puzzleIds.ts'])).toEqual([])
   })
@@ -101,11 +124,13 @@ describe('production game / Workshop isolation', () => {
     }
   })
 
-  it('Workshop browser code talks only to its own sourcing endpoint, never a provider or credential', () => {
+  it('Workshop browser code talks only to its own sourcing and publishing endpoints, never a provider or credential', () => {
+    // The only allowed network calls: the live source's POST to /api/sourcing
+    // and the publishing client's POSTs to /api/publishing/{preview,publish}.
+    const fetchers = ['/workshop/src/sourcing/liveSource.ts', '/workshop/src/publishing/publishingClient.ts']
     for (const [path, source] of Object.entries(workshopSources)) {
       if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
-      // The one allowed network call is the live source's POST to /api/sourcing.
-      if (path !== '/workshop/src/sourcing/liveSource.ts') {
+      if (!fetchers.includes(path)) {
         expect(source, path).not.toMatch(/\bfetch\(|XMLHttpRequest|WebSocket|EventSource|sendBeacon/)
       }
       expect(source, path).not.toMatch(/https?:\/\/|api\.anthropic\.com|openai/i)
@@ -115,6 +140,24 @@ describe('production game / Workshop isolation', () => {
     const liveSource = workshopSources['/workshop/src/sourcing/liveSource.ts']
     expect(liveSource).toMatch(/SOURCING_ENDPOINT = '\/api\/sourcing'/)
     expect(liveSource.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
+
+    const contract = workshopSources['/workshop/src/publishing/contract.ts']
+    expect(contract).toMatch(/PUBLISHING_PREVIEW_PATH = '\/api\/publishing\/preview'/)
+    expect(contract).toMatch(/PUBLISHING_PUBLISH_PATH = '\/api\/publishing\/publish'/)
+    const client = workshopSources['/workshop/src/publishing/publishingClient.ts']
+    expect(client.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
+    expect(client).toMatch(/fetchImpl\(path,/)
+    expect(client).toMatch(/post<PreviewResponseBody>\(PUBLISHING_PREVIEW_PATH,/)
+    expect(client).toMatch(/post<PublishResponseBody>\(PUBLISHING_PUBLISH_PATH,/)
+  })
+
+  it('Workshop browser code never touches the database layer', () => {
+    for (const [path, source] of Object.entries(workshopSources)) {
+      if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
+      const specifiers = importSpecifiers(source)
+      expect(specifiers.filter((s) => /@neondatabase|^pg$|postgres|workshop\/server|(^|\/)db\//.test(s)), path).toEqual([])
+      expect(source, path).not.toMatch(/DATABASE_URL|@neondatabase/)
+    }
   })
 
   it('credentials stay server-side: no VITE_ credential variables or config-time defines', () => {

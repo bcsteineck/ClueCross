@@ -5,6 +5,9 @@ import { layoutModuleFile, puzzleModuleFile, registrySnippet } from './finalPuzz
 import type { ExportFile } from './finalPuzzle/exportSource'
 import { prepareFinalPuzzle } from './finalPuzzle/finalPuzzle'
 import type { FinalPuzzleInputs, MetadataIssue } from './finalPuzzle/finalPuzzle'
+import type { PublishingClient } from './publishing/publishingClient'
+import { PublishSection } from './PublishSection'
+import type { PublishedState } from './PublishSection'
 
 interface FinalPuzzleProps {
   candidate: PoolCandidate
@@ -12,6 +15,10 @@ interface FinalPuzzleProps {
   inputs: FinalPuzzleInputs
   onInputsChange: (inputs: FinalPuzzleInputs) => void
   onBack: () => void
+  publisher: PublishingClient
+  /** Set once the server confirms a durable publication; locks the ID and clue. */
+  published: PublishedState | null
+  onPublished: (state: PublishedState) => void
 }
 
 // Browser download of one generated module; nothing is written anywhere else.
@@ -28,11 +35,20 @@ function fieldErrors(issues: MetadataIssue[], field: MetadataIssue['field']): st
   return issues.filter((issue) => issue.field === field).map((issue) => issue.message)
 }
 
-// The approved candidate being prepared for export: author id + clue,
-// the final board, two-layer validation, and export of the two production
-// modules plus registry guidance. Read-only geometry — v1 is not an
-// editor; a different board means returning to Candidate Review.
-export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack }: FinalPuzzleProps) {
+// The approved candidate being prepared for publishing: author id + clue,
+// the final board, two-layer validation, Publish, and the developer export
+// fallback. Read-only geometry — v1 is not an editor; a different board
+// means returning to Candidate Review. Once published, the ID and clue lock.
+export function FinalPuzzle({
+  candidate,
+  number,
+  inputs,
+  onInputsChange,
+  onBack,
+  publisher,
+  published,
+  onPublished,
+}: FinalPuzzleProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const [copyStatus, setCopyStatus] = useState('')
   const validation = useMemo(() => prepareFinalPuzzle(candidate.construction, inputs), [candidate, inputs])
@@ -78,8 +94,8 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack 
           <span className="ws-badge">Approved Candidate {number}</span>
         </h2>
         <p className="ws-muted">
-          Preparing the approved candidate for export. The Workshop doesn’t save, publish, or schedule puzzles, and
-          it never changes production files.
+          Preparing the approved candidate for publishing. Nothing is published until you confirm Publish, and the
+          Workshop never changes production files.
         </p>
         <button type="button" className="ws-button ws-button--secondary" onClick={onBack}>
           Back to Candidate Review
@@ -95,8 +111,11 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack 
               type="text"
               value={inputs.id}
               onChange={(event) => update('id', event.target.value)}
+              readOnly={published !== null}
               aria-invalid={idErrors.length > 0}
-              aria-describedby={['ws-final-id-hint', idErrors.length > 0 && 'ws-final-id-error'].filter(Boolean).join(' ')}
+              aria-describedby={['ws-final-id-hint', idErrors.length > 0 && 'ws-final-id-error', published && 'ws-final-locked']
+                .filter(Boolean)
+                .join(' ')}
               spellCheck={false}
               autoComplete="off"
             />
@@ -118,8 +137,12 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack 
               type="text"
               value={inputs.clue}
               onChange={(event) => update('clue', event.target.value)}
+              readOnly={published !== null}
               aria-invalid={clueErrors.length > 0}
-              aria-describedby={clueErrors.length > 0 ? 'ws-final-clue-error' : undefined}
+              aria-describedby={
+                [clueErrors.length > 0 && 'ws-final-clue-error', published && 'ws-final-locked'].filter(Boolean).join(' ') ||
+                undefined
+              }
             />
             {clueErrors.length > 0 && (
               <p id="ws-final-clue-error" className="ws-field__error">
@@ -127,6 +150,12 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack 
               </p>
             )}
           </div>
+
+          {published && (
+            <p id="ws-final-locked" className="ws-muted">
+              Published: the ID and clue are locked.
+            </p>
+          )}
 
           <h3 className="ws-detail__subheading">Validation</h3>
           <div role="status" className="ws-final__status">
@@ -154,10 +183,22 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack 
             )}
           </div>
 
+          {ready && (
+            <>
+              <h3 className="ws-detail__subheading">Publish</h3>
+              <PublishSection
+                request={{ construction, id: inputs.id, clue: inputs.clue }}
+                publisher={publisher}
+                published={published}
+                onPublished={onPublished}
+              />
+            </>
+          )}
+
           <h3 className="ws-detail__subheading">Developer export</h3>
           <p className="ws-muted">
-            Temporary developer fallback. Download the production puzzle modules for manual integration. The normal
-            authoring workflow will use a separate publishing system.
+            Fallback developer workflow. Download the production puzzle modules for manual integration if the
+            publishing system is unavailable or manual integration is needed.
           </p>
           {ready ? (
             <>

@@ -666,3 +666,61 @@ h3 {
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 12px;
 }
+
+// Publish: preview estimate, confirmation, and outcome. Problems are
+// written out as text, so the border is reinforcement, not the only signal.
+
+.ws-publish {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+
+  p {
+    margin: 0;
+  }
+}
+
+.ws-publish__preview,
+.ws-publish__result {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  font-size: 14px;
+}
+
+.ws-publish__outcome {
+  border-left: 4px solid $ws-approved;
+  background: $color-gray-10;
+  padding: $spacing-8 $spacing-12;
+}
+
+.ws-publish__problem {
+  border-left: 4px solid $color-gray-90;
+  background: $color-gray-10;
+  padding: $spacing-8 $spacing-12;
+
+  ul {
+    margin: $spacing-4 0 0;
+    padding-left: $spacing-20;
+  }
+}
+
+.ws-publish__confirm {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+  padding: $spacing-12;
+  border: $border-2 solid $ws-accent;
+  border-radius: $radius-4;
+}
+
+.ws-publish__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-8;
+}
+
+.ws-field input[readonly] {
+  background: $color-gray-10;
+  color: $color-gray-80;
+}
