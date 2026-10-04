@@ -1,11 +1,19 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
+import { fakeCalendarClient, published, renderApp } from './testing/playerHarness'
+import { dogsPuzzleLayout } from './testing/fixtures/dogsPuzzleLayout'
 import { toDateKey } from './core/archiveCalendar'
 import { isDateCompleted } from './core/completionTracking'
-import { dogsPuzzle } from './data/dogsPuzzle'
+import { dogsPuzzle } from './testing/fixtures/dogsPuzzle'
+
+// Released puzzles served by a fake player API.
+const calendarClient = () =>
+  fakeCalendarClient([
+    published('2026-08-04', dogsPuzzle, dogsPuzzleLayout),
+    published('2026-08-05', dogsPuzzle, dogsPuzzleLayout),
+  ])
 
 // jsdom's default test origin doesn't provide a working localStorage, so
 // stub in a simple in-memory implementation to exercise real persistence.
@@ -34,29 +42,6 @@ function createMemoryStorage(): Storage {
 // longer the "active" (currently viewing) date.
 const TODAY = new Date(2026, 7, 5)
 
-vi.mock('./data/archivePuzzles', async () => {
-  const { dogsPuzzle } = await import('./data/dogsPuzzle')
-  const { dogsPuzzleLayout } = await import('./layout/dogsPuzzleLayout')
-  const { addMonths, startOfDay, startOfMonth, toDateKey } = await import('./core/archiveCalendar')
-
-  const today = startOfDay(new Date(2026, 7, 5))
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const entries: Record<string, { puzzle: typeof dogsPuzzle; layout: typeof dogsPuzzleLayout }> = {
-    [toDateKey(today)]: { puzzle: dogsPuzzle, layout: dogsPuzzleLayout },
-    [toDateKey(yesterday)]: { puzzle: dogsPuzzle, layout: dogsPuzzleLayout },
-  }
-
-  return {
-    getToday: () => today,
-    getArchiveEntryForDate: (date: Date) => entries[toDateKey(date)],
-    isDateAvailable: (date: Date) => {
-      if (startOfDay(date).getTime() > today.getTime()) return false
-      return entries[toDateKey(date)] !== undefined
-    },
-    getEarliestArchiveMonth: () => addMonths(startOfMonth(today), -2),
-  }
-})
 
 beforeEach(() => {
   vi.stubGlobal('localStorage', createMemoryStorage())
@@ -79,7 +64,7 @@ async function openSettings(user: ReturnType<typeof userEvent.setup>) {
 describe('Settings drawer', () => {
   it('opens on Settings click and closes via the X button', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     expect(screen.queryByRole('dialog')).toBeNull()
     await openSettings(user)
@@ -91,7 +76,7 @@ describe('Settings drawer', () => {
 
   it('closes on Escape', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openSettings(user)
     expect(screen.getByRole('dialog')).toBeTruthy()
 
@@ -101,7 +86,7 @@ describe('Settings drawer', () => {
 
   it('closes when clicking the backdrop, but not when clicking inside the dialog', async () => {
     const user = userEvent.setup()
-    const { container } = render(<App />)
+    const { container } = await renderApp(calendarClient())
     await openSettings(user)
 
     await user.click(screen.getByRole('heading', { name: /settings/i }))
@@ -115,7 +100,7 @@ describe('Settings drawer', () => {
 
   it('marks the rest of the page inert while open', async () => {
     const user = userEvent.setup()
-    const { container } = render(<App />)
+    const { container } = await renderApp(calendarClient())
 
     expect(container.querySelector('.app__content')?.hasAttribute('inert')).toBe(false)
     await openSettings(user)
@@ -124,7 +109,7 @@ describe('Settings drawer', () => {
 
   it('returns focus to the Settings button after closing', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     const settingsButton = screen.getByRole('button', { name: /^settings$/i })
 
     await openSettings(user)
@@ -134,7 +119,7 @@ describe('Settings drawer', () => {
 
   it('traps Tab focus within the dialog', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openSettings(user)
 
     const dialog = screen.getByRole('dialog')
@@ -148,7 +133,7 @@ describe('Settings drawer', () => {
 
   it('toggles Reduce Motion and applies it as a data attribute on <html>', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openSettings(user)
 
     const checkbox = screen.getByRole('checkbox', { name: /reduce motion/i }) as HTMLInputElement
@@ -162,12 +147,12 @@ describe('Settings drawer', () => {
 
   it('persists Reduce Motion across a remount via localStorage', async () => {
     const user = userEvent.setup()
-    const { unmount } = render(<App />)
+    const { unmount } = await renderApp(calendarClient())
     await openSettings(user)
     await user.click(screen.getByRole('checkbox', { name: /reduce motion/i }))
     unmount()
 
-    render(<App />)
+    await renderApp(calendarClient())
     await openSettings(user)
     const checkbox = screen.getByRole('checkbox', { name: /reduce motion/i }) as HTMLInputElement
     expect(checkbox.checked).toBe(true)
@@ -175,7 +160,7 @@ describe('Settings drawer', () => {
 
   it('requires confirmation before resetting the current puzzle, and clears progress on confirm', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(getCell('r0c0'))
     await user.keyboard('S')
@@ -202,7 +187,7 @@ describe('Settings drawer', () => {
 describe('Completion tracking', () => {
   it('marks a date completed once its puzzle is solved, distinct from the active date', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     for (const cell of Object.values(dogsPuzzle.cells)) {
       await user.click(getCell(cell.id))
@@ -232,7 +217,7 @@ describe('Completion tracking', () => {
   // not the general-player experience.
   it('dev override: resetting an already-completed puzzle does not un-mark it as completed', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     for (const cell of Object.values(dogsPuzzle.cells)) {
       await user.click(getCell(cell.id))
@@ -259,7 +244,7 @@ describe('Completion tracking (production build, no dev override)', () => {
 
   it('disables resetting an already-completed puzzle for a general player', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     for (const cell of Object.values(dogsPuzzle.cells)) {
       await user.click(getCell(cell.id))
@@ -281,7 +266,7 @@ describe('Completion tracking (production build, no dev override)', () => {
 
   it('still allows resetting a puzzle that has not been completed yet', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(getCell('r0c0'))
     await user.keyboard('S')

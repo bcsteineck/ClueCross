@@ -6,12 +6,10 @@ import type { ConstructionSuccess, PlacedAnswer } from '../../../tools/generator
 import { DEFAULT_REVEAL_BUDGET } from '../../../src/core/letterCosts'
 import type { PuzzleDefinition } from '../../../src/core/types'
 import { validatePuzzleDefinition } from '../../../src/core/validatePuzzleDefinition'
-import { PUZZLE_IDS } from '../../../src/data/puzzleIds'
 import type { LayoutDefinition } from '../../../src/layout/types'
 import { generateBatch } from '../generateBatch'
 import { parsePool } from '../parsePool'
 import {
-  PRODUCTION_PUZZLE_IDS,
   RESERVED_PUZZLE_IDS,
   prepareFinalPuzzle,
   suggestPuzzleId,
@@ -107,9 +105,8 @@ describe('Final Puzzle assembly', () => {
 })
 
 describe('Final Puzzle metadata validation', () => {
-  it('reads the production ids from the shared registry id list', () => {
-    expect(PRODUCTION_PUZZLE_IDS).toEqual(PUZZLE_IDS)
-    expect(PRODUCTION_PUZZLE_IDS).toEqual(expect.arrayContaining(['dogs', 'space', 'fruit', 'magic', 'flower']))
+  it('keeps the legacy development and fixture ids reserved', () => {
+    expect([...RESERVED_PUZZLE_IDS].sort()).toEqual(['dogs', 'flower', 'fruit', 'magic', 'sample', 'space'])
   })
 
   it('requires an id and a non-blank clue', () => {
@@ -128,11 +125,14 @@ describe('Final Puzzle metadata validation', () => {
     expect(validateFinalPuzzleMetadata({ id: ' desserts2 ', clue: 'x' })).toEqual([])
   })
 
-  it('rejects an id already used by a production puzzle, without renaming it', () => {
-    expect(validateFinalPuzzleMetadata({ id: 'flower', clue: 'Flowers' })).toEqual([
-      { field: 'id', message: 'Puzzle ID “flower” is already used by a production puzzle.' },
-    ])
+  it('rejects reserved ids without renaming them', () => {
+    for (const id of RESERVED_PUZZLE_IDS) {
+      expect(validateFinalPuzzleMetadata({ id, clue: 'x' }), id).toEqual([
+        { field: 'id', message: `Puzzle ID “${id}” is reserved (a legacy development puzzle or test fixture) and can’t be used.` },
+      ])
+    }
     expect(validateFinalPuzzleMetadata({ id: 'custom', clue: 'x' }, ['custom'])).toHaveLength(1)
+    expect(prepareFinalPuzzle(crossing(), { id: 'sample', clue: 'Sample' }).ready).toBe(false)
   })
 
   it('blocks export on metadata errors while still reporting the assembled pair', () => {
@@ -144,33 +144,13 @@ describe('Final Puzzle metadata validation', () => {
     expect(result.puzzle).toBeDefined()
   })
 
-  it('rejects a reserved id whose export would overwrite an existing non-registry module', () => {
-    expect(validateFinalPuzzleMetadata({ id: 'sample', clue: 'Sample' })).toEqual([
-      {
-        field: 'id',
-        message:
-          'Puzzle ID “sample” is reserved: its export would overwrite the existing samplePuzzle.ts and samplePuzzleLayout.ts modules.',
-      },
-    ])
-    expect(prepareFinalPuzzle(crossing(), { id: 'sample', clue: 'Sample' }).ready).toBe(false)
-    expect(PRODUCTION_PUZZLE_IDS).not.toContain('sample')
-  })
-
-  it('every existing puzzle module filename is covered by a production or reserved id', () => {
-    // Keys only (lazy glob): nothing is loaded. Guards against a new
-    // non-registry module silently becoming an overwritable export target.
-    const stems = [
-      ...Object.keys(import.meta.glob('/src/data/*Puzzle.ts')).map((path) => path.match(/\/(\w+)Puzzle\.ts$/)![1]),
-      ...Object.keys(import.meta.glob('/src/layout/*PuzzleLayout.ts')).map(
-        (path) => path.match(/\/(\w+)PuzzleLayout\.ts$/)![1],
-      ),
-    ]
-    const covered = new Set([...PRODUCTION_PUZZLE_IDS, ...RESERVED_PUZZLE_IDS])
-    expect(stems.length).toBeGreaterThan(0)
-    expect(stems.filter((stem) => !covered.has(stem))).toEqual([])
-    for (const stem of stems) {
-      expect(validateFinalPuzzleMetadata({ id: stem, clue: 'x' }), stem).toHaveLength(1)
-    }
+  it('reserves the id of every puzzle fixture module', () => {
+    // Keys only (lazy glob): nothing is loaded.
+    const stems = Object.keys(import.meta.glob('/src/testing/fixtures/*Puzzle.ts')).map(
+      (path) => path.match(/\/(\w+)Puzzle\.ts$/)![1],
+    )
+    expect(stems.sort()).toEqual(['dogs', 'flower', 'sample', 'space'])
+    expect(stems.filter((stem) => !RESERVED_PUZZLE_IDS.includes(stem))).toEqual([])
   })
 
   it('suggests an editable id from the clue', () => {

@@ -39,10 +39,10 @@
   cursor: pointer;
 }
 
-// Cell.tsx selects a cell's text on focus so typing directly replaces the
-// existing letter (maxLength=1 would otherwise block the keystroke). That
-// selection is functional only — hiding its native highlight here keeps
-// backspace/delete looking like one immediate action instead of two.
+// Cell.tsx never selects a cell's text (replacement doesn't need it); this
+// only hides the highlight if a browser selects it anyway, e.g. a long-press.
+// It isn't enough on its own: iPhone Chrome ignores it for its native
+// selection treatment, hence the collapsed caret in Cell.tsx.
 .cell::selection {
   background: transparent;
   color: inherit;

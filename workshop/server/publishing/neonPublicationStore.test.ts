@@ -11,7 +11,7 @@ import { assignPublishDate, earliestPublishDate } from '../../../src/publishing/
 import { createNeonPublicationStore } from './neonPublicationStore'
 import { PublicationContentionError } from './publicationStore'
 import { previewPublication, publishFinalPuzzle } from './publishPuzzle'
-import { TEST_BRANCH_MARKER_TABLE, assertTestBranchMarker, decideTestDatabase } from './testDatabaseGuard'
+import { TEST_BRANCH_MARKER_TABLE, TEST_DATABASE_LOCK_KEY, assertTestBranchMarker, decideTestDatabase } from './testDatabaseGuard'
 import { batsRequest, catsRequest, publicationFor } from './testFixtures'
 
 const env = { ...loadEnv('test', process.cwd(), 'PUBLISHING_'), ...process.env }
@@ -65,6 +65,8 @@ describe.skipIf(!decision.run)('Neon publication store (test branch only)', () =
     await admin.connect()
     const marker = await admin.query('SELECT to_regclass($1) IS NOT NULL AS present', [TEST_BRANCH_MARKER_TABLE])
     assertTestBranchMarker(marker.rows[0].present === true) // before anything destructive
+    // Serializes with the other destructive test file on this branch.
+    await admin.query('SELECT pg_advisory_lock($1)', [TEST_DATABASE_LOCK_KEY])
     await admin.query('DELETE FROM published_puzzles')
   }, 60_000)
 
@@ -72,6 +74,7 @@ describe.skipIf(!decision.run)('Neon publication store (test branch only)', () =
     if (!admin) return
     const marker = await admin.query('SELECT to_regclass($1) IS NOT NULL AS present', [TEST_BRANCH_MARKER_TABLE])
     if (marker.rows[0].present === true) await admin.query('DELETE FROM published_puzzles')
+    await admin.query('SELECT pg_advisory_unlock($1)', [TEST_DATABASE_LOCK_KEY])
     await admin.end()
   }, 60_000)
 

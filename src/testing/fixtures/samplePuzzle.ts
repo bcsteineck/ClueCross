@@ -1,8 +1,11 @@
-import type { PuzzleDefinition } from '../core/types'
+// TEST FIXTURE ONLY. The minimal validator/model fixture — never
+// production calendar content and never imported by the player runtime
+// (enforced in workshop/src/isolation.test.ts). Its ID is reserved
+// (src/publishing/reservedPuzzleIds.ts) so it can't be published.
+import type { PuzzleDefinition } from '../../core/types'
 
-// Minimal fixture puzzle used to exercise the model end-to-end.
-// Not a real daily puzzle — those are the fuller hand-authored puzzles
-// (e.g. dogsPuzzle) used to evaluate real gameplay.
+// Minimal fixture puzzle used to exercise the model end-to-end. The fuller
+// legacy fixtures (e.g. dogsPuzzle) cover realistic gameplay.
 export const samplePuzzle: PuzzleDefinition = {
   id: 'sample-fruits-puzzle',
   clue: 'Fruits',

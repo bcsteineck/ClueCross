@@ -5,7 +5,7 @@ import './MobileInfoBar.scss'
 
 export interface MobileInfoBarProps {
   clue: string
-  isToday: boolean
+  isCurrentPuzzle: boolean
   date: Date
   onStatsClick: () => void
 }
@@ -13,8 +13,8 @@ export interface MobileInfoBarProps {
 // Shared by the mobile Puzzle and Reveal views (spec section 6): "TODAY'S
 // CLUE" (or the publication date for an archived puzzle) plus a Stats
 // control.
-export function MobileInfoBar({ clue, isToday, date, onStatsClick }: MobileInfoBarProps) {
-  const label = isToday ? "Today's Clue:" : formatFullDate(date)
+export function MobileInfoBar({ clue, isCurrentPuzzle, date, onStatsClick }: MobileInfoBarProps) {
+  const label = isCurrentPuzzle ? "Today's Clue:" : formatFullDate(date)
   return (
     <div className="mobile-info-bar">
       <h1 className="mobile-info-bar__heading">

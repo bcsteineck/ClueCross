@@ -20,5 +20,5 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["vite.config.ts", "vite.workshop.config.ts", "workshop/server"]
+  "include": ["vite.config.ts", "vite.workshop.config.ts", "workshop/server", "server", "api"]
 }

@@ -2,7 +2,7 @@
 // (subset-selection) mode — generator test/experiment data only.
 //
 // This is NOT derived from, and makes no claim about, the real
-// hand-authored dogsPuzzle's actual entries (src/data/dogsPuzzle.ts). It
+// hand-authored dogsPuzzle's actual entries (src/testing/fixtures/dogsPuzzle.ts). It
 // represents "a plausible editorially-approved candidate list someone
 // might hand the generator for a Dogs-themed puzzle" — created fresh, for
 // Phase 5's testing purposes, favoring familiar, clearly dog-related

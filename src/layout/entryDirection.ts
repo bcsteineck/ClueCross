@@ -1,4 +1,4 @@
-import { getEntriesForCell } from '../core/puzzleQueries'
+import { getEntriesForCell } from '../core/puzzleQueries.js'
 import type { CellId, Entry, PuzzleDefinition } from '../core/types'
 import type { LayoutDefinition, Position } from './types'
 

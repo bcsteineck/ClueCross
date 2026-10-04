@@ -1,5 +1,5 @@
-import { useEffect, useImperativeHandle, useMemo, useRef } from 'react'
-import type { CSSProperties, KeyboardEvent, Ref } from 'react'
+import { useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import type { CSSProperties, FocusEvent, KeyboardEvent, Ref } from 'react'
 import type { CellId, PuzzleDefinition } from '../../core/types'
 import { getNextCellInEntry, getPreviousCellInEntry } from '../../layout/autoAdvance'
 import { getAvailableDirectionsForCell } from '../../layout/entryDirection'
@@ -82,6 +82,17 @@ export function PuzzleBoard({
 
   const effectiveActiveCellId = activeCellId ?? layout.navigationOrder[0] ?? null
 
+  // Whether keyboard focus is actually inside the board. The active cell is
+  // remembered regardless (it keeps the roving tabindex, so Tab returns to
+  // it), but it only *looks* active while the board owns focus — a cell
+  // must never appear to be the input target when typing goes elsewhere.
+  const [hasFocus, setHasFocus] = useState(false)
+
+  function handleBoardBlur(event: FocusEvent<HTMLDivElement>) {
+    // Moving between cells keeps focus inside the board.
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setHasFocus(false)
+  }
+
   function focusCell(cellId: CellId) {
     inputRefs.current[cellId]?.focus()
   }
@@ -105,6 +116,20 @@ export function PuzzleBoard({
     }
   }
 
+  // Input-event path (on-screen keyboards that report no key, IMEs): the
+  // input briefly holds the old letter plus the new one (maxLength is 2 for
+  // exactly this), on either side depending on the caret. The cell takes
+  // the newly typed letter — never two characters, never the old one.
+  function handleInputValue(cellId: CellId, rawValue: string) {
+    if (lockedCellIds[cellId]) return
+    const previous = values[cellId] ?? ''
+    let typed = rawValue
+    if (rawValue.length === 2 && previous) {
+      typed = rawValue[0].toUpperCase() === previous ? rawValue[1] : rawValue[0]
+    }
+    handleChangeValue(cellId, typed)
+  }
+
   function handleChangeValue(cellId: CellId, rawValue: string) {
     const letter = rawValue.slice(-1).toUpperCase()
     if (letter && !/^[A-Z]$/.test(letter)) {
@@ -116,13 +141,17 @@ export function PuzzleBoard({
       return
     }
     onSetCellValue(cellId, letter)
+    // Every occurrence of a revealed letter was already placed by that
+    // reveal — this cell wasn't among them (it's still unlocked, or the
+    // input couldn't have changed), so this letter is provably wrong here.
+    if (letter && revealedLetters[letter]) {
+      onImpossibleLetterAttempt(cellId, letter)
+    } else if (cellId === impossibleCellId) {
+      // The alert describes this cell's current value, which is no longer
+      // the impossible letter — clear it (banner and highlight) at once.
+      onImpossibleLetterCleared()
+    }
     if (letter) {
-      // Every occurrence of a revealed letter was already placed by that
-      // reveal — this cell wasn't among them (it's still unlocked, or the
-      // input couldn't have changed), so this letter is provably wrong here.
-      if (revealedLetters[letter]) {
-        onImpossibleLetterAttempt(cellId, letter)
-      }
       const next = getNextCellInEntry(puzzle, layout, cellId, activeDirection, lockedCellIds)
       if (next) {
         focusCell(next)
@@ -171,6 +200,22 @@ export function PuzzleBoard({
     if (event.key === 'Backspace') {
       event.preventDefault()
       handleBackspace(cellId)
+      return
+    }
+
+    // A letter key always replaces an editable cell's letter, whatever the
+    // caret or selection, without needing the letter to be selected.
+    // Composition input (IMEs) and keyboards that report no key go through
+    // the input-event path (handleInputValue) instead.
+    if (
+      /^[a-z]$/i.test(event.key) &&
+      !event.ctrlKey &&
+      !event.metaKey &&
+      !event.altKey &&
+      !event.nativeEvent.isComposing
+    ) {
+      event.preventDefault()
+      if (!lockedCellIds[cellId]) handleChangeValue(cellId, event.key)
     }
   }
 
@@ -191,7 +236,13 @@ export function PuzzleBoard({
     // custom properties only cascade downward, and this is the outermost
     // element PuzzleBoard renders.
     <div className="puzzle-board" style={{ '--cols': cols, '--rows': rows } as CSSProperties}>
-      <div role="group" aria-label="Puzzle board" className="puzzle-board__grid">
+      <div
+        role="group"
+        aria-label={isComplete ? 'Puzzle board, completed' : 'Puzzle board'}
+        className="puzzle-board__grid"
+        onFocus={() => setHasFocus(true)}
+        onBlur={handleBoardBlur}
+      >
         {Object.keys(puzzle.cells).map((cellId) => (
           <Cell
             key={cellId}
@@ -200,6 +251,7 @@ export function PuzzleBoard({
             value={values[cellId] ?? ''}
             isLocked={!!lockedCellIds[cellId]}
             isActive={cellId === effectiveActiveCellId}
+            showActive={hasFocus && !isComplete && cellId === effectiveActiveCellId}
             isComplete={isComplete}
             isImpossible={cellId === impossibleCellId}
             onActivate={(id) => activateCell(id, { allowToggle: false })}
@@ -207,7 +259,7 @@ export function PuzzleBoard({
             onClickActivate={(id) =>
               activateCell(id, { allowToggle: clickTargetWasActiveRef.current })
             }
-            onChangeValue={handleChangeValue}
+            onChangeValue={handleInputValue}
             onKeyDownCell={handleKeyDownCell}
             inputRef={(id, el) => {
               inputRefs.current[id] = el

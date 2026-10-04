@@ -1,16 +1,16 @@
 // Final Puzzle v1: an approved candidate + author id and clue, assembled
 // into the production { PuzzleDefinition, LayoutDefinition } pair through
 // the generator's own buildPuzzle, then validated in two explicit layers
-// before export is allowed:
+// before publishing or export is allowed:
 //
 //   1. the unchanged production validator (validatePuzzleDefinition);
 //   2. Workshop export validation — the stricter contract newly generated
 //      puzzles are held to (metadata, letters, board geometry, coverage,
 //      and the generator's zero-incidental-entry invariant), without
-//      retroactively applying it to existing production puzzles.
+//      retroactively applying it to the legacy hand-authored fixtures.
 //
-// Pure and session-only: nothing here writes files, persists, or touches
-// the production registry. Structural checks deliberately exclude any
+// Pure and session-only: nothing here writes files or persists anything —
+// publishing re-runs this on the Workshop server before writing. Structural checks deliberately exclude any
 // subjective quality judgment (density, shape, answer mix) — that belongs
 // to Candidate Review.
 
@@ -21,7 +21,7 @@ import type { ConstructionSuccess } from '../../../tools/generator/src/types.js'
 import { DEFAULT_REVEAL_BUDGET } from '../../../src/core/letterCosts'
 import type { PuzzleDefinition } from '../../../src/core/types'
 import { validatePuzzleDefinition } from '../../../src/core/validatePuzzleDefinition'
-import { PUZZLE_IDS } from '../../../src/data/puzzleIds'
+import { RESERVED_PUZZLE_IDS } from '../../../src/publishing/reservedPuzzleIds'
 import { deriveEntryDirection } from '../../../src/layout/entryDirection'
 import { getGridDimensions } from '../../../src/layout/gridDimensions'
 import type { LayoutDefinition } from '../../../src/layout/types'
@@ -34,13 +34,7 @@ export const MAX_BOARD_SIZE = 20
 // `<id>Puzzle.ts` a safe filename in the exported modules.
 export const PUZZLE_ID_PATTERN = /^[a-z][a-z0-9]*$/
 
-export const PRODUCTION_PUZZLE_IDS: readonly string[] = PUZZLE_IDS
-
-// Ids whose export filenames (src/data/<id>Puzzle.ts,
-// src/layout/<id>PuzzleLayout.ts) already belong to modules outside the
-// production registry: `sample` is the samplePuzzle.ts test fixture. A test
-// checks every existing puzzle module is covered by one of these two lists.
-export const RESERVED_PUZZLE_IDS: readonly string[] = ['sample']
+export { RESERVED_PUZZLE_IDS }
 
 export interface FinalPuzzleInputs {
   id: string
@@ -72,9 +66,11 @@ export function suggestPuzzleId(clue: string): string {
     .replace(/^[0-9]+/, '')
 }
 
+// Published IDs are kept unique by the database (a repeat ID is an
+// idempotent re-publish or a conflict); this only rejects reserved IDs.
 export function validateFinalPuzzleMetadata(
   inputs: FinalPuzzleInputs,
-  existingIds: readonly string[] = PRODUCTION_PUZZLE_IDS,
+  reservedIds: readonly string[] = RESERVED_PUZZLE_IDS,
 ): MetadataIssue[] {
   const issues: MetadataIssue[] = []
   const id = inputs.id.trim()
@@ -85,12 +81,10 @@ export function validateFinalPuzzleMetadata(
       field: 'id',
       message: 'Puzzle ID must use only lowercase letters a–z and digits, starting with a letter.',
     })
-  } else if (existingIds.includes(id)) {
-    issues.push({ field: 'id', message: `Puzzle ID “${id}” is already used by a production puzzle.` })
-  } else if (RESERVED_PUZZLE_IDS.includes(id)) {
+  } else if (reservedIds.includes(id)) {
     issues.push({
       field: 'id',
-      message: `Puzzle ID “${id}” is reserved: its export would overwrite the existing ${id}Puzzle.ts and ${id}PuzzleLayout.ts modules.`,
+      message: `Puzzle ID “${id}” is reserved (a legacy development puzzle or test fixture) and can’t be used.`,
     })
   }
   if (inputs.clue.trim() === '') {
@@ -193,9 +187,9 @@ export function validateExportStructure(puzzle: PuzzleDefinition, layout: Layout
 export function prepareFinalPuzzle(
   construction: ConstructionSuccess,
   inputs: FinalPuzzleInputs,
-  existingIds: readonly string[] = PRODUCTION_PUZZLE_IDS,
+  reservedIds: readonly string[] = RESERVED_PUZZLE_IDS,
 ): FinalPuzzleValidation {
-  const metadataErrors = validateFinalPuzzleMetadata(inputs, existingIds)
+  const metadataErrors = validateFinalPuzzleMetadata(inputs, reservedIds)
   const exportErrors: string[] = []
   let productionErrors: string[] = []
   let puzzle: PuzzleDefinition | undefined

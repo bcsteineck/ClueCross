@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-10-02
+
+### Player publishing cutover
+
+The player now reads only from the published calendar: `/api/calendar` and `/api/puzzle?date=`, served from the release-gated `released_puzzles` view as the read-only `cluecross_reader` role (see `docs/architecture.md`). The server decides the current puzzle and which dates are available. The browser clock never does.
+
+This supersedes the static player data:
+
+- `archivePuzzles.ts`, the relative `offsetDays` schedule, `puzzleIds.ts`, and the Dogs fallback are removed.
+- Dogs, Space, Flower, and Sample are kept as test fixtures in `src/testing/fixtures/`. Fruit and Magic are deleted.
+- All six legacy IDs stay reserved (`src/publishing/reservedPuzzleIds.ts`). Published IDs are kept unique by the database.
+
+Developer Export no longer describes manual registry integration. It is a debug and fallback tool only; publishing is the release path.
+
+Completed results keep the `${publishDate}:${puzzleId}` localStorage contract. Old development history is not migrated. Accounts and cross-device history are future work.
+
+Production rollout is a separate, later step. It covers applying `0002` and creating the reader on `main`, the Production `PUZZLES_READ_DATABASE_URL`, and the first real publication. Until then, Preview uses the `dev` reader.
+
+---
+
 ## 2026-09-30
 
 ### Publishing v1

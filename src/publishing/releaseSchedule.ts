@@ -4,8 +4,8 @@
 // the current instant as a parameter — callers supply the authoritative
 // clock (the database's, when publishing) — so nothing here reads Date.now().
 
-import { addDays, maxDateKey } from './dateKey'
-import { easternDateKey, easternWallTimeToInstant } from './easternTime'
+import { addDays, maxDateKey } from './dateKey.js'
+import { easternDateKey, easternWallTimeToInstant } from './easternTime.js'
 import type { DateKey, PublicationStatus } from './types'
 
 export const RELEASE_HOUR = 22

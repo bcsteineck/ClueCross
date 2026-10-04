@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { ArchiveCalendar } from './ArchiveCalendar'
+import type { ArchiveCalendarData } from './ArchiveCalendar'
 import './MobileArchiveView.scss'
 import { MobileBackBar } from './MobileBackBar'
 
@@ -8,6 +9,7 @@ export interface MobileArchiveViewProps {
   onBack: () => void
   onSelectDate: (date: Date) => void
   getDateStarCount: (date: Date) => 0 | 1 | 2 | 3 | undefined
+  archive: ArchiveCalendarData
 }
 
 // Spec section 6/15: Back to Puzzle, month/year selection, the calendar,
@@ -18,6 +20,7 @@ export function MobileArchiveView({
   onBack,
   onSelectDate,
   getDateStarCount,
+  archive,
 }: MobileArchiveViewProps) {
   // Entering this view is a real navigation, so focus needs a logical
   // landing point (see MobileHowToPlayView for the full rationale). There's
@@ -39,6 +42,7 @@ export function MobileArchiveView({
           activeDate={date}
           onSelectDate={onSelectDate}
           getDateStarCount={getDateStarCount}
+          {...archive}
         />
       </div>
       <footer className="mobile-archive-view__copyright">

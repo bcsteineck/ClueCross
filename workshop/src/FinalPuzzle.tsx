@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { CandidateBoard } from './CandidateBoard'
-import { layoutModuleFile, puzzleModuleFile, registrySnippet } from './finalPuzzle/exportSource'
+import { layoutModuleFile, puzzleModuleFile } from './finalPuzzle/exportSource'
 import type { ExportFile } from './finalPuzzle/exportSource'
 import { prepareFinalPuzzle } from './finalPuzzle/finalPuzzle'
 import type { FinalPuzzleInputs, MetadataIssue } from './finalPuzzle/finalPuzzle'
@@ -50,11 +50,9 @@ export function FinalPuzzle({
   onPublished,
 }: FinalPuzzleProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
-  const [copyStatus, setCopyStatus] = useState('')
   const validation = useMemo(() => prepareFinalPuzzle(candidate.construction, inputs), [candidate, inputs])
   const { puzzle, layout, ready } = validation
   const files = ready && puzzle && layout ? [puzzleModuleFile(puzzle, layout), layoutModuleFile(layout)] : []
-  const snippet = ready && puzzle ? registrySnippet(puzzle.id) : ''
   const { construction } = candidate
   const idErrors = fieldErrors(validation.metadataErrors, 'id')
   const clueErrors = fieldErrors(validation.metadataErrors, 'clue')
@@ -67,17 +65,7 @@ export function FinalPuzzle({
   }, [])
 
   function update(field: keyof FinalPuzzleInputs, value: string) {
-    setCopyStatus('')
     onInputsChange({ ...inputs, [field]: value })
-  }
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(snippet)
-      setCopyStatus('Registry snippet copied.')
-    } catch {
-      setCopyStatus('Copy failed. Select the snippet text and copy it manually.')
-    }
   }
 
   const groups = [
@@ -197,8 +185,9 @@ export function FinalPuzzle({
 
           <h3 className="ws-detail__subheading">Developer export</h3>
           <p className="ws-muted">
-            Fallback developer workflow. Download the production puzzle modules for manual integration if the
-            publishing system is unavailable or manual integration is needed.
+            For inspection, debugging, test fixtures, or emergency manual work only. Publishing is how a puzzle
+            reaches players: the server assigns its permanent date and the player loads it from the puzzle API at
+            release — no code change or redeploy.
           </p>
           {ready ? (
             <>
@@ -208,7 +197,6 @@ export function FinalPuzzle({
                     <button type="button" className="ws-button" onClick={() => downloadFile(file)}>
                       Download {file.filename}
                     </button>
-                    <span className="ws-muted">Save as {file.path}</span>
                   </li>
                 ))}
               </ul>
@@ -219,34 +207,6 @@ export function FinalPuzzle({
                 </details>
               ))}
 
-              <h3 className="ws-detail__subheading">Registry snippet</h3>
-              <p className="ws-muted">
-                Developer integration reference only. Publishing and calendar scheduling will be handled by a
-                separate workflow.
-              </p>
-              <pre className="ws-final__snippet" aria-label="Registry snippet">
-                {snippet}
-              </pre>
-              <button type="button" className="ws-button ws-button--secondary" onClick={() => void handleCopy()}>
-                Copy Registry Snippet
-              </button>
-              <p className="ws-muted" role="status">
-                {copyStatus}
-              </p>
-
-              <h3 className="ws-detail__subheading">Manual developer integration</h3>
-              <ol className="ws-final__steps">
-                <li>Save the two downloaded modules at the paths shown above.</li>
-                <li>Add the ID to PUZZLE_IDS in src/data/puzzleIds.ts.</li>
-                <li>Add the imports and PUZZLES entry to src/data/archivePuzzles.ts.</li>
-                <li>Add the new puzzle to src/core/validatePuzzleDefinition.test.ts.</li>
-                <li>Run typecheck, tests, lint, and the production build.</li>
-                <li>Commit the integration changes.</li>
-              </ol>
-              <p className="ws-muted">
-                Publishing and scheduling are intentionally not included here. A separate publishing workflow will
-                assign approved puzzles to calendar dates without shifting previously published puzzles.
-              </p>
             </>
           ) : (
             <>

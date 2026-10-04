@@ -213,7 +213,7 @@ describe('WorkshopApp approval and Final Puzzle', () => {
 
     // The suggested id collides with the production Dogs puzzle.
     expect(validationStatus()).toMatch('Validation errors (1)')
-    expect(validationStatus()).toMatch('Puzzle ID “dogs” is already used by a production puzzle.')
+    expect(validationStatus()).toMatch('Puzzle ID “dogs” is reserved (a legacy development puzzle or test fixture) and can’t be used.')
     expect(screen.getByLabelText('Puzzle ID').getAttribute('aria-invalid')).toBe('true')
     const blocked = within(region).getByRole('button', { name: 'Download Puzzle Modules' })
     expect(blocked.getAttribute('aria-disabled')).toBe('true')
@@ -241,7 +241,6 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     const region = finalPuzzle()
     expect(within(region).getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
     expect(within(region).getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' })).toBeTruthy()
-    expect(within(region).getByText('Save as src/data/workshopdogsPuzzle.ts')).toBeTruthy()
 
     const clue = screen.getByLabelText('Clue')
     await user.clear(clue)
@@ -258,7 +257,7 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     expect(within(region).getByText(/clue: 'Man\\'s best friend'/)).toBeTruthy()
   })
 
-  it('downloads each module with its filename, and copies the registry snippet', async () => {
+  it('downloads each module with its filename, as a developer-only export', async () => {
     const createObjectURL = vi.fn((blob: Blob) => {
       void blob
       return 'blob:export'
@@ -284,27 +283,16 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     expect(source).toMatch("export const workshopdogsPuzzle: PuzzleDefinition = {")
     expect(source).toMatch('unlockBudget: DEFAULT_REVEAL_BUDGET,')
 
-    await user.click(screen.getByRole('button', { name: 'Copy Registry Snippet' }))
-    expect(await navigator.clipboard.readText()).toMatch(
-      'workshopdogs: { puzzle: workshopdogsPuzzle, layout: workshopdogsPuzzleLayout },',
-    )
-    expect(screen.getByText('Registry snippet copied.')).toBeTruthy()
-    expect(screen.getByText(/Add the new puzzle to src\/core\/validatePuzzleDefinition.test.ts/)).toBeTruthy()
-
-    // Export is a developer fallback; scheduling is left to a future publishing workflow.
+    // A developer-only export: no registry, schedule, or manual integration workflow.
     const region = finalPuzzle()
     expect(within(region).getByRole('heading', { name: 'Developer export' })).toBeTruthy()
     expect(
       within(region).getByText(
-        'Fallback developer workflow. Download the production puzzle modules for manual integration if the publishing system is unavailable or manual integration is needed.',
+        'For inspection, debugging, test fixtures, or emergency manual work only. Publishing is how a puzzle reaches players: the server assigns its permanent date and the player loads it from the puzzle API at release — no code change or redeploy.',
       ),
     ).toBeTruthy()
-    expect(region.textContent).not.toMatch(/will use a separate publishing system/)
-    expect(within(region).getByText(/^Developer integration reference only\./)).toBeTruthy()
-    expect(within(region).getByRole('heading', { name: 'Manual developer integration' })).toBeTruthy()
-    expect(within(region).getByText(/^Publishing and scheduling are intentionally not included here\./)).toBeTruthy()
-    expect(within(region).getByText('Commit the integration changes.')).toBeTruthy()
-    expect(region.textContent).not.toMatch(/offsetDays|offset|SCHEDULE|bump|After exporting/)
+    expect(within(region).queryByRole('button', { name: /registry snippet/i })).toBeNull()
+    expect(region.textContent).not.toMatch(/archivePuzzles|PUZZLE_IDS|puzzleIds|offsetDays|\bSCHEDULE\b|[Rr]egistry|Save as|Manual developer integration/)
   })
 
   it('Back returns to Candidate Review unchanged; reopening keeps edits; approving another candidate replaces it', async () => {
@@ -631,7 +619,7 @@ describe('WorkshopApp publishing: preview', () => {
     await generate(user)
     await approve(user, 0)
 
-    // The suggested id "dogs" is a reserved production id: not locally valid.
+    // The suggested id "dogs" is reserved: not locally valid.
     expect(screen.queryByRole('heading', { name: 'Publish' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Publish Puzzle' })).toBeNull()
 

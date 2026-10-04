@@ -8,7 +8,6 @@ import {
   getDaysInMonth,
   getLeadingBlankCount,
   isSameDate,
-  startOfDay,
   startOfMonth,
   toDateKey,
 } from './archiveCalendar'
@@ -105,12 +104,7 @@ describe('isSameDate', () => {
   })
 })
 
-describe('startOfDay / startOfMonth', () => {
-  it('zeroes out the time', () => {
-    const d = startOfDay(new Date(2026, 7, 3, 15, 30))
-    expect([d.getHours(), d.getMinutes(), d.getSeconds()]).toEqual([0, 0, 0])
-  })
-
+describe('startOfMonth', () => {
   it('moves to the first of the month', () => {
     const d = startOfMonth(new Date(2026, 7, 17))
     expect(d.getDate()).toBe(1)

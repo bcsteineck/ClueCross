@@ -1,0 +1,43 @@
+@use '../../styles/tokens' as *;
+
+// Minimal app-level loading/error/empty states: the logo and one card,
+// centered, in the existing ClueCross type and color tokens.
+.player-status {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-24;
+  padding: $spacing-24 $spacing-16;
+  box-sizing: border-box;
+}
+
+.player-status__logo {
+  height: 32px;
+}
+
+.player-status__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: $spacing-12;
+  max-width: 360px;
+  width: 100%;
+  text-align: center;
+}
+
+.player-status__title {
+  margin: 0;
+  font-family: $font-body;
+  font-size: $font-size-16;
+  font-weight: $font-weight-semibold;
+  color: $color-gray-90;
+}
+
+.player-status__detail {
+  margin: 0;
+  font-family: $font-body;
+  font-size: $font-size-14;
+  color: $color-gray-70;
+}

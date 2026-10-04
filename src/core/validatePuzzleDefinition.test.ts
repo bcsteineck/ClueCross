@@ -2,18 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { validatePuzzleDefinition } from './validatePuzzleDefinition'
 import type { PuzzleDefinition } from './types'
 import type { LayoutDefinition } from '../layout/types'
-import { samplePuzzle } from '../data/samplePuzzle'
-import { samplePuzzleLayout } from '../layout/samplePuzzleLayout'
-import { dogsPuzzle } from '../data/dogsPuzzle'
-import { dogsPuzzleLayout } from '../layout/dogsPuzzleLayout'
-import { spacePuzzle } from '../data/spacePuzzle'
-import { spacePuzzleLayout } from '../layout/spacePuzzleLayout'
-import { fruitPuzzle } from '../data/fruitPuzzle'
-import { fruitPuzzleLayout } from '../layout/fruitPuzzleLayout'
-import { magicPuzzle } from '../data/magicPuzzle'
-import { magicPuzzleLayout } from '../layout/magicPuzzleLayout'
-import { flowerPuzzle } from '../data/flowerPuzzle'
-import { flowerPuzzleLayout } from '../layout/flowerPuzzleLayout'
+import { samplePuzzle } from '../testing/fixtures/samplePuzzle'
+import { samplePuzzleLayout } from '../testing/fixtures/samplePuzzleLayout'
+import { dogsPuzzle } from '../testing/fixtures/dogsPuzzle'
+import { dogsPuzzleLayout } from '../testing/fixtures/dogsPuzzleLayout'
+import { spacePuzzle } from '../testing/fixtures/spacePuzzle'
+import { spacePuzzleLayout } from '../testing/fixtures/spacePuzzleLayout'
+import { flowerPuzzle } from '../testing/fixtures/flowerPuzzle'
+import { flowerPuzzleLayout } from '../testing/fixtures/flowerPuzzleLayout'
 
 function makeValidFixture(): { puzzle: PuzzleDefinition; layout: LayoutDefinition } {
   const puzzle: PuzzleDefinition = {
@@ -56,16 +52,6 @@ describe('validatePuzzleDefinition', () => {
 
   it('accepts the hand-authored Space puzzle', () => {
     const result = validatePuzzleDefinition(spacePuzzle, spacePuzzleLayout)
-    expect(result).toEqual({ valid: true, errors: [] })
-  })
-
-  it('accepts the hand-authored Fruit puzzle', () => {
-    const result = validatePuzzleDefinition(fruitPuzzle, fruitPuzzleLayout)
-    expect(result).toEqual({ valid: true, errors: [] })
-  })
-
-  it('accepts the hand-authored Magic puzzle', () => {
-    const result = validatePuzzleDefinition(magicPuzzle, magicPuzzleLayout)
     expect(result).toEqual({ valid: true, errors: [] })
   })
 

@@ -1,8 +1,12 @@
-import { DEFAULT_REVEAL_BUDGET } from '../core/letterCosts'
-import type { PuzzleDefinition } from '../core/types'
+// TEST FIXTURE ONLY. A legacy, pre-calendar development puzzle kept for
+// test coverage — never production calendar content and never imported by
+// the player runtime (enforced in workshop/src/isolation.test.ts). Its ID
+// is reserved (src/publishing/reservedPuzzleIds.ts) so it can't be published.
+import { DEFAULT_REVEAL_BUDGET } from '../../core/letterCosts'
+import type { PuzzleDefinition } from '../../core/types'
 
 // Hand-authored from a flower-themed word grid (crossing flower names,
-// across and down). See layout/flowerPuzzleLayout.ts for cell positions.
+// across and down). See flowerPuzzleLayout.ts for cell positions.
 export const flowerPuzzle: PuzzleDefinition = {
   id: 'flower',
   clue: 'Flowers',

@@ -34,6 +34,19 @@ export function getPuzzleResultStarCount(dateKey: string, puzzleId: string): 0 |
   return result ? getStarCount(result.score) : undefined
 }
 
+/** Test tools only (Reset Test State): forgets one puzzle's saved result. */
+export function clearPuzzleResult(dateKey: string, puzzleId: string): void {
+  const results = readResults()
+  const key = makeKey(dateKey, puzzleId)
+  if (!results[key]) return
+  delete results[key]
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(results))
+  } catch {
+    // Storage unavailable — nothing persisted to clear.
+  }
+}
+
 // Idempotent, like markDateCompleted: only the first recorded result for a
 // given date+puzzle is kept, since that's the score/history that was live
 // when the puzzle actually completed.

@@ -1,17 +1,18 @@
-// Source text for a Final Puzzle export: the same two TypeScript modules
-// authors write by hand today (src/data/<id>Puzzle.ts and
-// src/layout/<id>PuzzleLayout.ts), plus a copyable archivePuzzles.ts
-// registry snippet. Pure and deterministic: the same pair always yields
-// byte-identical text. Callers export only a pair that passed Final
-// Puzzle validation (so `id` is a safe slug); string values are still
-// always emitted as escaped literals, never interpolated raw.
+// Source text for a Final Puzzle developer export: the puzzle and layout as
+// two TypeScript modules in the hand-authored style, for inspection,
+// debugging, test fixtures, or emergency manual work. Not the release path —
+// publishing is (the player reads released puzzles from the API). Pure and
+// deterministic: the same pair always yields byte-identical text. Callers
+// export only a pair that passed Final Puzzle validation (so `id` is a safe
+// slug); string values are still always emitted as escaped literals, never
+// interpolated raw.
 
 import type { Cell, CellId, Entry, PuzzleDefinition } from '../../../src/core/types'
 import { deriveEntryDirection } from '../../../src/layout/entryDirection'
 import type { LayoutDefinition, Position } from '../../../src/layout/types'
 
 export interface ExportFile {
-  /** Repo-relative destination, e.g. src/data/dogsPuzzle.ts. */
+  /** Path the module's relative imports assume, e.g. src/data/dogsPuzzle.ts. */
   path: string
   /** Download filename, e.g. dogsPuzzle.ts. */
   filename: string
@@ -131,27 +132,4 @@ export function layoutModuleFile(layout: LayoutDefinition): ExportFile {
   ].join('\n')
   const filename = `${layoutExportName(layout.puzzleId)}.ts`
   return { path: `src/layout/${filename}`, filename, source }
-}
-
-/**
- * Developer integration reference only — the Workshop never edits these
- * files. Mirrors the current puzzleIds.ts / archivePuzzles.ts registry
- * structure. Deliberately no schedule row: publishing and calendar
- * scheduling belong to a separate workflow.
- */
-export function registrySnippet(id: string): string {
-  const puzzleName = puzzleExportName(id)
-  const layoutName = layoutExportName(id)
-  return [
-    `// src/data/puzzleIds.ts — add the id to PUZZLE_IDS:`,
-    `${tsString(id)},`,
-    ``,
-    `// src/data/archivePuzzles.ts — imports:`,
-    `import { ${layoutName} } from '../layout/${layoutName}'`,
-    `import { ${puzzleName} } from './${puzzleName}'`,
-    ``,
-    `// src/data/archivePuzzles.ts — PUZZLES entry:`,
-    `${id}: { puzzle: ${puzzleName}, layout: ${layoutName} },`,
-    ``,
-  ].join('\n')
 }

@@ -1,4 +1,8 @@
-import type { LayoutDefinition } from './types'
+// TEST FIXTURE ONLY. A legacy, pre-calendar development puzzle kept for
+// test coverage — never production calendar content and never imported by
+// the player runtime (enforced in workshop/src/isolation.test.ts). Its ID
+// is reserved (src/publishing/reservedPuzzleIds.ts) so it can't be published.
+import type { LayoutDefinition } from '../../layout/types'
 
 // Positions preserve the source spreadsheet exactly: x = column, y = row,
 // both normalized to the puzzle's own leftmost/topmost used cell (0-based)

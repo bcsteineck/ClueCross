@@ -614,8 +614,7 @@ h3 {
   }
 }
 
-.ws-final__downloads,
-.ws-final__steps {
+.ws-final__downloads {
   margin: 0;
   padding: 0;
 }
@@ -638,18 +637,12 @@ h3 {
   }
 }
 
-.ws-final__steps {
-  padding-left: $spacing-20;
-  font-size: 14px;
-}
-
 .ws-final__source summary {
   cursor: pointer;
   font-size: 13px;
 }
 
-.ws-final__source pre,
-.ws-final__snippet {
+.ws-final__source pre {
   margin: $spacing-4 0 0;
   padding: $spacing-12;
   max-height: 320px;
