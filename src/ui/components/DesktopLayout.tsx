@@ -10,6 +10,7 @@ import type { LayoutDefinition } from '../../layout/types'
 import { usePuzzleSession } from '../../state/PuzzleSessionContext'
 import type { View } from '../view'
 import { ArchiveCalendar } from './ArchiveCalendar'
+import type { ArchiveCalendarData } from './ArchiveCalendar'
 import { ClueCard } from './ClueCard'
 import { ContainerCard } from './ContainerCard'
 import './DesktopLayout.scss'
@@ -30,7 +31,7 @@ export interface DesktopLayoutProps {
   onViewChange: (view: View) => void
   layout: LayoutDefinition
   date: Date
-  isToday: boolean
+  isCurrentPuzzle: boolean
   activeCellId: CellId | null
   activeDirection: Direction
   onActiveCellChange: (cellId: CellId) => void
@@ -40,6 +41,7 @@ export interface DesktopLayoutProps {
   onSettingsClick: () => void
   onSelectDate: (date: Date) => void
   getDateStarCount: (date: Date) => 0 | 1 | 2 | 3 | undefined
+  archive: ArchiveCalendarData
 }
 
 // The desktop dashboard shell (spec section 5): a persistent header, a
@@ -53,7 +55,7 @@ export function DesktopLayout({
   onViewChange,
   layout,
   date,
-  isToday,
+  isCurrentPuzzle,
   activeCellId,
   activeDirection,
   onActiveCellChange,
@@ -63,6 +65,7 @@ export function DesktopLayout({
   onSettingsClick,
   onSelectDate,
   getDateStarCount,
+  archive,
 }: DesktopLayoutProps) {
   const { state } = usePuzzleSession()
   const progress = getProgress(state)
@@ -93,7 +96,7 @@ export function DesktopLayout({
       <div className="desktop-layout">
         <div className="desktop-layout__columns">
           <div className="desktop-layout__column desktop-layout__column--left">
-            <ClueCard clue={state.puzzle.clue} isToday={isToday} date={date} />
+            <ClueCard clue={state.puzzle.clue} isCurrentPuzzle={isCurrentPuzzle} date={date} />
             <ScoreCard score={state.score} unlockBudget={state.puzzle.unlockBudget} />
             <ProgressCard progress={progress} />
           </div>
@@ -108,6 +111,7 @@ export function DesktopLayout({
                   activeDate={date}
                   onSelectDate={onSelectDate}
                   getDateStarCount={getDateStarCount}
+                  {...archive}
                 />
               ) : view === 'reveal' ? (
                 <RevealLetterSelector onRevealed={() => onViewChange('puzzle')} />

@@ -5,6 +5,7 @@ import type { Direction } from '../../layout/entryDirection'
 import { getGridDimensions } from '../../layout/gridDimensions'
 import type { LayoutDefinition } from '../../layout/types'
 import type { View } from '../view'
+import type { ArchiveCalendarData } from './ArchiveCalendar'
 import './MobileLayout.scss'
 import { MobileArchiveView } from './MobileArchiveView'
 import { MobileHeader } from './MobileHeader'
@@ -18,7 +19,7 @@ export interface MobileLayoutProps {
   onViewChange: (view: View) => void
   layout: LayoutDefinition
   date: Date
-  isToday: boolean
+  isCurrentPuzzle: boolean
   activeCellId: CellId | null
   activeDirection: Direction
   onActiveCellChange: (cellId: CellId) => void
@@ -28,6 +29,7 @@ export interface MobileLayoutProps {
   onSettingsClick: () => void
   onSelectDate: (date: Date) => void
   getDateStarCount: (date: Date) => 0 | 1 | 2 | 3 | undefined
+  archive: ArchiveCalendarData
 }
 
 // The mobile composition (spec section 6) — a focused single-task game
@@ -42,7 +44,7 @@ export function MobileLayout({
   onViewChange,
   layout,
   date,
-  isToday,
+  isCurrentPuzzle,
   activeCellId,
   activeDirection,
   onActiveCellChange,
@@ -52,6 +54,7 @@ export function MobileLayout({
   onSettingsClick,
   onSelectDate,
   getDateStarCount,
+  archive,
 }: MobileLayoutProps) {
   // Exposed as custom properties on the root element (below) rather than
   // just inside MobilePuzzleView, so MobileRevealView can size its own
@@ -87,7 +90,7 @@ export function MobileLayout({
         <MobilePuzzleView
           layout={layout}
           date={date}
-          isToday={isToday}
+          isCurrentPuzzle={isCurrentPuzzle}
           activeCellId={activeCellId}
           activeDirection={activeDirection}
           onActiveCellChange={onActiveCellChange}
@@ -100,7 +103,7 @@ export function MobileLayout({
       {view === 'reveal' && (
         <MobileRevealView
           date={date}
-          isToday={isToday}
+          isCurrentPuzzle={isCurrentPuzzle}
           onStatsClick={() => onViewChange('stats')}
           onRevealed={() => onViewChange('puzzle')}
           onCancel={() => onViewChange('puzzle')}
@@ -115,6 +118,7 @@ export function MobileLayout({
           onBack={() => onViewChange('puzzle')}
           onSelectDate={onSelectDate}
           getDateStarCount={getDateStarCount}
+          archive={archive}
         />
       )}
 

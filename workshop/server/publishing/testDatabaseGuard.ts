@@ -6,6 +6,9 @@
 
 export const TEST_BRANCH_MARKER_TABLE = 'cluecross_test_branch'
 
+/** Advisory lock held by each destructive test file, so files sharing the branch never run concurrently. */
+export const TEST_DATABASE_LOCK_KEY = 70_412_026
+
 export type TestDatabaseDecision =
   | { run: false; reason: string }
   | { run: true; url: string }

@@ -12,7 +12,7 @@ import { RevealButton } from './RevealButton'
 export interface MobilePuzzleViewProps {
   layout: LayoutDefinition
   date: Date
-  isToday: boolean
+  isCurrentPuzzle: boolean
   activeCellId: CellId | null
   activeDirection: Direction
   onActiveCellChange: (cellId: CellId) => void
@@ -26,7 +26,7 @@ export interface MobilePuzzleViewProps {
 export function MobilePuzzleView({
   layout,
   date,
-  isToday,
+  isCurrentPuzzle,
   activeCellId,
   activeDirection,
   onActiveCellChange,
@@ -41,7 +41,7 @@ export function MobilePuzzleView({
     <div className="mobile-puzzle-view">
       <MobileInfoBar
         clue={state.puzzle.clue}
-        isToday={isToday}
+        isCurrentPuzzle={isCurrentPuzzle}
         date={date}
         onStatsClick={onStatsClick}
       />

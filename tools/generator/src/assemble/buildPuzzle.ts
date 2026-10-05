@@ -37,7 +37,7 @@ export type BuildPuzzleResult = BuildPuzzleSuccess | BuildPuzzleFailure
 
 // Row-major (y ascending, then x ascending), matching the existing
 // hand-authored puzzles' own navigationOrder convention (see e.g.
-// src/layout/dogsPuzzleLayout.ts).
+// src/testing/fixtures/dogsPuzzleLayout.ts).
 function rowMajorOrder(positions: Record<CellId, Position>): CellId[] {
   return Object.keys(positions).sort((a, b) => {
     const positionA = positions[a]

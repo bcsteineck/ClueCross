@@ -1,10 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
-import App from './App'
-import { flowerPuzzle } from './data/flowerPuzzle'
+import { fakeCalendarClient, published, renderApp } from './testing/playerHarness'
+import { flowerPuzzleLayout } from './testing/fixtures/flowerPuzzleLayout'
+import { flowerPuzzle } from './testing/fixtures/flowerPuzzle'
 import { DEFAULT_REVEAL_BUDGET, FREE_REVEALS_PER_PUZZLE, getLetterCost } from './core/letterCosts'
+
+// Released puzzles served by a fake player API.
+const calendarClient = () => fakeCalendarClient([published('2026-08-05', flowerPuzzle, flowerPuzzleLayout)])
 
 afterEach(cleanup)
 
@@ -77,20 +81,20 @@ async function burnFreeReveals(user: ReturnType<typeof userEvent.setup>) {
 const PAID_LETTERS_EXCEPT_C = 'ABDEFGHIMNOPQRSTUVWXYZ'.split('')
 
 describe('App with the "Flower" puzzle', () => {
-  it('renders the clue and no submit control', () => {
-    render(<App />)
+  it('renders the clue and no submit control', async () => {
+    await renderApp(calendarClient())
     expect(screen.getByRole('heading', { name: /today's clue\s*flowers/i })).toBeTruthy()
     expect(screen.queryByRole('button', { name: /submit/i })).toBeNull()
   })
 
-  it('starts with a score of 2000', () => {
-    render(<App />)
+  it('starts with a score of 2000', async () => {
+    await renderApp(calendarClient())
     expect(getScoreBadgeValue()).toBe('2000')
   })
 
   it('does not deduct score for the puzzle\'s first free reveals', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await revealLetterViaUI(user, 'D')
     expect(getScoreBadgeValue()).toBe('2000')
@@ -98,7 +102,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('revealing a repeated letter fills and locks every occurrence board-wide', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await burnFreeReveals(user)
     const scoreBeforeD = Number(getScoreBadgeValue())
@@ -122,7 +126,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('flags a manually-typed letter that has already been fully revealed elsewhere', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await revealLetterViaUI(user, 'D') // locks every D cell board-wide
 
@@ -141,7 +145,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('deleting the impossible letter clears the cell highlight and dismisses the banner', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await revealLetterViaUI(user, 'D')
     await user.click(getCell('r0c2'))
@@ -158,7 +162,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('deleting the impossible letter via chained backspace from the next cell also clears the alert', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await revealLetterViaUI(user, 'D')
     await user.click(getCell('r0c2'))
@@ -177,7 +181,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('dismisses the impossible-letter banner and cell highlight via the close button', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await revealLetterViaUI(user, 'D')
     await user.click(getCell('r0c2'))
@@ -192,7 +196,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('typing-advance skips a cell locked via letter reveal', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await revealLetterViaUI(user, 'H') // locks r10c4, among others
 
@@ -204,7 +208,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('supports the down direction via a single-direction cell (ORCHID)', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(getCell('r1c19')) // only belongs to ORCHID (down)
     await user.keyboard('O')
@@ -215,7 +219,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('arrow keys move spatially and stay put at a boundary', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(getCell('r0c6'))
     await user.keyboard('{ArrowRight}')
@@ -232,7 +236,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('arrow keys land on locked cells the same way everywhere, mid-line and at a corner', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await revealLetterViaUI(user, 'H') // locks r10c4, mid-line in row 10
     await revealLetterViaUI(user, 'M') // locks r10c15, a corner cell
@@ -255,7 +259,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('backspace clears the current cell in place when it has content', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(getCell('r10c3'))
     await user.keyboard('CH')
@@ -270,7 +274,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('backspace on an empty cell deletes the previous cell and moves back in one press', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(getCell('r10c3'))
     await user.keyboard('CH')
@@ -288,7 +292,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('never disables a reveal key based on affordability, even as the score goes negative', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await burnFreeReveals(user)
     for (const letter of PAID_LETTERS_EXCEPT_C) {
@@ -311,7 +315,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('shows the gold badge styling at the starting (high) score, and the bust styling once negative', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     expect(getScoreBadge().className).toContain('credit-badge--gold')
 
@@ -323,14 +327,14 @@ describe('App with the "Flower" puzzle', () => {
     expect(getScoreBadge().className).toContain('credit-badge--bust')
   })
 
-  it('renders only one live score badge', () => {
-    render(<App />)
+  it('renders only one live score badge', async () => {
+    await renderApp(calendarClient())
     expect(screen.getAllByTestId('score-badge')).toHaveLength(1)
   })
 
   it('manual letter entry never affects the score', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     expect(getScoreBadgeValue()).toBe('2000')
     await user.click(getCell('r10c3'))
@@ -341,7 +345,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('announces the revealed letter and the resulting score', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await burnFreeReveals(user)
     const scoreBeforeD = Number(getScoreBadgeValue())
@@ -354,7 +358,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('marks every cell complete and read-only once the whole puzzle is filled in correctly', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     for (const cell of Object.values(flowerPuzzle.cells)) {
       await user.click(getCell(cell.id))
@@ -370,7 +374,7 @@ describe('App with the "Flower" puzzle', () => {
 
   it('shows the result modal with the star rating and final score immediately on completion, and closes via the close button', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     // Filled entirely by typing, no reveals, so the score stays at the
     // full starting budget (2000) — comfortably in the top (3-star) range.

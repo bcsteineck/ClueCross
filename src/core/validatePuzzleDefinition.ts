@@ -1,6 +1,6 @@
 import type { CellId, PuzzleDefinition } from './types'
 import type { LayoutDefinition } from '../layout/types'
-import { deriveEntryDirection } from '../layout/entryDirection'
+import { deriveEntryDirection } from '../layout/entryDirection.js'
 
 export interface ValidationResult {
   valid: boolean

@@ -8,7 +8,10 @@ export interface CellProps {
   position: Position
   value: string
   isLocked: boolean
+  /** The remembered active cell (roving tabindex). */
   isActive: boolean
+  /** Shown as the active input target: active AND the board currently has focus. */
+  showActive: boolean
   isComplete: boolean
   isImpossible: boolean
   onActivate: (cellId: CellId) => void
@@ -19,12 +22,20 @@ export interface CellProps {
   inputRef: (cellId: CellId, element: HTMLInputElement | null) => void
 }
 
+function collapseSelection(input: HTMLInputElement) {
+  const end = input.value.length
+  if (input.selectionStart !== end || input.selectionEnd !== end) {
+    input.setSelectionRange(end, end)
+  }
+}
+
 export function Cell({
   cellId,
   position,
   value,
   isLocked,
   isActive,
+  showActive,
   isComplete,
   isImpossible,
   onActivate,
@@ -34,8 +45,10 @@ export function Cell({
   onKeyDownCell,
   inputRef,
 }: CellProps) {
-  const accessibleLabel = isLocked
-    ? `Locked, letter ${value || 'blank'}`
+  const accessibleLabel = isComplete
+    ? `Completed, letter ${value || 'blank'}`
+    : isLocked
+      ? `Locked, letter ${value || 'blank'}`
     : value
       ? `Editable, letter ${value} entered`
       : 'Editable, empty'
@@ -43,7 +56,7 @@ export function Cell({
   const className = [
     'cell',
     isLocked && 'cell--locked',
-    isActive && 'cell--active',
+    showActive && 'cell--active',
     isComplete && 'cell--complete',
     isImpossible && 'cell--impossible',
   ]
@@ -74,21 +87,33 @@ export function Cell({
         autoCapitalize="characters"
         spellCheck={false}
         inputMode="text"
-        maxLength={1}
+        // 2, not 1: an input-event-only keyboard typing into a filled cell
+        // must be able to insert the new letter beside the old one, which
+        // PuzzleBoard then normalizes to just the new letter.
+        maxLength={2}
         value={value}
         readOnly={isLocked}
-        tabIndex={isActive ? 0 : -1}
+        // A completed puzzle is a finished, read-only result: its cells
+        // leave the tab order and can't take focus or show the editing
+        // state, while staying in the accessibility tree with their letters.
+        disabled={isComplete}
+        tabIndex={isActive && !isComplete ? 0 : -1}
         aria-label={accessibleLabel}
         data-testid={`cell-${cellId}`}
         className={className}
+        // Replacement never depends on a text selection (PuzzleBoard replaces
+        // on keydown and normalizes input events), so focus and taps only
+        // ever leave a collapsed caret: some mobile browsers (iPhone Chrome)
+        // paint a native highlight over selected text that CSS can't hide.
         onFocus={(event) => {
           onActivate(cellId)
-          if (!isLocked) {
-            event.target.select()
-          }
+          collapseSelection(event.target)
         }}
         onMouseDown={() => onPointerDownCell(cellId)}
-        onClick={() => onClickActivate(cellId)}
+        onClick={(event) => {
+          onClickActivate(cellId)
+          collapseSelection(event.currentTarget)
+        }}
         onChange={(event) => onChangeValue(cellId, event.target.value)}
         onKeyDown={(event) => onKeyDownCell(cellId, event)}
       />
@@ -98,7 +123,7 @@ export function Cell({
       {/* The active-cell background wash alone reads as too subtle a
           selection cue — this reinforces it, but only while there's
           nothing else (a letter) already marking the cell. */}
-      {isActive && !value && <span className="cell__dot" aria-hidden="true" />}
+      {showActive && !value && <span className="cell__dot" aria-hidden="true" />}
     </div>
   )
 }

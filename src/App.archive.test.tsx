@@ -2,40 +2,30 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
+import { fakeCalendarClient, published, renderApp } from './testing/playerHarness'
+import { dogsPuzzleLayout } from './testing/fixtures/dogsPuzzleLayout'
 import { buildMonthGrid, getDaysInMonth, getLeadingBlankCount } from './core/archiveCalendar'
-import { dogsPuzzle } from './data/dogsPuzzle'
+import { dogsPuzzle } from './testing/fixtures/dogsPuzzle'
 import { ArchiveCalendar } from './ui/components/ArchiveCalendar'
 
-// A fixed "today" decouples these tests from the real wall-clock date, and
-// is deliberately chosen so that some fixture offsets (7, 14 days back)
-// land in the previous month — needed to exercise cross-month behavior
-// (changing month, reopening Archive on an archived puzzle's month).
-vi.mock('./data/archivePuzzles', async () => {
-  const { dogsPuzzle } = await import('./data/dogsPuzzle')
-  const { dogsPuzzleLayout } = await import('./layout/dogsPuzzleLayout')
-  const { addMonths, startOfDay, startOfMonth, toDateKey } = await import('./core/archiveCalendar')
+// The released calendar as the Archive receives it from the player.
+const archiveData = {
+  availableDates: new Set(['2025-07-10', '2026-07-22', '2026-07-29', '2026-08-03', '2026-08-04', '2026-08-05']),
+  currentDate: '2026-08-05',
+  earliestMonth: new Date(2025, 5, 1),
+  latestMonth: new Date(2026, 7, 1),
+}
 
-  const today = startOfDay(new Date(2026, 7, 5)) // August 5, 2026
-  const offsets = [0, 1, 2, 7, 14]
-  const entries: Record<string, { puzzle: typeof dogsPuzzle; layout: typeof dogsPuzzleLayout }> = {}
-  for (const offset of offsets) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - offset)
-    entries[toDateKey(date)] = { puzzle: dogsPuzzle, layout: dogsPuzzleLayout }
-  }
+// Released puzzles served by a fake player API.
+const calendarClient = () =>
+  fakeCalendarClient(
+    // August 5, 2026 is current; 7 and 14 days back land in July (cross-month
+    // behavior), and a 2025 date makes a year-only month change testable.
+    ['2025-07-10', '2026-07-22', '2026-07-29', '2026-08-03', '2026-08-04', '2026-08-05'].map((date) =>
+      published(date, dogsPuzzle, dogsPuzzleLayout),
+    ),
+  )
 
-  return {
-    getToday: () => today,
-    getArchiveEntryForDate: (date: Date) => entries[toDateKey(date)],
-    isDateAvailable: (date: Date) => {
-      if (startOfDay(date).getTime() > today.getTime()) return false
-      return entries[toDateKey(date)] !== undefined
-    },
-    // Spans two years (2025 and 2026) so a year-only change is testable.
-    getEarliestArchiveMonth: () => addMonths(startOfMonth(today), -14),
-  }
-})
 
 afterEach(cleanup)
 
@@ -55,7 +45,7 @@ async function changeMonth(
 describe('Archive', () => {
   it('clicking Archive shows the calendar in the center column, leaving the clue card visible', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     expect(screen.getByRole('heading', { name: /today's clue/i })).toBeTruthy()
 
     await openArchive(user)
@@ -68,7 +58,7 @@ describe('Archive', () => {
 
   it('clicking Archive again while already viewing it returns to the puzzle', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
 
@@ -80,7 +70,7 @@ describe('Archive', () => {
 
   it('clicking the ClueCross logo returns to the puzzle from the archive', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
 
@@ -92,14 +82,14 @@ describe('Archive', () => {
 
   it('shows the current month initially', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
     expect(screen.getByRole('button', { name: /august 2026/i })).toBeTruthy()
   })
 
   it('weekday headings start with Sunday', async () => {
     const user = userEvent.setup()
-    const { container } = render(<App />)
+    const { container } = await renderApp(calendarClient())
     await openArchive(user)
 
     const weekdayEls = container.querySelectorAll('.archive-calendar__weekday')
@@ -115,7 +105,7 @@ describe('Archive', () => {
 
   it('aligns dates under the correct weekdays', async () => {
     const user = userEvent.setup()
-    const { container } = render(<App />)
+    const { container } = await renderApp(calendarClient())
     await openArchive(user)
 
     const leadingBlanks = getLeadingBlankCount(2026, 7) // August 2026
@@ -131,7 +121,7 @@ describe('Archive', () => {
 
   it('changing the month updates the calendar immediately without closing the panel, and there is no Apply button', async () => {
     const user = userEvent.setup()
-    const { container } = render(<App />)
+    const { container } = await renderApp(calendarClient())
     await openArchive(user)
     expect(screen.queryByRole('button', { name: /apply/i })).toBeNull()
 
@@ -146,7 +136,7 @@ describe('Archive', () => {
 
   it('changing only the year immediately applies without closing the panel', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
 
     await user.click(screen.getByRole('button', { name: /august 2026/i }))
@@ -158,7 +148,7 @@ describe('Archive', () => {
 
   it('only closes the month/year panel when the trigger is clicked again, not on selection', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
 
     await changeMonth(user, 'august 2026', 'September')
@@ -174,7 +164,7 @@ describe('Archive', () => {
 
   it('clicking an available date opens its puzzle', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
 
     await user.click(screen.getByRole('button', { name: /open puzzle for august 5, 2026/i }))
@@ -185,7 +175,7 @@ describe('Archive', () => {
 
   it('clicking or activating an unavailable date does nothing', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
 
     // August 10, 2026 has no fixture entry (only 3, 4, 5 are available in August).
@@ -197,12 +187,13 @@ describe('Archive', () => {
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
   })
 
-  it('applies a completed state via aria-label (including the real star count) and styling', () => {
+  it('applies a completed state via aria-label (including the real star count) and styling', async () => {
     render(
       <ArchiveCalendar
         initialMonth={new Date(2026, 7, 5)}
         activeDate={new Date(2026, 0, 1)} // unrelated date, so it never wins over "completed"
         onSelectDate={() => {}}
+        {...archiveData}
         getDateStarCount={(date) => (date.getDate() === 5 ? 2 : undefined)}
       />,
     )
@@ -216,12 +207,13 @@ describe('Archive', () => {
     expect(plainButton.className).not.toContain('archive-date--completed')
   })
 
-  it('distinguishes a real 0-star completed result from an unplayed date', () => {
+  it('distinguishes a real 0-star completed result from an unplayed date', async () => {
     render(
       <ArchiveCalendar
         initialMonth={new Date(2026, 7, 5)}
         activeDate={new Date(2026, 0, 1)}
         onSelectDate={() => {}}
+        {...archiveData}
         getDateStarCount={(date) => (date.getDate() === 5 ? 0 : undefined)}
       />,
     )
@@ -237,12 +229,13 @@ describe('Archive', () => {
     expect(unplayedButton.className).not.toContain('archive-date--completed')
   })
 
-  it('marks the currently viewed puzzle\'s date as active, taking priority over completed', () => {
+  it('marks the currently viewed puzzle\'s date as active, taking priority over completed', async () => {
     render(
       <ArchiveCalendar
         initialMonth={new Date(2026, 7, 5)}
         activeDate={new Date(2026, 7, 5)}
         onSelectDate={() => {}}
+        {...archiveData}
         getDateStarCount={(date) => (date.getDate() === 5 ? 2 : undefined)}
       />,
     )
@@ -257,7 +250,7 @@ describe('Archive', () => {
 
   it('shows the Archive trigger as active only while the calendar is open', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     const archiveButton = screen.getByRole('button', { name: /^archive$/i })
     expect(archiveButton.getAttribute('aria-pressed')).toBe('false')
@@ -271,7 +264,7 @@ describe('Archive', () => {
 
   it('reopening Archive from an archived puzzle defaults to that puzzle\'s month', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     await openArchive(user)
 
     // July 22, 2026 is 14 days before the fixed "today" (Aug 5) and falls
@@ -289,7 +282,7 @@ describe('Archive', () => {
 
   it('restores in-progress state when returning to a previously viewed puzzle via Archive', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByTestId('cell-r0c0'))
     await user.keyboard('S')
@@ -309,7 +302,7 @@ describe('Archive', () => {
 
   it('does not restore a reset puzzle\'s pre-reset progress after switching dates and back', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByTestId('cell-r0c0'))
     await user.keyboard('S')
@@ -331,7 +324,7 @@ describe('Archive', () => {
 
   it('supports full keyboard operation of the Archive controls', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.tab() // -> ClueCross logo (first focusable element)
     await user.tab() // -> Archive button (desktop header has no How-to-Play trigger)
@@ -391,7 +384,7 @@ describe('Completed archived puzzle restoration', () => {
 
   it('restores a completed archived puzzle\'s board and score after a full remount', async () => {
     const user = userEvent.setup()
-    const { unmount } = render(<App />)
+    const { unmount } = await renderApp(calendarClient())
 
     for (const cell of Object.values(dogsPuzzle.cells)) {
       await user.click(getCell(cell.id))
@@ -404,7 +397,7 @@ describe('Completed archived puzzle restoration', () => {
     // "revisiting the completed puzzle restores its completed state").
     unmount()
 
-    render(<App />)
+    await renderApp(calendarClient())
 
     for (const cell of Object.values(dogsPuzzle.cells)) {
       expect(getCell(cell.id).value).toBe(cell.correctLetter)

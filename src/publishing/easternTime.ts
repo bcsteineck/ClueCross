@@ -3,7 +3,7 @@
 // machine's own timezone. Every function takes an explicit instant; none
 // reads the current time.
 
-import { formatDateKey, parseDateKey } from './dateKey'
+import { formatDateKey, parseDateKey } from './dateKey.js'
 import type { DateKey } from './types'
 
 export const PUBLICATION_TIME_ZONE = 'America/New_York'

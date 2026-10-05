@@ -1,36 +1,22 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import App from './App'
+import { fakeCalendarClient, published, renderApp } from './testing/playerHarness'
+import { dogsPuzzle } from './testing/fixtures/dogsPuzzle'
+import { dogsPuzzleLayout } from './testing/fixtures/dogsPuzzleLayout'
+
+// Released puzzles served by a fake player API.
+const calendarClient = () =>
+  fakeCalendarClient([
+    published('2026-08-04', dogsPuzzle, dogsPuzzleLayout),
+    published('2026-08-05', dogsPuzzle, dogsPuzzleLayout),
+  ])
 
 // A fixed "today" with two available dates (today + yesterday), both the
 // Dogs puzzle — mirrors the fixture already used by App.settings.test.tsx,
 // reused here so the Archive-related mobile tests have something to select.
 
-vi.mock('./data/archivePuzzles', async () => {
-  const { dogsPuzzle } = await import('./data/dogsPuzzle')
-  const { dogsPuzzleLayout } = await import('./layout/dogsPuzzleLayout')
-  const { addMonths, startOfDay, startOfMonth, toDateKey } = await import('./core/archiveCalendar')
-
-  const today = startOfDay(new Date(2026, 7, 5))
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
-  const entries: Record<string, { puzzle: typeof dogsPuzzle; layout: typeof dogsPuzzleLayout }> = {
-    [toDateKey(today)]: { puzzle: dogsPuzzle, layout: dogsPuzzleLayout },
-    [toDateKey(yesterday)]: { puzzle: dogsPuzzle, layout: dogsPuzzleLayout },
-  }
-
-  return {
-    getToday: () => today,
-    getArchiveEntryForDate: (date: Date) => entries[toDateKey(date)],
-    isDateAvailable: (date: Date) => {
-      if (startOfDay(date).getTime() > today.getTime()) return false
-      return entries[toDateKey(date)] !== undefined
-    },
-    getEarliestArchiveMonth: () => addMonths(startOfMonth(today), -2),
-  }
-})
 
 // jsdom doesn't implement matchMedia at all — stub a minimal
 // EventTarget-less implementation that always reports the mobile query as
@@ -82,8 +68,8 @@ function getCell(cellId: string): HTMLInputElement {
 }
 
 describe('Mobile layout', () => {
-  it('shows the persistent mobile header with icon-only Info/Settings/Archive controls, no hamburger', () => {
-    render(<App />)
+  it('shows the persistent mobile header with icon-only Info/Settings/Archive controls, no hamburger', async () => {
+    await renderApp(calendarClient())
 
     expect(screen.getByRole('button', { name: /^cluecross$/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^how to play$/i })).toBeTruthy()
@@ -92,8 +78,8 @@ describe('Mobile layout', () => {
     expect(screen.queryByRole('button', { name: /open menu/i })).toBeNull()
   })
 
-  it('shows the info bar and puzzle board on the Puzzle view', () => {
-    render(<App />)
+  it('shows the info bar and puzzle board on the Puzzle view', async () => {
+    await renderApp(calendarClient())
 
     expect(screen.getByText(/today's clue/i)).toBeTruthy()
     expect(screen.getByText('Dogs')).toBeTruthy()
@@ -103,7 +89,7 @@ describe('Mobile layout', () => {
 
   it('opens the Reveal Letter view with the same info bar, and Cancel returns to Puzzle unchanged', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByRole('button', { name: /^reveal letter/i }))
 
@@ -119,7 +105,7 @@ describe('Mobile layout', () => {
 
   it('revealing a letter returns to the Puzzle view automatically', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByRole('button', { name: /^reveal letter/i }))
     await user.click(screen.getByTestId('letter-S'))
@@ -131,7 +117,7 @@ describe('Mobile layout', () => {
 
   it('navigates to Stats via the info bar, keeping the persistent header visible, and returns via Back to Puzzle', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByRole('button', { name: /stats/i }))
 
@@ -153,7 +139,7 @@ describe('Mobile layout', () => {
 
   it('keeps the persistent header visible on Archive and How to Play as well', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByRole('button', { name: /^archive$/i }))
     expect(screen.getByRole('button', { name: /^cluecross$/i })).toBeTruthy()
@@ -169,7 +155,7 @@ describe('Mobile layout', () => {
 
   it('navigates to Archive via the header icon, selecting a date returns to Puzzle', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByRole('button', { name: /^archive$/i }))
     expect(screen.getByRole('group', { name: /puzzle calendar/i })).toBeTruthy()
@@ -182,7 +168,7 @@ describe('Mobile layout', () => {
 
   it('opens How to Play via the Info icon and returns via Back to Puzzle', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByRole('button', { name: /^how to play$/i }))
     expect(screen.getByRole('heading', { name: /how to play/i })).toBeTruthy()
@@ -194,7 +180,7 @@ describe('Mobile layout', () => {
 
   it('opens Settings from the persistent header, same as desktop', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(screen.getByRole('button', { name: /^settings$/i }))
     expect(screen.getByRole('dialog', { name: /settings/i })).toBeTruthy()
@@ -207,7 +193,7 @@ describe('Mobile layout', () => {
     // still-mounted board, so the focused cell input is still present and
     // would otherwise be left holding native-keyboard focus underneath it.
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
     const cell = getCell('r0c0')
 
     await user.click(cell)
@@ -217,14 +203,14 @@ describe('Mobile layout', () => {
     expect(document.activeElement).not.toBe(cell)
   })
 
-  it('uses inputMode="text" so the native keyboard can appear, instead of suppressing it', () => {
-    render(<App />)
+  it('uses inputMode="text" so the native keyboard can appear, instead of suppressing it', async () => {
+    await renderApp(calendarClient())
     expect(getCell('r0c0').getAttribute('inputmode')).toBe('text')
   })
 
   it('keeps typed progress when navigating away and back via Stats', async () => {
     const user = userEvent.setup()
-    render(<App />)
+    await renderApp(calendarClient())
 
     await user.click(getCell('r0c0'))
     await user.keyboard('S')
@@ -238,7 +224,7 @@ describe('Mobile layout', () => {
 })
 
 describe('Responsive breakpoint switch', () => {
-  it('renders the desktop dashboard when the mobile media query does not match', () => {
+  it('renders the desktop dashboard when the mobile media query does not match', async () => {
     vi.stubGlobal(
       'matchMedia',
       (query: string) => ({
@@ -248,7 +234,7 @@ describe('Responsive breakpoint switch', () => {
         removeEventListener: () => {},
       }),
     )
-    render(<App />)
+    await renderApp(calendarClient())
 
     // Desktop's header shows Archive/Settings as visible text buttons
     // alongside the three-column dashboard; mobile's are icon-only with no

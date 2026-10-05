@@ -5,10 +5,11 @@
 
 const STORAGE_KEY = 'cluecross:completed-dates'
 
-// Keyed by date AND puzzle id, not just date: which puzzle occupies a given
-// date can change (e.g. a new daily puzzle takes over "today"), and a date
-// being solved under one puzzle must not carry over as "completed" for a
-// different puzzle that later lands on that same date.
+// Keyed by publish date AND puzzle id (`${publishDate}:${puzzleId}`).
+// Published dates are permanent, so the pair names exactly one publication;
+// the id also keeps history from before the published calendar (when
+// development puzzles moved between dates) from ever matching a published
+// puzzle on the same date.
 function makeKey(dateKey: string, puzzleId: string): string {
   return `${dateKey}:${puzzleId}`
 }
@@ -26,6 +27,19 @@ function readCompletedDates(): Record<string, true> {
 
 export function isDateCompleted(dateKey: string, puzzleId: string): boolean {
   return !!readCompletedDates()[makeKey(dateKey, puzzleId)]
+}
+
+/** Test tools only (Reset Test State): forgets one puzzle's completion. */
+export function clearDateCompleted(dateKey: string, puzzleId: string): void {
+  const completed = readCompletedDates()
+  const key = makeKey(dateKey, puzzleId)
+  if (!completed[key]) return
+  delete completed[key]
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(completed))
+  } catch {
+    // Storage unavailable — nothing persisted to clear.
+  }
 }
 
 export function markDateCompleted(dateKey: string, puzzleId: string): void {

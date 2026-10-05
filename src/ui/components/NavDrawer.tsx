@@ -1,6 +1,7 @@
 import { Check, X } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
+import { TEST_TOOLS_ENABLED } from '../../state/testTools'
 import { Button } from './Button'
 import './NavDrawer.scss'
 
@@ -10,6 +11,8 @@ export interface NavDrawerProps {
   onResetCurrentPuzzle: () => void
   currentPuzzleCompleted: boolean
   onClose: () => void
+  /** Dev/Preview builds only (see state/testTools.ts). */
+  onResetTestState?: () => void
 }
 
 const FOCUSABLE_SELECTOR =
@@ -25,6 +28,7 @@ export function NavDrawer({
   onResetCurrentPuzzle,
   currentPuzzleCompleted,
   onClose,
+  onResetTestState,
 }: NavDrawerProps) {
   // A completed puzzle's archived result is permanent (it always reflects
   // the first completion, by design — see puzzleResults.ts), so there's no
@@ -197,6 +201,24 @@ export function NavDrawer({
             </>
           )}
         </section>
+
+        {/* Manual-testing tool: compiled out of Production builds entirely. */}
+        {TEST_TOOLS_ENABLED && onResetTestState && (
+          <section className="nav-drawer__section">
+            <h3 className="nav-drawer__section-title">Testing (dev &amp; Preview only)</h3>
+            <Button
+              onClick={() => {
+                onResetTestState()
+                onClose()
+              }}
+            >
+              Reset Test State
+            </Button>
+            <p className="nav-drawer__hint">
+              Clears this puzzle’s completion, saved result, and progress on this device, then starts it fresh.
+            </p>
+          </section>
+        )}
       </div>
     </div>
   )

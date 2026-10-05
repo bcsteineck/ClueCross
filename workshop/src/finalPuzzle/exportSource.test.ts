@@ -1,7 +1,7 @@
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import type { ConstructionSuccess } from '../../../tools/generator/src/types.js'
-import { layoutModuleFile, puzzleModuleFile, registrySnippet, tsString } from './exportSource'
+import { layoutModuleFile, puzzleModuleFile, tsString } from './exportSource'
 import { prepareFinalPuzzle } from './finalPuzzle'
 
 // CAT across crossing TIE down at the T, with a stray-order cell map so
@@ -147,27 +147,5 @@ describe('Final Puzzle export source', () => {
     const { puzzleFile } = exportFor('Cats')
     const broken = { ...puzzleFile, source: puzzleFile.source.replace('unlockBudget: DEFAULT_REVEAL_BUDGET,', '') }
     expect(typecheck([broken]).join('\n')).toMatch(/unlockBudget/)
-  })
-
-  it('builds a registry snippet matching puzzleIds.ts and archivePuzzles.ts', () => {
-    expect(registrySnippet('cats')).toBe(
-      [
-        `// src/data/puzzleIds.ts — add the id to PUZZLE_IDS:`,
-        `'cats',`,
-        ``,
-        `// src/data/archivePuzzles.ts — imports:`,
-        `import { catsPuzzleLayout } from '../layout/catsPuzzleLayout'`,
-        `import { catsPuzzle } from './catsPuzzle'`,
-        ``,
-        `// src/data/archivePuzzles.ts — PUZZLES entry:`,
-        `cats: { puzzle: catsPuzzle, layout: catsPuzzleLayout },`,
-        ``,
-      ].join('\n'),
-    )
-  })
-
-  it('leaves scheduling out of the registry snippet', () => {
-    const snippet = registrySnippet('cats')
-    expect(snippet).not.toMatch(/SCHEDULE|offsetDays|schedul|today|bump/i)
   })
 })

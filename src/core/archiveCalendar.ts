@@ -17,12 +17,6 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
-export function startOfDay(date: Date): Date {
-  const next = new Date(date)
-  next.setHours(0, 0, 0, 0)
-  return next
-}
-
 export function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1)
 }

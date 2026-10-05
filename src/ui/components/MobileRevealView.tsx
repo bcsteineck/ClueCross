@@ -7,7 +7,7 @@ import { RevealLetterSelector } from './RevealLetterSelector'
 
 export interface MobileRevealViewProps {
   date: Date
-  isToday: boolean
+  isCurrentPuzzle: boolean
   onStatsClick: () => void
   onRevealed: () => void
   onCancel: () => void
@@ -18,7 +18,7 @@ export interface MobileRevealViewProps {
 // doesn't cause the surrounding chrome to jump.
 export function MobileRevealView({
   date,
-  isToday,
+  isCurrentPuzzle,
   onStatsClick,
   onRevealed,
   onCancel,
@@ -29,7 +29,7 @@ export function MobileRevealView({
     <div className="mobile-reveal-view">
       <MobileInfoBar
         clue={state.puzzle.clue}
-        isToday={isToday}
+        isCurrentPuzzle={isCurrentPuzzle}
         date={date}
         onStatsClick={onStatsClick}
       />

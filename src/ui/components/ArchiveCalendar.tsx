@@ -6,14 +6,34 @@ import {
   formatMonthYear,
   isSameDate,
   startOfMonth,
+  toDateKey,
 } from '../../core/archiveCalendar'
-import { getEarliestArchiveMonth, getToday, isDateAvailable } from '../../data/archivePuzzles'
 import { ArchiveCalendarKey } from './ArchiveCalendarKey'
+import { Button } from './Button'
 import { ArchiveDateButton } from './ArchiveDateButton'
 import { ArchiveMonthSelector } from './ArchiveMonthSelector'
 import './ArchiveCalendar.scss'
 
-export interface ArchiveCalendarProps {
+/** A pending Archive selection whose puzzle is still loading or failed to load. */
+export interface ArchiveSelectionStatus {
+  date: Date
+  state: 'loading' | 'unavailable' | 'error'
+}
+
+// The released calendar, from the server — never the browser clock.
+export interface ArchiveCalendarData {
+  /** Released publish dates (YYYY-MM-DD); everything else is unavailable. */
+  availableDates: ReadonlySet<string>
+  /** The server's current publish date, which may be tomorrow's civil date. */
+  currentDate: string
+  earliestMonth: Date
+  latestMonth: Date
+  selectionStatus?: ArchiveSelectionStatus | null
+  onRetrySelection?: () => void
+  onShowCurrent?: () => void
+}
+
+export interface ArchiveCalendarProps extends ArchiveCalendarData {
   initialMonth: Date
   activeDate: Date
   onSelectDate: (date: Date) => void
@@ -32,11 +52,15 @@ export function ArchiveCalendar({
   activeDate,
   onSelectDate,
   getDateStarCount = defaultGetDateStarCount,
+  availableDates,
+  currentDate,
+  earliestMonth,
+  latestMonth,
+  selectionStatus,
+  onRetrySelection,
+  onShowCurrent,
 }: ArchiveCalendarProps) {
   const [month, setMonth] = useState(() => startOfMonth(initialMonth))
-  const today = getToday()
-  const earliestMonth = getEarliestArchiveMonth()
-  const latestMonth = startOfMonth(today)
 
   const year = month.getFullYear()
   const monthIndex = month.getMonth()
@@ -79,7 +103,8 @@ export function ArchiveCalendar({
                 year={year}
                 monthIndex={monthIndex}
                 day={day}
-                today={today}
+                availableDates={availableDates}
+                currentDate={currentDate}
                 activeDate={activeDate}
                 getDateStarCount={getDateStarCount}
                 onSelectDate={onSelectDate}
@@ -88,7 +113,49 @@ export function ArchiveCalendar({
           )}
         </div>
       </div>
+      {selectionStatus && (
+        <SelectionStatusMessage
+          status={selectionStatus}
+          onRetry={onRetrySelection}
+          onShowCurrent={onShowCurrent}
+        />
+      )}
       <ArchiveCalendarKey />
+    </div>
+  )
+}
+
+// Loading/failure feedback for an archived puzzle being opened. The puzzle
+// already on screen stays in place until the new one has loaded.
+function SelectionStatusMessage({
+  status,
+  onRetry,
+  onShowCurrent,
+}: {
+  status: ArchiveSelectionStatus
+  onRetry?: () => void
+  onShowCurrent?: () => void
+}) {
+  const fullDate = formatFullDate(status.date)
+  return (
+    <div className="archive-calendar__status" role={status.state === 'loading' ? 'status' : 'alert'}>
+      <p className="archive-calendar__status-message">
+        {status.state === 'loading'
+          ? `Loading the puzzle for ${fullDate}…`
+          : status.state === 'unavailable'
+            ? `The puzzle for ${fullDate} isn’t available.`
+            : `The puzzle for ${fullDate} couldn’t be loaded.`}
+      </p>
+      {status.state !== 'loading' && (
+        <div className="archive-calendar__status-actions">
+          {status.state === 'error' && onRetry && <Button onClick={onRetry}>Retry</Button>}
+          {onShowCurrent && (
+            <Button variant="text" onClick={onShowCurrent}>
+              Go to Today’s Puzzle
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -97,7 +164,8 @@ interface ArchiveDateButtonCellProps {
   year: number
   monthIndex: number
   day: number
-  today: Date
+  availableDates: ReadonlySet<string>
+  currentDate: string
   activeDate: Date
   getDateStarCount: (date: Date) => 0 | 1 | 2 | 3 | undefined
   onSelectDate: (date: Date) => void
@@ -107,18 +175,21 @@ function ArchiveDateButtonCell({
   year,
   monthIndex,
   day,
-  today,
+  availableDates,
+  currentDate,
   activeDate,
   getDateStarCount,
   onSelectDate,
 }: ArchiveDateButtonCellProps) {
   const date = new Date(year, monthIndex, day)
-  const available = isDateAvailable(date)
+  const dateKey = toDateKey(date)
+  const available = availableDates.has(dateKey)
   const active = available && isSameDate(date, activeDate)
   const resultStarCount = available ? getDateStarCount(date) : undefined
   const completed = available && !active && resultStarCount !== undefined
   const fullDate = formatFullDate(date)
-  const isFuture = date.getTime() > today.getTime()
+  // Relative to the server's current puzzle, not the browser's clock.
+  const isFuture = dateKey > currentDate
 
   const ariaLabel = available
     ? `Open puzzle for ${fullDate}`
