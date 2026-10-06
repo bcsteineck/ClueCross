@@ -113,10 +113,19 @@ describe('desktop sharing (clipboard)', () => {
     expect(document.activeElement).toBe(persistentShare())
     expect(screen.queryByRole('button', { name: /^reveal letter/i })).toBeNull() // not a disabled Reveal Letter
 
+    // While idle there's no empty caption line under the button (no gap above the next card).
+    const group = persistentShare()!.parentElement!
+    expect(group.querySelector('.reveal-button__sublabel')).toBeNull()
+
     await navigator.clipboard.writeText('')
     await user.click(screen.getByRole('button', { name: 'Share Result' }))
     expect(await navigator.clipboard.readText()).toBe(CATS_TEXT)
     expect(screen.getAllByRole('status').some((node) => node.textContent === 'Copied!')).toBe(true)
+    // The visible caption appears only with a message; the always-mounted live region announces it.
+    const caption = group.querySelector('.reveal-button__sublabel')!
+    expect(caption.textContent).toBe('Copied!')
+    expect(caption.getAttribute('aria-hidden')).toBe('true')
+    expect(within(group).getByRole('status').textContent).toBe('Copied!')
     // Shares in place: no modal, no Reveal view.
     expect(modal()).toBeNull()
     expect(screen.queryByTestId('letter-C')).toBeNull()
