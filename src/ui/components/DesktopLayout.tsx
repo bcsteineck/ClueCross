@@ -134,6 +134,7 @@ export function DesktopLayout({
                 variant="cancel"
                 label="Cancel Reveal"
                 sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
+                sublabelDots={state.freeRevealsRemaining}
                 onClick={() => onViewChange('puzzle')}
               />
             ) : complete ? (
@@ -143,6 +144,7 @@ export function DesktopLayout({
                 variant="default"
                 label="Reveal Letter"
                 sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
+                sublabelDots={state.freeRevealsRemaining}
                 onClick={() => onViewChange('reveal')}
               />
             )}

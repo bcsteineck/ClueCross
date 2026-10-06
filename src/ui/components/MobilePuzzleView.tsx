@@ -64,6 +64,7 @@ export function MobilePuzzleView({
             variant="default"
             label="Reveal Letter"
             sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
+            sublabelDots={state.freeRevealsRemaining}
             onClick={onRevealClick}
           />
         )}

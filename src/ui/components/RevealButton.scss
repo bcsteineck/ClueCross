@@ -31,6 +31,9 @@
 // readable-on-page-background color rather than the white the button
 // itself uses.
 .reveal-button__sublabel {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-8;
   font-family: $font-body;
   font-size: $font-size-14;
   font-weight: $font-weight-regular;
@@ -39,6 +42,23 @@
 
 .reveal-button__sublabel--disabled {
   color: $color-gray-50;
+}
+
+// One dot per free reveal left, in the Reveal Letter green.
+.reveal-button__dots {
+  display: inline-flex;
+  gap: $spacing-4;
+}
+
+.reveal-button__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: $radius-full;
+  background: $color-brand-secondary;
+}
+
+.reveal-button__sublabel--disabled .reveal-button__dot {
+  background: $color-gray-50;
 }
 
 .reveal-button--default {

@@ -41,6 +41,7 @@ export function MobileRevealView({
           variant="cancel"
           label="Cancel Reveal"
           sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
+          sublabelDots={state.freeRevealsRemaining}
           onClick={onCancel}
         />
       </div>
