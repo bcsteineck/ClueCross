@@ -1,5 +1,26 @@
 # Decisions
 
+## 2026-10-05
+
+### Production publishing and the scheduled queue
+
+Publishing to Production no longer needs a captured browser request or a hand-started Production server. A Workshop started with `npm run workshop:production-ops` adds Production Preview / Publish to Final Puzzle and a Production Schedule view. Each operation runs in its own short-lived child process that `vercel env run -e production` starts. The Workshop server itself never holds a Production credential, and plain `npm run workshop` cannot reach Production at all.
+
+The calendar invariant changes for unreleased rows only:
+
+- **Released puzzles are immutable history.** No Workshop operation edits, moves, replaces, or removes one. Correcting a live puzzle stays out of scope.
+- **Scheduled puzzles are a future queue.** New puzzles still append through `publishFinalPuzzle`'s date assignment. A scheduled puzzle may be removed; every later scheduled puzzle moves forward one day, in order, in one SERIALIZABLE transaction, so the queue never has an internal gap. A removed puzzle is simply deleted: there is no removal history, and its ID may be reused.
+
+Removability is decided by database time inside the removal transaction, never by the browser. The confirmation carries the previewed date and fingerprint plus the typed puzzle ID, and a mismatch changes nothing. The puzzle ID is the removal identity, so retrying a completed removal reports "not found" rather than removing the puzzle that moved into its date. Moves run in ascending date order, which keeps the non-deferrable `UNIQUE (publish_date)` constraint valid without a schema change.
+
+Production Publish sends the previewed content fingerprint, and the existing service refuses changed content before writing. Validation, fingerprinting, idempotency, and date assignment stay in `publishFinalPuzzle`.
+
+Before any operation, the Production runner requires a `cluecross_production_calendar` marker table (`db/migrations/0003`, applied to `main` only) and the absence of the test marker. Until 0003 is applied to `main`, every Production operation is refused.
+
+The older notes below that describe dates as never moving refer to released history and to v1 before this change. Migrations 0001 and 0002 are unchanged.
+
+---
+
 ## 2026-10-02
 
 ### Player publishing cutover

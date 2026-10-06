@@ -204,7 +204,7 @@ export function PublishSection({ request, publisher, published, onPublished }: P
           disabled={blocked || publishing}
           onClick={() => (alreadyPublished ? void publish() : setPublishState({ kind: 'confirming' }))}
         >
-          {publishing ? 'Publishing…' : alreadyPublished ? 'Confirm Existing Publication' : 'Publish Puzzle'}
+          {publishing ? 'Publishing…' : alreadyPublished ? 'Confirm Existing Publication' : 'Publish to Dev Calendar'}
         </button>
       )}
 

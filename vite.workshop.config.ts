@@ -2,6 +2,8 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { createNeonPublicationStore } from './workshop/server/publishing/neonPublicationStore'
 import { publishingApiPlugin } from './workshop/server/publishing/publishingApiPlugin'
+import { createProductionBridge } from './workshop/server/production/productionBridge'
+import { productionOpsApiPlugin, productionOpsEnabled } from './workshop/server/production/productionOpsApiPlugin'
 import type { PublicationStore } from './workshop/server/publishing/publicationStore'
 import { sourcingApiPlugin } from './workshop/server/sourcingApiPlugin'
 
@@ -27,6 +29,15 @@ import { sourcingApiPlugin } from './workshop/server/sourcingApiPlugin'
 // string, server-only like the Anthropic variables — is set; without it
 // both endpoints answer `not-configured`. During development it points at
 // the Neon `dev` branch, never `main` (the permanent calendar).
+//
+// Production operations (`npm run workshop:production-ops` only): the same
+// server also serves /api/production/* (workshop/server/production), and
+// listens on 5175 so a Production-operations tab is never confused with an
+// ordinary one. Each operation runs in a short-lived child that `vercel env
+// run -e production` starts; this process itself never holds a Production
+// credential. The opt-in is read from the process environment only, never
+// from .env files. Plain `npm run workshop` answers every
+// /api/production/* request "disabled".
 export default defineConfig(({ mode }) => {
   const fileEnv = loadEnv(mode, process.cwd(), '')
   const sourcingConfig = () => ({
@@ -42,12 +53,23 @@ export default defineConfig(({ mode }) => {
     return publicationStore
   }
 
+  const productionOps = productionOpsEnabled(process.env)
+
   return {
     root: 'workshop',
-    plugins: [react(), sourcingApiPlugin(sourcingConfig), publishingApiPlugin(getPublicationStore)],
-    server: {
-      port: 5174,
+    plugins: [
+      react(),
+      sourcingApiPlugin(sourcingConfig),
+      publishingApiPlugin(getPublicationStore),
+      productionOpsApiPlugin({
+        enabled: productionOps,
+        run: productionOps ? createProductionBridge({ cwd: process.cwd() }) : undefined,
+      }),
+    ],
+    define: {
+      __WORKSHOP_PRODUCTION_OPS__: JSON.stringify(productionOps),
     },
+    server: productionOps ? { port: 5175, strictPort: true } : { port: 5174 },
     build: {
       outDir: 'dist',
       emptyOutDir: true,
