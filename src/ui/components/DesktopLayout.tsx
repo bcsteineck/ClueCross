@@ -19,6 +19,7 @@ import { HowItWorksCard } from './HowItWorksCard'
 import { ProgressCard } from './ProgressCard'
 import { PuzzleView } from './PuzzleView'
 import { RevealButton } from './RevealButton'
+import { ShareResultButton } from './ShareResultButton'
 import { RevealHistoryCard } from './RevealHistoryCard'
 import { RevealLetterSelector } from './RevealLetterSelector'
 import { ScoreCard } from './ScoreCard'
@@ -135,12 +136,13 @@ export function DesktopLayout({
                 sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
                 onClick={() => onViewChange('puzzle')}
               />
+            ) : complete ? (
+              <ShareResultButton />
             ) : (
               <RevealButton
                 variant="default"
                 label="Reveal Letter"
                 sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
-                disabled={complete}
                 onClick={() => onViewChange('reveal')}
               />
             )}

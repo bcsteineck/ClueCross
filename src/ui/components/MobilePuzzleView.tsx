@@ -8,6 +8,7 @@ import './MobilePuzzleView.scss'
 import { MobileInfoBar } from './MobileInfoBar'
 import { PuzzleView } from './PuzzleView'
 import { RevealButton } from './RevealButton'
+import { ShareResultButton } from './ShareResultButton'
 
 export interface MobilePuzzleViewProps {
   layout: LayoutDefinition
@@ -21,8 +22,9 @@ export interface MobilePuzzleViewProps {
   onRevealClick: () => void
 }
 
-// Spec section 6: info/nav bar, 1:1 puzzle, Reveal Letter action, native
-// keyboard (handled by Cell.tsx directly — no on-screen keyboard here).
+// Spec section 6: info/nav bar, 1:1 puzzle, Reveal Letter action (Share
+// Result once the puzzle is complete), native keyboard (handled by Cell.tsx
+// directly — no on-screen keyboard here).
 export function MobilePuzzleView({
   layout,
   date,
@@ -55,13 +57,16 @@ export function MobilePuzzleView({
         />
       </div>
       <div className="mobile-puzzle-view__actions">
-        <RevealButton
-          variant="default"
-          label="Reveal Letter"
-          sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
-          disabled={complete}
-          onClick={onRevealClick}
-        />
+        {complete ? (
+          <ShareResultButton />
+        ) : (
+          <RevealButton
+            variant="default"
+            label="Reveal Letter"
+            sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
+            onClick={onRevealClick}
+          />
+        )}
       </div>
     </div>
   )

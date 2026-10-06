@@ -125,9 +125,11 @@ export function PuzzleSessionProvider({
 
   const dismissCompletion = useCallback(() => setJustCompleted(false), [])
 
+  // sessionKey is the selected puzzle's publish date (see App), so it is
+  // exposed as publishDate for consumers that need the puzzle's own date.
   const value = useMemo(
-    () => ({ state, setCellValue, revealLetter, justCompleted, dismissCompletion }),
-    [state, setCellValue, revealLetter, justCompleted, dismissCompletion],
+    () => ({ state, publishDate: sessionKey, setCellValue, revealLetter, justCompleted, dismissCompletion }),
+    [state, sessionKey, setCellValue, revealLetter, justCompleted, dismissCompletion],
   )
 
   return (
