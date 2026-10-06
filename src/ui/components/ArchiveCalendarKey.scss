@@ -59,8 +59,21 @@
   white-space: nowrap;
 }
 
+// Mobile: stacked and centered — the key items side by side on top, the
+// note below them.
 @include mobile {
   .archive-calendar-key {
+    flex-direction: column;
+    justify-content: center;
     padding: $spacing-16;
+  }
+
+  .archive-calendar-key__items {
+    justify-content: center;
+  }
+
+  .archive-calendar-key__note {
+    margin: 0;
+    text-align: center;
   }
 }
