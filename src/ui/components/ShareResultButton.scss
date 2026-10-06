@@ -12,7 +12,16 @@
   flex-shrink: 0;
 }
 
-// Reserves one line so "Copied!" appearing doesn't shift the cards below.
-.share-result-button__status {
-  min-height: 1.5em;
+// Visually hidden, and absolutely positioned so it takes no space in the
+// button group's layout (no gap below the button while idle).
+.share-result-button__announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
