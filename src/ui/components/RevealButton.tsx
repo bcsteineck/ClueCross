@@ -4,6 +4,8 @@ export interface RevealButtonProps {
   variant?: 'default' | 'cancel'
   label: string
   sublabel?: string
+  /** Draws this many small dots before the sublabel (the free reveals left). */
+  sublabelDots?: number
   disabled?: boolean
   onClick: () => void
 }
@@ -16,7 +18,7 @@ export interface RevealButtonProps {
 // text happens to be present (e.g. once free reveals run out, the default
 // variant's sublabel disappears; the cancel variant's "Nevermind!" always
 // renders).
-export function RevealButton({ variant = 'default', label, sublabel, disabled, onClick }: RevealButtonProps) {
+export function RevealButton({ variant = 'default', label, sublabel, sublabelDots = 0, disabled, onClick }: RevealButtonProps) {
   const sublabelClassName = [
     'reveal-button__sublabel',
     disabled && 'reveal-button__sublabel--disabled',
@@ -34,7 +36,19 @@ export function RevealButton({ variant = 'default', label, sublabel, disabled, o
       >
         <span className="reveal-button__label">{label}</span>
       </button>
-      {sublabel && <span className={sublabelClassName}>{sublabel}</span>}
+      {sublabel && (
+        <span className={sublabelClassName}>
+          {/* Decorative: the text beside them already says how many. */}
+          {sublabelDots > 0 && (
+            <span className="reveal-button__dots" aria-hidden="true">
+              {Array.from({ length: sublabelDots }, (_, index) => (
+                <span key={index} className="reveal-button__dot" />
+              ))}
+            </span>
+          )}
+          {sublabel}
+        </span>
+      )}
     </div>
   )
 }

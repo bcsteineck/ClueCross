@@ -92,6 +92,24 @@ describe('App with the "Flower" puzzle', () => {
     expect(getScoreBadgeValue()).toBe('2000')
   })
 
+  it('shows one green dot per free reveal left beside the caption, counting down to none', async () => {
+    const user = userEvent.setup()
+    await renderApp(calendarClient())
+    const dots = () => document.querySelectorAll('.reveal-button__dot').length
+
+    expect(screen.getByText('3 free reveals remaining')).toBeTruthy()
+    expect(dots()).toBe(3)
+    await revealLetterViaUI(user, 'J')
+    expect(screen.getByText('2 free reveals remaining')).toBeTruthy()
+    expect(dots()).toBe(2)
+    await revealLetterViaUI(user, 'K')
+    expect(screen.getByText('1 free reveal remaining')).toBeTruthy()
+    expect(dots()).toBe(1)
+    await revealLetterViaUI(user, 'L')
+    expect(screen.queryByText(/free reveals? remaining/)).toBeNull()
+    expect(dots()).toBe(0)
+  })
+
   it('does not deduct score for the puzzle\'s first free reveals', async () => {
     const user = userEvent.setup()
     await renderApp(calendarClient())

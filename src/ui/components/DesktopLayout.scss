@@ -51,6 +51,9 @@
   align-items: center;
   justify-content: center;
   padding: 0;
+  box-shadow: none;
+  border-radius: $radius-8;
+  border: none;
 }
 
 // Matches the Puzzle state's own board height (PuzzleBoard.scss's grid is
@@ -60,12 +63,14 @@
 // footprint today and wasn't part of this fix.
 .desktop-layout__center-card--reveal {
   aspect-ratio: var(--cols) / var(--rows);
+  border: solid 1px $color-gray-30;
 }
 
 .desktop-layout__copyright {
   box-sizing: border-box;
   width: 100%;
   border-top: $border-1 solid $color-gray-30;
+  background-color: $color-gray-00;
 }
 
 .desktop-layout__copyright-inner {
@@ -74,7 +79,7 @@
   text-align: center;
   font-family: $font-body;
   font-size: $font-size-12;
-  color: $color-gray-50;
+  color: $color-gray-70;
 }
 
 // Not the Phase 5 mobile design — just a safety net so the dashboard

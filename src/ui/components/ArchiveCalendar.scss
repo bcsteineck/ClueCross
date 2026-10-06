@@ -3,7 +3,8 @@
 .archive-calendar {
   width: 100%;
   padding: $spacing-16;
-  border-radius: $radius-16;
+  border-radius: $radius-8;
+  border: solid 1px $color-gray-30;
 }
 
 .archive-calendar__body {

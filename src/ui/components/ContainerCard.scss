@@ -6,6 +6,10 @@
   border-radius: $radius-16;
   padding: $spacing-20;
   @include hard-shadow($color-gray-30);
+
+  .desktop-layout__column--left & {
+    @include hard-shadow-left($color-gray-30);
+  }
 }
 
 .container-card--default {

@@ -5,10 +5,29 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: center;
-  gap: $spacing-24;
+  justify-content: space-between;
+  gap: $spacing-12 $spacing-24;
   width: 100%;
   padding: $spacing-20;
+}
+
+// Key items on the left; the release-time note on the right.
+.archive-calendar-key__items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-24;
+}
+
+// Quieter than the key labels. If the row runs out of room it wraps onto
+// its own line, still right-aligned.
+.archive-calendar-key__note {
+  margin: 0 0 0 auto;
+  font-family: $font-body;
+  font-weight: $font-weight-regular;
+  font-size: $font-size-12;
+  color: $color-gray-60;
+  text-align: right;
 }
 
 .archive-calendar-key__item {
@@ -40,8 +59,21 @@
   white-space: nowrap;
 }
 
+// Mobile: stacked and centered — the key items side by side on top, the
+// note below them.
 @include mobile {
   .archive-calendar-key {
+    flex-direction: column;
+    justify-content: center;
     padding: $spacing-16;
+  }
+
+  .archive-calendar-key__items {
+    justify-content: center;
+  }
+
+  .archive-calendar-key__note {
+    margin: 0;
+    text-align: center;
   }
 }

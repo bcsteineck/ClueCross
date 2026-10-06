@@ -64,6 +64,10 @@ $shadow-card: 0px 4px 10px rgba(0, 0, 0, 0.05);
   box-shadow: $x $y 0px $shade;
 }
 
+@mixin hard-shadow-left($shade, $x: -2px, $y: 2px) {
+  box-shadow: $x $y 0px $shade;
+}
+
 // Typography
 $font-logo: 'Outfit', sans-serif;
 $font-cell: 'Roboto', sans-serif;
