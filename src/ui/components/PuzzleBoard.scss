@@ -7,7 +7,7 @@
   justify-content: center;
   align-items: center;
   background: $color-gray-90;
-  border-radius: $radius-16;
+  border-radius: $radius-8;
   padding: $spacing-20;
   // Lets .cell__letter (in Cell.scss) scale its font with the grid's own
   // available width via cqw, rather than needing a JS-computed pixel size.
@@ -27,7 +27,7 @@
   aspect-ratio: var(--cols) / var(--rows);
   // Caps individual cells at a comfortable reading size on a very wide
   // center column, rather than growing without bound.
-  max-width: calc(var(--cols) * 40px + (var(--cols) - 1) * #{$spacing-2});
+  max-width: calc(var(--cols) * 60px + (var(--cols) - 1) * #{$spacing-2});
 }
 
 @include compactLayout {

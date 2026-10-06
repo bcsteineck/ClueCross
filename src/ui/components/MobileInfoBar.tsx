@@ -14,7 +14,7 @@ export interface MobileInfoBarProps {
 // CLUE" (or the publication date for an archived puzzle) plus a Stats
 // control.
 export function MobileInfoBar({ clue, isCurrentPuzzle, date, onStatsClick }: MobileInfoBarProps) {
-  const label = isCurrentPuzzle ? "Today's Clue:" : formatFullDate(date)
+  const label = isCurrentPuzzle ? "Today's Clue" : formatFullDate(date)
   return (
     <div className="mobile-info-bar">
       <h1 className="mobile-info-bar__heading">

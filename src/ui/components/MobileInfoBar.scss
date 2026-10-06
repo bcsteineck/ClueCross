@@ -10,15 +10,15 @@
   padding: $spacing-12 $spacing-16;
   border-top: $border-1 solid $color-gray-30;
   border-bottom: $border-1 solid $color-gray-30;
-  background: $color-brand-primary-wash;
+  background-color: $color-gray-10;
 }
 
 .mobile-info-bar__heading {
   margin: 0;
   min-width: 0;
   display: flex;
-  gap: $spacing-4;
-  align-items: baseline;
+  gap: $spacing-8;
+  align-items: center;
 }
 
 // The heading above shrinks (and its own clue line ellipsizes) so this
@@ -31,8 +31,10 @@
 .mobile-info-bar__label {
   font-family: $font-body;
   font-size: $font-size-14;
-  font-weight: $font-weight-semibold;
-  color: $color-gray-70;
+  font-weight: $font-weight-regular;
+  color: $color-gray-90;
+  border-right: solid 2px $color-brand-primary;
+  padding-right: $spacing-8;
 }
 
 .mobile-info-bar__clue {
