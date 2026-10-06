@@ -56,6 +56,15 @@ describe('Archive', () => {
     expect(screen.getByRole('group', { name: /puzzle calendar for august 2026/i })).toBeTruthy()
   })
 
+  it('the calendar key shows the daily release time', async () => {
+    const user = userEvent.setup()
+    await renderApp(calendarClient())
+    await openArchive(user)
+    expect(screen.getByText('New puzzle published daily at 10:00 PM EST')).toBeTruthy()
+    expect(screen.getByText('Completed')).toBeTruthy()
+    expect(screen.getByText('Selected')).toBeTruthy()
+  })
+
   it('clicking Archive again while already viewing it returns to the puzzle', async () => {
     const user = userEvent.setup()
     await renderApp(calendarClient())
