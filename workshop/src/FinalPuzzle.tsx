@@ -6,6 +6,8 @@ import type { ExportFile } from './finalPuzzle/exportSource'
 import { prepareFinalPuzzle } from './finalPuzzle/finalPuzzle'
 import type { FinalPuzzleInputs, MetadataIssue } from './finalPuzzle/finalPuzzle'
 import type { PublishingClient } from './publishing/publishingClient'
+import type { ProductionClient } from './production/productionClient'
+import { ProductionPublishSection } from './ProductionPublishSection'
 import { PublishSection } from './PublishSection'
 import type { PublishedState } from './PublishSection'
 
@@ -16,6 +18,8 @@ interface FinalPuzzleProps {
   onInputsChange: (inputs: FinalPuzzleInputs) => void
   onBack: () => void
   publisher: PublishingClient
+  /** Present only in Production-operations mode. */
+  production?: ProductionClient | null
   /** Set once the server confirms a durable publication; locks the ID and clue. */
   published: PublishedState | null
   onPublished: (state: PublishedState) => void
@@ -46,6 +50,7 @@ export function FinalPuzzle({
   onInputsChange,
   onBack,
   publisher,
+  production = null,
   published,
   onPublished,
 }: FinalPuzzleProps) {
@@ -173,13 +178,22 @@ export function FinalPuzzle({
 
           {ready && (
             <>
-              <h3 className="ws-detail__subheading">Publish</h3>
+              <h3 className="ws-detail__subheading">Publish to dev calendar (testing)</h3>
+              <p className="ws-muted">
+                Publishes to this Workshop’s dev database for testing. It never reaches players.
+              </p>
               <PublishSection
                 request={{ construction, id: inputs.id, clue: inputs.clue }}
                 publisher={publisher}
                 published={published}
                 onPublished={onPublished}
               />
+              {production && (
+                <>
+                  <h3 className="ws-detail__subheading">Publish to Production</h3>
+                  <ProductionPublishSection request={{ construction, id: inputs.id, clue: inputs.clue }} client={production} />
+                </>
+              )}
             </>
           )}
 

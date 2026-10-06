@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "workshop": "vite --config vite.workshop.config.ts",
+    "workshop:production-ops": "WORKSHOP_PRODUCTION_OPS=1 vite --config vite.workshop.config.ts",
     "workshop:build": "tsc -p tsconfig.workshop.json && vite build --config vite.workshop.config.ts"
   },
   "dependencies": {

@@ -6,6 +6,7 @@ import { DOGS_BREEDS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsB
 import { DOGS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsCandidatePool.js'
 import type { PreviewResponseBody, PublicationSummary, PublishRequest, PublishResponseBody } from './publishing/contract'
 import type { ClientResult, PublishingClient } from './publishing/publishingClient'
+import type { ProductionClient } from './production/productionClient'
 import { CandidateSourcingError } from './sourcing/contract'
 import { FIXTURE_SOURCING_RESPONSE } from './sourcing/fixtureSource'
 import { WorkshopApp } from './WorkshopApp'
@@ -56,9 +57,9 @@ const notConfiguredPublisher = () =>
     publish: async () => ({ ok: true, body: NOT_CONFIGURED }),
   })
 
-async function setup(publisher: PublishingClient = notConfiguredPublisher()) {
+async function setup(publisher: PublishingClient = notConfiguredPublisher(), production: ProductionClient | null = null) {
   const user = userEvent.setup()
-  render(<WorkshopApp publisher={publisher} />)
+  render(<WorkshopApp publisher={publisher} production={production} />)
   return user
 }
 
@@ -591,8 +592,8 @@ describe('WorkshopApp live sourcing', () => {
   })
 })
 
-async function openReadyFinalPuzzle(publisher: PublishingClient, cardIndex = 0) {
-  const user = await setup(publisher)
+async function openReadyFinalPuzzle(publisher: PublishingClient, cardIndex = 0, production: ProductionClient | null = null) {
+  const user = await setup(publisher, production)
   await fillInputs(user)
   await generate(user)
   await approve(user, cardIndex)
@@ -620,8 +621,8 @@ describe('WorkshopApp publishing: preview', () => {
     await approve(user, 0)
 
     // The suggested id "dogs" is reserved: not locally valid.
-    expect(screen.queryByRole('heading', { name: 'Publish' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Publish Puzzle' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Publish to dev calendar (testing)' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Publish to Dev Calendar' })).toBeNull()
 
     await user.clear(screen.getByLabelText('Puzzle ID'))
     await user.type(screen.getByLabelText('Puzzle ID'), 'workshopdogs')
@@ -629,7 +630,7 @@ describe('WorkshopApp publishing: preview', () => {
     expect(screen.getByText('Releases October 3 at 10:00 PM ET.')).toBeTruthy()
     expect(screen.getByText('Estimate only. The final date is assigned when you publish.')).toBeTruthy()
 
-    const publishHeading = screen.getByRole('heading', { name: 'Publish' })
+    const publishHeading = screen.getByRole('heading', { name: 'Publish to dev calendar (testing)' })
     const exportHeading = screen.getByRole('heading', { name: 'Developer export' })
     expect(publishHeading.compareDocumentPosition(exportHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
@@ -665,7 +666,7 @@ describe('WorkshopApp publishing: preview', () => {
     })
     const user = await openReadyFinalPuzzle(publisher)
     expect(await screen.findByText('Already scheduled for October 4, 2026.')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Publish Puzzle' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Publish to Dev Calendar' })).toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Confirm Existing Publication' }))
     expect(screen.queryByRole('group', { name: /Publish “/ })).toBeNull() // no confirmation for a no-op
@@ -691,14 +692,14 @@ describe('WorkshopApp publishing: preview', () => {
         'Puzzle ID “workshopdogs” is already scheduled for October 9, 2026 with different content. Published puzzles can’t be changed; choose a new ID.',
       ),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Publish Puzzle' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Publish to Dev Calendar' })).toHaveProperty('disabled', true)
   })
 
   it('makes not-configured unmistakable and never looks published', async () => {
     const publisher = notConfiguredPublisher()
     await openReadyFinalPuzzle(publisher)
     expect(await screen.findByText(/Publishing isn’t configured on this Workshop server/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Publish Puzzle' })).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Publish to Dev Calendar' })).toHaveProperty('disabled', true)
     expect(screen.queryByText(/Scheduled for/)).toBeNull()
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
   })
@@ -710,7 +711,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     const user = await openReadyFinalPuzzle(publisher)
     await screen.findByText('Expected: Scheduled for October 4, 2026')
 
-    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
     const confirm = screen.getByRole('group', { name: 'Publish “Dogs” for October 4, 2026?' })
     expect(within(confirm).getByText(/That date is an estimate; the server assigns the final date/)).toBeTruthy()
     expect(within(confirm).getByText(new RegExp(IRREVERSIBLE))).toBeTruthy()
@@ -719,7 +720,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('group', { name: /Publish “/ })).toBeNull()
     expect(publisher.publish).not.toHaveBeenCalled()
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Publish Puzzle' })))
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Publish to Dev Calendar' })))
   })
 
   it('publishes exactly once despite a rapid double submit, shows Publishing…, then Scheduled and locks', async () => {
@@ -727,7 +728,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     const publisher = fakePublisher({ publish: () => pending.promise })
     const user = await openReadyFinalPuzzle(publisher)
     await screen.findByText('Expected: Scheduled for October 4, 2026')
-    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
 
     const confirmButton = within(screen.getByRole('group', { name: /Publish “Dogs”/ })).getByRole('button', { name: 'Publish' })
     // Two clicks before React can re-render the disabled button: only the ref guard stops the second.
@@ -762,7 +763,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     })
     const user = await openReadyFinalPuzzle(publisher)
     await screen.findByText('Expected: Scheduled for October 4, 2026')
-    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
     await user.click(screen.getByRole('button', { name: 'Publish' }))
     expect(await screen.findByText('Already scheduled for October 4, 2026')).toBeTruthy()
     expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(true)
@@ -774,7 +775,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     })
     const user = await openReadyFinalPuzzle(publisher)
     await screen.findByText('Expected: Scheduled for October 4, 2026')
-    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
     await user.click(screen.getByRole('button', { name: 'Publish' }))
     return publisher
   }
@@ -805,7 +806,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
   it('shows busy as retryable', async () => {
     await publishWith({ status: 'busy', message: 'server text' })
     expect(await screen.findByText('Publishing is busy. Nothing was published; try again.')).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Publish Puzzle' })).toHaveProperty('disabled', false)
+    expect(screen.getByRole('button', { name: 'Publish to Dev Calendar' })).toHaveProperty('disabled', false)
   })
 
   it('shows unavailable and not-configured outcomes without implying success', async () => {
@@ -828,7 +829,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     const publisher = fakePublisher({ preview: async () => ({ ok: false, failure: 'network' }) })
     const user = await openReadyFinalPuzzle(publisher)
     expect(await screen.findByText('Couldn’t check the publishing schedule right now.')).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
     expect(screen.getByRole('group', { name: 'Publish “Dogs”?' })).toBeTruthy()
   })
 })
@@ -838,7 +839,7 @@ describe('WorkshopApp publishing: session state', () => {
     const publisher = fakePublisher()
     const user = await openReadyFinalPuzzle(publisher, 3)
     await screen.findByText('Expected: Scheduled for October 4, 2026')
-    await user.click(screen.getByRole('button', { name: 'Publish Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
     await user.click(screen.getByRole('button', { name: 'Publish' }))
     await screen.findByText('Scheduled for October 4, 2026')
 
@@ -856,5 +857,131 @@ describe('WorkshopApp publishing: session state', () => {
     expect(screen.queryByText('Scheduled for October 4, 2026')).toBeNull()
     expect(publisher.publish).toHaveBeenCalledTimes(1)
     expect(publisher.preview.mock.calls.length).toBe(previewCalls) // "dogs" is invalid locally: no preview
+  })
+})
+
+// ---- Production operations (npm run workshop:production-ops) -------------
+
+const PRODUCTION_FINGERPRINT = '1'.repeat(64)
+
+function defaultProductionFakes() {
+  return {
+    schedule: vi.fn<ProductionClient['schedule']>(async () => ({
+      ok: true,
+      body: { status: 'ok', schedule: { asOf: '2026-10-06T16:00:00.000Z', entries: [], summary: { currentDate: null, lastScheduledDate: null, scheduledCount: 0, filledThrough: null, daysAhead: 0, gaps: [] } } },
+    })),
+    previewPublish: vi.fn<ProductionClient['previewPublish']>(async () => ({
+      ok: true,
+      body: { status: 'estimate', estimate: { publishDate: '2026-10-07', releaseInstant: '2026-10-07T02:00:00.000Z', contentFingerprint: PRODUCTION_FINGERPRINT } },
+    })),
+    publish: vi.fn<ProductionClient['publish']>(async ({ request }) => ({
+      ok: true,
+      body: {
+        status: 'created',
+        publication: { puzzleId: request.id, publishDate: '2026-10-07', releaseInstant: '2026-10-07T02:00:00.000Z', contentFingerprint: PRODUCTION_FINGERPRINT, fingerprintVersion: 1 },
+      },
+    })),
+    previewRemoval: vi.fn<ProductionClient['previewRemoval']>(async () => ({ ok: true, body: { status: 'not-found' } })),
+    remove: vi.fn<ProductionClient['remove']>(async () => ({ ok: true, body: { status: 'not-found' } })),
+  }
+}
+
+function fakeProduction(overrides: Partial<ReturnType<typeof defaultProductionFakes>> = {}) {
+  return { ...defaultProductionFakes(), ...overrides }
+}
+
+const productionRegion = () => screen.getByRole('heading', { name: 'Publish to Production' }).nextElementSibling as HTMLElement
+
+describe('WorkshopApp Production operations', () => {
+  it('plain Workshop shows no Production banner, schedule, or publish section', async () => {
+    const user = await openReadyFinalPuzzle(fakePublisher())
+    await screen.findByText(/Expected: Scheduled for/)
+    expect(screen.queryByText(/Production Operations Enabled/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Production Schedule' })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Publish to Production' })).toBeNull()
+    expect(screen.getByRole('heading', { name: 'Publish to dev calendar (testing)' })).toBeTruthy()
+    void user
+  })
+
+  it('shows the banner and schedule navigation, keeping authoring state across views', async () => {
+    const production = fakeProduction()
+    const user = await openReadyFinalPuzzle(fakePublisher(), 0, production)
+    expect(screen.getByText(/Production Operations Enabled/)).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Production Schedule' }))
+    expect(await screen.findByRole('heading', { name: 'Production Schedule' })).toBeTruthy()
+    expect(production.schedule).toHaveBeenCalledTimes(1)
+    await user.click(screen.getByRole('button', { name: 'Authoring' }))
+    expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('workshopdogs')
+  })
+
+  it('previews only on request, then publishes the exact approved request once with the previewed fingerprint and typed ID', async () => {
+    const publisher = fakePublisher()
+    const production = fakeProduction()
+    const user = await openReadyFinalPuzzle(publisher, 0, production)
+    await screen.findByText(/Expected: Scheduled for/)
+    expect(production.previewPublish).not.toHaveBeenCalled() // never automatic
+
+    await user.click(within(productionRegion()).getByRole('button', { name: 'Production Preview' }))
+    const region = productionRegion()
+    await within(region).findByText('Next Production date')
+    expect(within(region).getByText('October 7, 2026')).toBeTruthy()
+    expect(within(region).getByText(PRODUCTION_FINGERPRINT)).toBeTruthy()
+    const devRequest = publisher.preview.mock.calls.at(-1)![0]
+    expect(production.previewPublish.mock.calls[0][0]).toEqual(devRequest) // the same approved content
+
+    const publishButton = within(region).getByRole('button', { name: 'Publish to Production' })
+    expect(publishButton).toHaveProperty('disabled', true)
+    await user.type(within(region).getByLabelText(/Type the puzzle ID/), 'workshopdog')
+    expect(publishButton).toHaveProperty('disabled', true)
+    await user.type(within(region).getByLabelText(/Type the puzzle ID/), 's')
+    await user.dblClick(publishButton)
+
+    expect(await screen.findByText(/Published to Production/)).toBeTruthy()
+    expect(production.publish).toHaveBeenCalledTimes(1)
+    expect(production.publish.mock.calls[0][0]).toEqual({ request: devRequest, expectedFingerprint: PRODUCTION_FINGERPRINT, confirmPuzzleId: 'workshopdogs' })
+    expect(publisher.publish).not.toHaveBeenCalled() // dev publishing untouched
+  })
+
+  it('discards the preview when the puzzle inputs change', async () => {
+    const production = fakeProduction()
+    const user = await openReadyFinalPuzzle(fakePublisher(), 0, production)
+    await user.click(within(productionRegion()).getByRole('button', { name: 'Production Preview' }))
+    await within(productionRegion()).findByText('Next Production date')
+    await user.type(screen.getByLabelText('Clue'), ' Breeds')
+    await waitFor(() => expect(within(productionRegion()).queryByText('Next Production date')).toBeNull())
+    expect(within(productionRegion()).queryByRole('button', { name: 'Publish to Production' })).toBeNull()
+  })
+
+  it('explains changed content and uncertain outcomes without claiming success', async () => {
+    const production = fakeProduction({
+      publish: vi
+        .fn<ProductionClient['publish']>()
+        .mockResolvedValueOnce({ ok: true, body: { status: 'content-changed', message: 'This puzzle changed since the Production preview. Nothing was published; preview again.', contentFingerprint: '2'.repeat(64) } })
+        .mockResolvedValueOnce({ ok: false }),
+    })
+    const user = await openReadyFinalPuzzle(fakePublisher(), 0, production)
+    const previewAndPublish = async () => {
+      await user.click(within(productionRegion()).getByRole('button', { name: /Production Preview|Preview Again/ }))
+      await within(productionRegion()).findByText('Next Production date')
+      await user.type(within(productionRegion()).getByLabelText(/Type the puzzle ID/), 'workshopdogs')
+      await user.click(within(productionRegion()).getByRole('button', { name: 'Publish to Production' }))
+    }
+    await previewAndPublish()
+    expect(await screen.findByText(/changed since the Production preview/)).toBeTruthy()
+    await previewAndPublish()
+    expect(await screen.findByText(/may or may not have been published/)).toBeTruthy()
+    expect(screen.queryByText(/Published to Production/)).toBeNull()
+  })
+
+  it('the dev Publish button never reaches Production', async () => {
+    const publisher = fakePublisher()
+    const production = fakeProduction()
+    const user = await openReadyFinalPuzzle(publisher, 0, production)
+    await screen.findByText(/Expected: Scheduled for/)
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
+    await user.click(screen.getByRole('button', { name: 'Publish' }))
+    await waitFor(() => expect(publisher.publish).toHaveBeenCalledTimes(1))
+    expect(production.publish).not.toHaveBeenCalled()
+    expect(production.previewPublish).not.toHaveBeenCalled()
   })
 })

@@ -10,21 +10,40 @@
 //     publishDate whose release instant is no longer strictly after now();
 //   - contention a fresh attempt could resolve (a taken date or id, a
 //     serialization failure, a passed release slot) is thrown as
-//     PublicationContentionError; anything else is an infrastructure failure.
+//     PublicationContentionError; anything else is an infrastructure failure;
+//   - deleteScheduled/moveScheduled change a row only while it is still at
+//     the given date and the affected release instant is strictly after
+//     now(), so a released row can never be deleted or moved; they report
+//     whether the row changed, and a move onto a taken date is contention.
 
-import type { DateKey, PublishedPuzzle } from '../../../src/publishing/types'
+import type { DateKey, FingerprintVersion, PublishedPuzzle } from '../../../src/publishing/types'
 
 export type NewPublication = Omit<PublishedPuzzle, 'createdAt'>
+
+/** Schedule metadata for one publication — never its puzzle or layout content. */
+export interface CalendarRecord {
+  puzzleId: string
+  publishDate: DateKey
+  clue: string
+  contentFingerprint: string
+  fingerprintVersion: FingerprintVersion
+}
 
 export interface PublicationReader {
   now(): Promise<Date>
   findById(puzzleId: string): Promise<PublishedPuzzle | null>
   latestPublishDate(): Promise<DateKey | null>
+  /** Every publication's metadata, ascending by publishDate. */
+  listCalendar(): Promise<CalendarRecord[]>
 }
 
 export interface PublicationTransaction extends PublicationReader {
   /** Stages the record; it becomes visible to others only when the transaction commits. */
   insert(record: NewPublication): Promise<PublishedPuzzle>
+  /** Deletes the row if it is still at `publishDate` and that date has not released. */
+  deleteScheduled(puzzleId: string, publishDate: DateKey): Promise<boolean>
+  /** Moves the row from `from` to `to` if it is still at `from` and `to` has not released. */
+  moveScheduled(puzzleId: string, from: DateKey, to: DateKey): Promise<boolean>
 }
 
 export interface PublicationStore {

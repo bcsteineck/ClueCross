@@ -22,6 +22,11 @@ import packageJsonText from '/package.json?raw'
 const gameSources = import.meta.glob<string>('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true })
 const serverSources = import.meta.glob<string>('/server/**/*.ts', { query: '?raw', import: 'default', eager: true })
 const apiSources = import.meta.glob<string>('/api/**/*.ts', { query: '?raw', import: 'default', eager: true })
+const workshopServerSources = import.meta.glob<string>('/workshop/server/**/*.{ts,mjs}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+})
 const workshopSources = import.meta.glob<string>('/workshop/src/**/*.{ts,tsx}', {
   query: '?raw',
   import: 'default',
@@ -210,10 +215,15 @@ describe('production game / Workshop isolation', () => {
     }
   })
 
-  it('Workshop browser code talks only to its own sourcing and publishing endpoints, never a provider or credential', () => {
-    // The only allowed network calls: the live source's POST to /api/sourcing
-    // and the publishing client's POSTs to /api/publishing/{preview,publish}.
-    const fetchers = ['/workshop/src/sourcing/liveSource.ts', '/workshop/src/publishing/publishingClient.ts']
+  it('Workshop browser code talks only to its own sourcing, publishing, and Production-operations endpoints, never a provider or credential', () => {
+    // The only allowed network calls: the live source's POST to /api/sourcing,
+    // the publishing client's POSTs to /api/publishing/{preview,publish}, and
+    // the Production client's POSTs to its own /api/production/* paths.
+    const fetchers = [
+      '/workshop/src/sourcing/liveSource.ts',
+      '/workshop/src/publishing/publishingClient.ts',
+      '/workshop/src/production/productionClient.ts',
+    ]
     for (const [path, source] of Object.entries(workshopSources)) {
       if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
       if (!fetchers.includes(path)) {
@@ -235,6 +245,17 @@ describe('production game / Workshop isolation', () => {
     expect(client).toMatch(/fetchImpl\(path,/)
     expect(client).toMatch(/post<PreviewResponseBody>\(PUBLISHING_PREVIEW_PATH,/)
     expect(client).toMatch(/post<PublishResponseBody>\(PUBLISHING_PUBLISH_PATH,/)
+
+    const productionClient = workshopSources['/workshop/src/production/productionClient.ts']
+    expect(productionClient.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
+    expect(productionClient).toMatch(/fetchImpl\(path,/)
+    expect([...productionClient.matchAll(/post\(PRODUCTION_PATHS\.(\w+)/g)].map((m) => m[1]).sort()).toEqual(
+      ['publish', 'publishPreview', 'remove', 'removePreview', 'schedule'],
+    )
+    const productionContract = workshopSources['/workshop/src/production/contract.ts']
+    for (const path of Object.values(productionContract.match(/'\/api\/[^']+'/g) ?? [])) {
+      expect(path).toMatch(/^'\/api\/production\//)
+    }
   })
 
   it('Workshop browser code never touches the database layer', () => {
@@ -246,8 +267,61 @@ describe('production game / Workshop isolation', () => {
     }
   })
 
-  it('credentials stay server-side: no VITE_ credential variables or config-time defines', () => {
-    expect(workshopViteConfig).not.toMatch(/VITE_\w*(KEY|TOKEN|SECRET|MODEL)|\bdefine\s*:/)
+  it('credentials stay server-side: no VITE_ credential variables, and the only config-time define is the boolean mode flag', () => {
+    expect(workshopViteConfig).not.toMatch(/VITE_\w*(KEY|TOKEN|SECRET|MODEL|URL)/)
     expect(workshopViteConfig).toMatch(/process\.env\.ANTHROPIC_API_KEY/)
+    const defines = [...workshopViteConfig.matchAll(/\bdefine\s*:\s*\{([^}]*)\}/g)].map((match) => match[1].trim())
+    expect(defines).toEqual(['__WORKSHOP_PRODUCTION_OPS__: JSON.stringify(productionOps),'])
+    expect(workshopViteConfig).toMatch(/const productionOps = productionOpsEnabled\(process\.env\)/)
+  })
+
+  it('Production operations never reach the player: no player source references their code, endpoints, marker, or writer variable', () => {
+    const playerSources = { ...gameSources, ...serverSources, ...apiSources }
+    expect(Object.keys(playerSources).length).toBeGreaterThan(20)
+    for (const [path, source] of Object.entries(playerSources)) {
+      if (/\.test\.tsx?$/.test(path)) continue // tests may name these to prove they're ignored
+      expect(importSpecifiers(source).filter((s) => /workshop/.test(s)), path).toEqual([])
+      expect(source, path).not.toMatch(/\/api\/production|cluecross_production_calendar|DATABASE_URL_UNPOOLED|WORKSHOP_PRODUCTION_OPS|vercel env run/)
+    }
+    expect(gameViteConfig).not.toMatch(/production\/|productionOps|PRODUCTION_OPS/)
+    // The public player API stays the two read-only routes.
+    expect(Object.keys(apiSources).sort()).toEqual(['/api/calendar.ts', '/api/puzzle.ts'])
+  })
+
+  it('Workshop browser code never starts processes or sees the Production connection', () => {
+    for (const [path, source] of Object.entries(workshopSources)) {
+      if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
+      expect(source, path).not.toMatch(/child_process|DATABASE_URL|POSTGRES|vercel env|process\.env/)
+    }
+  })
+
+  it('Production-operations mode is a deliberate opt-in, mounted only by the Workshop server config', () => {
+    const scripts = (JSON.parse(packageJsonText) as { scripts: Record<string, string> }).scripts
+    const optIns = Object.entries(scripts).filter(([, command]) => command.includes('WORKSHOP_PRODUCTION_OPS'))
+    expect(optIns).toEqual([['workshop:production-ops', 'WORKSHOP_PRODUCTION_OPS=1 vite --config vite.workshop.config.ts']])
+    expect(scripts.workshop).toBe('vite --config vite.workshop.config.ts')
+
+    // Only the Workshop config (and tests) import the Production bridge and endpoints.
+    const importers = Object.entries(workshopServerSources)
+      .filter(([path]) => !/\.test\.ts$/.test(path))
+      .filter(([, source]) => importSpecifiers(source).some((s) => /production(Bridge|OpsApiPlugin)/.test(s)))
+      .map(([path]) => path)
+    expect(importers).toEqual(['/workshop/server/production/productionOpsApiPlugin.ts'])
+    expect(workshopViteConfig).toMatch(/productionOpsApiPlugin\(\{/)
+    expect(workshopViteConfig).toMatch(/run: productionOps \? createProductionBridge/)
+  })
+
+  it('the Production runner reads one connection variable and checks both markers before any operation', () => {
+    const runner = workshopServerSources['/workshop/server/production/runOperation.ts']
+    expect(runner).toMatch(/PRODUCTION_DATABASE_URL_VARIABLE = 'DATABASE_URL_UNPOOLED'/)
+    expect(runner.match(/env\[[^\]]+\]/g)).toEqual(['env[PRODUCTION_DATABASE_URL_VARIABLE]'])
+    const identity = runner.indexOf('deps.checkIdentity(url)')
+    const operation = runner.indexOf('runProductionOperation(parsed.operation')
+    expect(identity).toBeGreaterThan(0)
+    expect(operation).toBeGreaterThan(identity)
+    const bridge = workshopServerSources['/workshop/server/production/productionBridge.ts']
+    expect(bridge).toMatch(/'env', 'run', '-e', 'production', '--non-interactive', '--', 'node', RUNNER_PATH/)
+    expect(bridge).toMatch(/stdio: \['pipe', 'pipe', 'ignore'\]/) // child stderr is never read
   })
 })
+

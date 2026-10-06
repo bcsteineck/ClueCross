@@ -4,7 +4,9 @@
 //     -> prepareFinalPuzzle: server-side re-assembly via buildPuzzle, the
 //        production validator, and the stricter Final Puzzle / geometry
 //        rules (zero incidental entries) — failure means no store access
-//     -> fingerprint v1 of the server-assembled pair
+//     -> fingerprint v1 of the server-assembled pair (and, when the caller
+//        previewed it, a check against that expected fingerprint — a
+//        mismatch means the content changed, so nothing is written)
 //     -> up to MAX_PUBLISH_ATTEMPTS fresh transactions, each:
 //          look up puzzleId first (same fingerprint: existing; different:
 //          conflict) -> store now -> latest publishDate -> Phase 1 date
@@ -37,8 +39,15 @@ export type PublishOutcome =
   | { kind: 'existing'; publication: PublicationSummary }
   | { kind: 'conflict'; existing: ExistingPublicationRef }
   | { kind: 'invalid'; errors: PublishValidationErrors }
+  | { kind: 'content-changed'; contentFingerprint: string }
   | { kind: 'busy' }
   | { kind: 'unavailable' }
+
+export interface PublishOptions {
+  maxAttempts?: number
+  /** The fingerprint the operator previewed; publishing refuses different content. */
+  expectedFingerprint?: string
+}
 
 export type PreviewOutcome =
   | { kind: 'estimate'; publishDate: DateKey; releaseInstant: string; contentFingerprint: string }
@@ -109,11 +118,14 @@ async function nextPublishDate(reader: PublicationReader): Promise<DateKey> {
 export async function publishFinalPuzzle(
   request: PublishRequest,
   store: PublicationStore,
-  maxAttempts = MAX_PUBLISH_ATTEMPTS,
+  { maxAttempts = MAX_PUBLISH_ATTEMPTS, expectedFingerprint }: PublishOptions = {},
 ): Promise<PublishOutcome> {
   const preparation = await preparePublication(request)
   if (!preparation.ok) return { kind: 'invalid', errors: preparation.errors }
   const { puzzle, layout, contentFingerprint } = preparation.prepared
+  if (expectedFingerprint !== undefined && expectedFingerprint !== contentFingerprint) {
+    return { kind: 'content-changed', contentFingerprint }
+  }
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {

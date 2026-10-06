@@ -5,6 +5,10 @@ import { CandidateCard } from './CandidateCard'
 import { CandidateDetail } from './CandidateDetail'
 import { FinalPuzzle } from './FinalPuzzle'
 import { createPublishingClient } from './publishing/publishingClient'
+import { createProductionClient } from './production/productionClient'
+import type { ProductionClient } from './production/productionClient'
+import { PRODUCTION_OPS_ENABLED } from './production/productionOpsMode'
+import { ProductionSchedule } from './ProductionSchedule'
 import type { PublishingClient } from './publishing/publishingClient'
 import type { PublishedState } from './PublishSection'
 import { suggestPuzzleId } from './finalPuzzle/finalPuzzle'
@@ -54,15 +58,19 @@ const ERROR_LABEL: Record<SourcingErrorCategory, string> = {
 
 const defaultLiveSource = createLiveCandidateSource()
 const defaultPublisher = createPublishingClient()
+// Only a Workshop started with `npm run workshop:production-ops` has one.
+const defaultProduction = PRODUCTION_OPS_ENABLED ? createProductionClient() : null
 
 interface WorkshopAppProps {
   /** Injectable for tests; default to the live server endpoint and the deterministic fixture. */
   sources?: { live?: CandidateSource; fixture?: CandidateSource }
   /** Injectable for tests; defaults to the Workshop server's publishing endpoints. */
   publisher?: PublishingClient
+  /** Production operations; null (the default outside Production-operations mode) hides them entirely. */
+  production?: ProductionClient | null
 }
 
-export function WorkshopApp({ sources = {}, publisher = defaultPublisher }: WorkshopAppProps = {}) {
+export function WorkshopApp({ sources = {}, publisher = defaultPublisher, production = defaultProduction }: WorkshopAppProps = {}) {
   const candidateSources: Record<SourceKind, CandidateSource> = {
     live: sources.live ?? defaultLiveSource,
     fixture: sources.fixture ?? fixtureCandidateSource,
@@ -94,6 +102,8 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher }: Work
     published: PublishedState | null
   } | null>(null)
   const [stage, setStage] = useState<'review' | 'final'>('review')
+  // Authoring state stays mounted in this component while the schedule is shown.
+  const [view, setView] = useState<'authoring' | 'schedule'>('authoring')
   const approveButtonRef = useRef<HTMLButtonElement>(null)
   const returningToReview = useRef(false)
   const approvedId = finalPuzzle?.candidate.identitySignature ?? null
@@ -182,8 +192,43 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher }: Work
     <header className="ws-header">
       <h1>ClueCross Workshop</h1>
       <p className="ws-muted">Internal authoring tool. Not part of the ClueCross game.</p>
+      {production && (
+        <div className="ws-production-banner">
+          <p>
+            <strong>Production Operations Enabled.</strong> Production Preview, Publish, and the Production Schedule act on
+            the live ClueCross calendar. Publishing to the dev calendar still targets dev.
+          </p>
+          <nav className="ws-nav" aria-label="Workshop">
+            <button
+              type="button"
+              className="ws-button ws-button--secondary"
+              aria-current={view === 'authoring' ? 'page' : undefined}
+              onClick={() => setView('authoring')}
+            >
+              Authoring
+            </button>
+            <button
+              type="button"
+              className="ws-button ws-button--secondary"
+              aria-current={view === 'schedule' ? 'page' : undefined}
+              onClick={() => setView('schedule')}
+            >
+              Production Schedule
+            </button>
+          </nav>
+        </div>
+      )}
     </header>
   )
+
+  if (production && view === 'schedule') {
+    return (
+      <div className="ws-app">
+        {header}
+        <ProductionSchedule client={production} />
+      </div>
+    )
+  }
 
   // Review state stays in this component while Final Puzzle is shown, so
   // Back restores Candidate Review exactly as it was.
@@ -198,6 +243,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher }: Work
           onInputsChange={(inputs) => setFinalPuzzle({ ...finalPuzzle, inputs })}
           onBack={handleBack}
           publisher={publisher}
+          production={production}
           published={finalPuzzle.published}
           onPublished={(published) => {
             // Applies only to the Final Puzzle that published, even if the

@@ -16,6 +16,8 @@
 //   - insert() carries the database-side release guard: it inserts nothing
 //     unless the date's 10 PM Eastern release is still after
 //     statement_timestamp(), which is reported as 'release-slot-passed'.
+//     deleteScheduled() and moveScheduled() carry the same guard, so the
+//     scheduled-queue compaction can never touch a released row.
 //
 // Date assignment stays in the domain (publishPuzzle.ts); SQL only guards.
 
@@ -24,7 +26,13 @@ import { PUBLICATION_TIME_ZONE } from '../../../src/publishing/easternTime'
 import { RELEASE_HOUR } from '../../../src/publishing/releaseSchedule'
 import type { DateKey, PublishedPuzzle } from '../../../src/publishing/types'
 import { PublicationContentionError } from './publicationStore'
-import type { NewPublication, PublicationReader, PublicationStore, PublicationTransaction } from './publicationStore'
+import type {
+  CalendarRecord,
+  NewPublication,
+  PublicationReader,
+  PublicationStore,
+  PublicationTransaction,
+} from './publicationStore'
 
 type Row = Record<string, unknown>
 
@@ -58,6 +66,23 @@ const INSERT_PUBLICATION = `
   SELECT $1, $2::date, $3, $4, $5::jsonb, $6::jsonb
   WHERE ((($2::date - 1) + make_time($7, 0, 0)) AT TIME ZONE $8) > statement_timestamp()
   RETURNING ${isoText('created_at')} AS created_at`
+// Metadata only: the clue is read out of the stored puzzle, nothing else.
+const SELECT_CALENDAR = `
+  SELECT puzzle_id, publish_date::text AS publish_date, puzzle->>'clue' AS clue, content_fingerprint, fingerprint_version
+  FROM published_puzzles ORDER BY publish_date`
+// Scheduled-queue changes carry the same release guard as INSERT: a row is
+// deleted, or moved onto a date, only while that date's release is still
+// after statement_timestamp(). Released rows therefore never change.
+const DELETE_SCHEDULED = `
+  DELETE FROM published_puzzles
+  WHERE puzzle_id = $1 AND publish_date = $2::date
+    AND ((($2::date - 1) + make_time($3, 0, 0)) AT TIME ZONE $4) > statement_timestamp()
+  RETURNING puzzle_id`
+const MOVE_SCHEDULED = `
+  UPDATE published_puzzles SET publish_date = $3::date
+  WHERE puzzle_id = $1 AND publish_date = $2::date
+    AND ((($3::date - 1) + make_time($4, 0, 0)) AT TIME ZONE $5) > statement_timestamp()
+  RETURNING puzzle_id`
 
 function toPublication(row: Row): PublishedPuzzle {
   return {
@@ -103,6 +128,15 @@ function readerFor(query: (text: string, params?: unknown[]) => Promise<Row[]>):
     async latestPublishDate(): Promise<DateKey | null> {
       const [row] = await query(SELECT_LATEST)
       return row?.latest === null || row?.latest === undefined ? null : String(row.latest)
+    },
+    async listCalendar(): Promise<CalendarRecord[]> {
+      return (await query(SELECT_CALENDAR)).map((row) => ({
+        puzzleId: String(row.puzzle_id),
+        publishDate: String(row.publish_date),
+        clue: String(row.clue ?? ''),
+        contentFingerprint: String(row.content_fingerprint),
+        fingerprintVersion: Number(row.fingerprint_version) as CalendarRecord['fingerprintVersion'],
+      }))
     },
   }
 }
@@ -152,6 +186,22 @@ export function createNeonPublicationStore(
             }
             if (rows.length === 0) throw new PublicationContentionError('release-slot-passed')
             return { ...structuredClone(record), createdAt: String(rows[0].created_at) }
+          },
+          async deleteScheduled(puzzleId: string, publishDate: DateKey) {
+            try {
+              const rows = await query(DELETE_SCHEDULED, [puzzleId, publishDate, RELEASE_HOUR, PUBLICATION_TIME_ZONE])
+              return rows.length === 1
+            } catch (error) {
+              throw classifyDatabaseError(error)
+            }
+          },
+          async moveScheduled(puzzleId: string, from: DateKey, to: DateKey) {
+            try {
+              const rows = await query(MOVE_SCHEDULED, [puzzleId, from, to, RELEASE_HOUR, PUBLICATION_TIME_ZONE])
+              return rows.length === 1
+            } catch (error) {
+              throw classifyDatabaseError(error)
+            }
           },
         }
 

@@ -63,6 +63,9 @@ export async function handlePublishRequest(
         return { status: 503, body: BUSY }
       case 'unavailable':
         return { status: 503, body: UNAVAILABLE }
+      case 'content-changed':
+        // Not reachable here (this endpoint sends no expected fingerprint); kept exhaustive.
+        return { status: 409, body: { status: 'bad-request', message: 'The puzzle content changed. Nothing was published.' } }
     }
   } catch {
     return { status: 500, body: UNAVAILABLE }
