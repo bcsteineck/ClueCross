@@ -97,10 +97,19 @@ describe('Mobile layout', () => {
     expect(screen.getByText(/today's clue/i)).toBeTruthy() // info bar persists
     expect(screen.getByTestId('letter-A')).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: /cancel reveal letter/i }))
+    await user.click(screen.getByRole('button', { name: /^cancel reveal$/i }))
 
+    // Back on the Puzzle view, with nothing revealed or spent (spec section 7: Cancel).
     expect(screen.queryByText(/select letter to reveal/i)).toBeNull()
-    expect(screen.getAllByTestId(/^cell-/).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /^reveal letter/i })).toBeTruthy()
+    expect(screen.getByText('3 free reveals remaining')).toBeTruthy()
+    const cells = screen.getAllByTestId(/^cell-/) as HTMLInputElement[]
+    expect(cells.length).toBeGreaterThan(0)
+    expect(cells.every((cell) => cell.value === '' && !cell.readOnly)).toBe(true)
+
+    await user.click(screen.getByRole('button', { name: /stats/i }))
+    expect(screen.getByTestId('score-badge').textContent).toBe('2000 / 2000')
+    expect(screen.getByText('No letters revealed yet.')).toBeTruthy()
   })
 
   it('revealing a letter returns to the Puzzle view automatically', async () => {
