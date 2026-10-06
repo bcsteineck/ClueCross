@@ -1,0 +1,18 @@
+@use '../../styles/tokens' as *;
+
+// Layered on RevealButton's .reveal-button styles: same size and color as
+// the Reveal Letter action it replaces, plus an icon.
+.share-result-button {
+  gap: $spacing-8;
+}
+
+.share-result-button__icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+// Reserves one line so "Copied!" appearing doesn't shift the cards below.
+.share-result-button__status {
+  min-height: 1.5em;
+}

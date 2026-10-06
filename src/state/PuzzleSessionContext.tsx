@@ -9,6 +9,10 @@ import type { CellId } from '../core/types'
 // letter highlight) are NOT part of this value — see PuzzleSessionProvider.
 export interface PuzzleSessionValue {
   state: GameState
+  // The puzzle's publish date (YYYY-MM-DD): the authoritative date for
+  // anything shown about this puzzle (e.g. its shared result) — never the
+  // browser's date. Same value as the provider's session key.
+  publishDate: string
   setCellValue: (cellId: CellId, value: string) => void
   revealLetter: (letter: string) => void
   // True exactly once, right when the puzzle transitions from incomplete to

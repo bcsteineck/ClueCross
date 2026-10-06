@@ -1,7 +1,9 @@
-import { X } from 'lucide-react'
+import { Share, X } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { getStarCount } from '../../core/awardLevel'
+import { useShareResult } from '../../state/useShareResult'
+import { PERSISTENT_SHARE_ATTRIBUTE } from './ShareResultButton'
 import { StarRating } from './StarRating'
 import './ResultModal.scss'
 
@@ -11,13 +13,18 @@ export interface ResultModalProps {
   onClose: () => void
 }
 
+const SCORE_FORMAT = new Intl.NumberFormat('en-US')
+
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 // Centered dialog + blurred/locked backdrop, same treatment as the nav
 // drawer's overlay — shown once, immediately when a puzzle is completed.
+// Share Result is the primary action; it uses the same share behavior as
+// the completed puzzle's persistent Share Result control.
 export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) {
   const starCount = getStarCount(score)
+  const { share, message } = useShareResult()
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const titleId = useId()
@@ -40,7 +47,11 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
 
     return () => {
       document.body.style.overflow = previousOverflow
-      previouslyFocused?.focus()
+      // The control that completed the puzzle (usually the last cell typed
+      // into) is disabled by now, so focus would fall to <body>. Land on the
+      // completed puzzle's persistent Share Result control instead.
+      const shareControl = document.querySelector<HTMLElement>(`[${PERSISTENT_SHARE_ATTRIBUTE}]`)
+      ;(shareControl ?? previouslyFocused)?.focus()
     }
   }, [previouslyFocused])
 
@@ -103,10 +114,22 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
         </div>
 
         <div className="result-modal__award">
-          <StarRating count={starCount} size={32} />
+          <StarRating count={starCount} size={40} />
         </div>
-        <p className="result-modal__score">
-          Final Score: {score} / {unlockBudget}
+        <div className="result-modal__score-block">
+          <p className="result-modal__score-label">Final score</p>
+          <p className="result-modal__score">
+            <span className="result-modal__score-value">{SCORE_FORMAT.format(score)}</span>{' '}
+            <span className="result-modal__score-total">/ {SCORE_FORMAT.format(unlockBudget)}</span>
+          </p>
+        </div>
+
+        <button type="button" className="result-modal__share" onClick={share}>
+          <Share size={22} aria-hidden="true" />
+          <span>Share Result</span>
+        </button>
+        <p role="status" className="result-modal__status">
+          {message}
         </p>
       </div>
     </div>

@@ -386,7 +386,9 @@ describe('App with the "Flower" puzzle', () => {
     const dialog = screen.getByRole('dialog', { name: /puzzle complete/i })
     expect(dialog).toBeTruthy()
     expect(within(dialog).getByRole('img', { name: '3 out of 3 stars' })).toBeTruthy()
-    expect(within(dialog).getByText('Final Score: 2000 / 2000')).toBeTruthy()
+    expect(within(dialog).getByText('Final score')).toBeTruthy()
+    expect(dialog.querySelector('.result-modal__score')?.textContent).toBe('2,000 / 2,000')
+    expect(within(dialog).getByRole('button', { name: 'Share Result' })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: /^close$/i }))
     expect(screen.queryByRole('dialog', { name: /puzzle complete/i })).toBeNull()
