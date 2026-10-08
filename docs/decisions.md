@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-10-08
+
+### Unfinished puzzles persist across refreshes
+
+A tester found that using the 3 free reveals and refreshing started the puzzle over, with 3 more free reveals: unfinished progress lived only in page memory. Unfinished progress is now saved in `localStorage` (`cluecross:puzzle-progress`), keyed by `${publishDate}:${puzzleId}` like completed results, and restored on refresh or a later visit, for the current puzzle and archived ones alike.
+
+- **Minimal, replayable record.** Each entry holds a version, the non-empty cell values, and the revealed letters in order. Score, free reveals left, Reveal History (free, paid, and zero-cell), and locked cells are rebuilt by replaying through the existing engine, so scoring and reveal rules are unchanged and nothing can drift out of sync. A save that doesn't replay to exactly what was stored, or that would already be complete, is discarded and the puzzle starts fresh.
+- **Completed results stay authoritative**, in the unchanged `cluecross:puzzle-results` / `cluecross:completed-dates` formats. Completing a puzzle removes its unfinished entry; sharing reflects the whole session, including reveals before a refresh.
+- **The player "Reset current puzzle" control is removed** from Settings: it handed back free reveals just like a refresh did. The dev/Preview-only Reset Test State remains and also clears unfinished progress.
+
+This prevents casual refresh or reset exploits. It doesn't try to stop deliberate storage clearing, another browser or device, or two tabs on the same puzzle (the last tab to save wins).
+
+---
+
 ## 2026-10-05
 
 ### Production publishing and the scheduled queue

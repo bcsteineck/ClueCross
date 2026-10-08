@@ -77,7 +77,7 @@ describe('test tools gating', () => {
     const dialog = screen.getByRole('dialog')
     expect(within(dialog).queryByRole('button', { name: /reset test state/i })).toBeNull()
     expect(dialog.textContent).not.toMatch(/Testing|Reset Test State/)
-    expect(within(dialog).getByRole('button', { name: /reset current puzzle/i })).toBeTruthy() // normal Reset intact
+    expect(within(dialog).queryByRole('button', { name: /reset/i })).toBeNull() // no reset of any kind
   })
 })
 

@@ -158,29 +158,16 @@ describe('Settings drawer', () => {
     expect(checkbox.checked).toBe(true)
   })
 
-  it('requires confirmation before resetting the current puzzle, and clears progress on confirm', async () => {
+  it('offers players no way to reset the puzzle (that would hand back free reveals)', async () => {
     const user = userEvent.setup()
     await renderApp(calendarClient())
-
     await user.click(getCell('r0c0'))
     await user.keyboard('S')
-    expect(getCell('r0c0').value).toBe('S')
 
     await openSettings(user)
-    await user.click(screen.getByRole('button', { name: /reset current puzzle/i }))
-    expect(screen.getByText(/reset your progress/i)).toBeTruthy()
-
-    // Cancel backs out without resetting or closing the modal.
-    await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+    expect(screen.queryByRole('button', { name: /reset current puzzle/i })).toBeNull()
     expect(screen.queryByText(/reset your progress/i)).toBeNull()
-    expect(screen.getByRole('dialog')).toBeTruthy()
     expect(getCell('r0c0').value).toBe('S')
-
-    await user.click(screen.getByRole('button', { name: /reset current puzzle/i }))
-    await user.click(screen.getByRole('button', { name: /^reset$/i }))
-
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(getCell('r0c0').value).toBe('')
   })
 })
 
@@ -210,30 +197,9 @@ describe('Completion tracking', () => {
       screen.getByRole('button', { name: /august 4, 2026 \(currently viewing\)/i }),
     ).toBeTruthy()
   })
-
-  // Vitest runs with import.meta.env.DEV true by default (see the next
-  // describe block for the opposite, production-like case), so this
-  // exercises the same dev-only override a real developer gets locally —
-  // not the general-player experience.
-  it('dev override: resetting an already-completed puzzle does not un-mark it as completed', async () => {
-    const user = userEvent.setup()
-    await renderApp(calendarClient())
-
-    for (const cell of Object.values(dogsPuzzle.cells)) {
-      await user.click(getCell(cell.id))
-      await user.keyboard(cell.correctLetter)
-    }
-    expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
-
-    await openSettings(user)
-    await user.click(screen.getByRole('button', { name: /reset current puzzle/i }))
-    await user.click(screen.getByRole('button', { name: /^reset$/i }))
-
-    expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
-  })
 })
 
-describe('Completion tracking (production build, no dev override)', () => {
+describe('Settings in a production build', () => {
   beforeEach(() => {
     vi.stubEnv('DEV', false)
   })
@@ -242,43 +208,20 @@ describe('Completion tracking (production build, no dev override)', () => {
     vi.unstubAllEnvs()
   })
 
-  it('disables resetting an already-completed puzzle for a general player', async () => {
+  it('has no reset control for a general player, before or after completing a puzzle', async () => {
     const user = userEvent.setup()
     await renderApp(calendarClient())
+    await openSettings(user)
+    expect(screen.queryByRole('button', { name: /reset current puzzle/i })).toBeNull()
+    await user.click(screen.getByRole('button', { name: /close settings/i }))
 
     for (const cell of Object.values(dogsPuzzle.cells)) {
       await user.click(getCell(cell.id))
       await user.keyboard(cell.correctLetter)
     }
     expect(isDateCompleted(toDateKey(TODAY), dogsPuzzle.id)).toBe(true)
-
+    await user.click(screen.getByRole('button', { name: /^close$/i })) // the completion dialog
     await openSettings(user)
-    const resetButton = screen.getByRole('button', {
-      name: /reset current puzzle/i,
-    }) as HTMLButtonElement
-    expect(resetButton.disabled).toBe(true)
-    expect(screen.getByText(/this puzzle is already complete/i)).toBeTruthy()
-
-    await user.click(resetButton)
-    expect(screen.queryByText(/reset your progress/i)).toBeNull()
-    expect(getCell(Object.keys(dogsPuzzle.cells)[0]).value).not.toBe('')
-  })
-
-  it('still allows resetting a puzzle that has not been completed yet', async () => {
-    const user = userEvent.setup()
-    await renderApp(calendarClient())
-
-    await user.click(getCell('r0c0'))
-    await user.keyboard('S')
-
-    await openSettings(user)
-    const resetButton = screen.getByRole('button', {
-      name: /reset current puzzle/i,
-    }) as HTMLButtonElement
-    expect(resetButton.disabled).toBe(false)
-
-    await user.click(resetButton)
-    await user.click(screen.getByRole('button', { name: /^reset$/i }))
-    expect(getCell('r0c0').value).toBe('')
+    expect(screen.queryByRole('button', { name: /reset current puzzle/i })).toBeNull()
   })
 })

@@ -59,8 +59,10 @@ Neon `published_puzzles` → `released_puzzles` view → `cluecross_reader` → 
 ## Persistence
 
 - **Completed results** stay in `localStorage` (`cluecross:completed-dates`, `cluecross:puzzle-results`), keyed by `${publishDate}:${puzzleId}`.
-- **In-progress state** lives in page-session memory only.
-- There are no accounts and no cross-device sync.
+- **Unfinished progress** is saved in `localStorage` too (`cluecross:puzzle-progress`, same key), so a refresh or a later visit continues the same game, including its spent free reveals. Each entry stores only the non-empty cell values and the order of revealed letters (`src/core/puzzleProgress.ts`). Score, free reveals left, Reveal History, and locked cells are rebuilt by replaying those reveals through the game engine (`restoreGameState`), and a save that doesn't replay exactly is discarded.
+- **Load order:** this page's in-memory session, then a completed result (authoritative), then saved unfinished progress, then a fresh game. Completing a puzzle removes its unfinished entry.
+- **Players can't reset a puzzle.** The only reset is the dev/Preview-only Reset Test State, which also clears the puzzle's unfinished progress.
+- Everything is per browser and device. It stops a casual refresh from handing back free reveals; it doesn't stop someone from clearing site data or replaying on another device. There are no accounts and no cross-device sync.
 
 ## Environments
 
