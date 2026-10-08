@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ReactNode, RefObject } from 'react'
 import { markDateCompleted } from '../core/completionTracking'
-import { createCompletedGameState, createInitialGameState, isPuzzleComplete } from '../core/gameEngine'
+import {
+  createCompletedGameState,
+  createInitialGameState,
+  isPuzzleComplete,
+  progressFromState,
+  restoreGameState,
+} from '../core/gameEngine'
 import type { GameState } from '../core/gameEngine'
+import { clearPuzzleProgress, getPuzzleProgress, savePuzzleProgress } from '../core/puzzleProgress'
 import { getPuzzleResult, recordPuzzleResult } from '../core/puzzleResults'
 import type { CellId, PuzzleDefinition } from '../core/types'
 import type { Direction } from '../layout/entryDirection'
@@ -40,11 +47,10 @@ export interface PuzzleSessionProviderProps {
   puzzle: PuzzleDefinition
   sessionKey: string
   cache: RefObject<Record<string, GameState>>
-  // False right after an explicit "reset current puzzle" (until the next
-  // genuinely fresh session key) — otherwise a persisted completed result
-  // for this key would immediately re-restore the completed board the
-  // player just asked to clear. True in every other case, including a
-  // plain first-ever visit to this key.
+  // False right after Reset Test State (dev/Preview only) for this key —
+  // otherwise a persisted result or saved progress would immediately
+  // re-restore the board it just cleared. True in every other case,
+  // including a plain first-ever visit to this key.
   allowRestoringResult: boolean
   children: (interaction: PuzzleInteractionState) => ReactNode
 }
@@ -64,14 +70,23 @@ export function PuzzleSessionProvider({
   allowRestoringResult,
   children,
 }: PuzzleSessionProviderProps) {
-  // Only consulted on this component's first render (useReducer's lazy
-  // init only ever runs once), so it's fine to recompute this on every
-  // render rather than memoize it.
-  const cached = cache.current[sessionKey]
-  const persistedResult = allowRestoringResult ? getPuzzleResult(sessionKey, puzzle.id) : undefined
-  const initialState =
-    cached ??
-    (persistedResult ? createCompletedGameState(puzzle, persistedResult) : createInitialGameState(puzzle))
+  // Where this session starts, decided once on mount, in priority order:
+  // this page's in-memory session; a completed result (authoritative — it
+  // always beats leftover unfinished progress); saved unfinished progress,
+  // restored only if it replays faithfully (see restoreGameState); else a
+  // fresh game.
+  const [initialState] = useState(() => {
+    const cached = cache.current[sessionKey]
+    if (cached) return cached
+    if (allowRestoringResult) {
+      const result = getPuzzleResult(sessionKey, puzzle.id)
+      if (result) return createCompletedGameState(puzzle, result)
+      const progress = getPuzzleProgress(sessionKey, puzzle.id)
+      const restored = progress ? restoreGameState(puzzle, progress) : null
+      if (restored) return restored
+    }
+    return createInitialGameState(puzzle)
+  })
   const { state, setCellValue, revealLetter } = usePuzzleGame(puzzle, initialState)
   const [activeCellId, setActiveCellId] = useState<CellId | null>(null)
   const [activeDirection, setActiveDirection] = useState<Direction>('across')
@@ -122,6 +137,18 @@ export function PuzzleSessionProvider({
     }
     wasCompleteRef.current = complete
   }, [complete, sessionKey, puzzle.id, state.score, state.revealHistory])
+
+  // Saves unfinished progress after every change (an untouched board saves
+  // nothing), so a refresh continues this game. Runs after the completion
+  // effect above: once complete, the result is recorded there and the
+  // unfinished entry is removed here. It only ever writes the current
+  // state, which came from the saved progress itself or a later move — so
+  // mounting, StrictMode's repeated effects, or switching puzzles can't
+  // replace good progress with an empty board.
+  useEffect(() => {
+    if (complete) clearPuzzleProgress(sessionKey, puzzle.id)
+    else savePuzzleProgress(sessionKey, puzzle.id, progressFromState(state))
+  }, [state, complete, sessionKey, puzzle.id])
 
   const dismissCompletion = useCallback(() => setJustCompleted(false), [])
 

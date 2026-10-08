@@ -309,7 +309,7 @@ describe('Archive', () => {
     expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('S')
   })
 
-  it('does not restore a reset puzzle\'s pre-reset progress after switching dates and back', async () => {
+  it('does not restore pre-reset progress after Reset Test State and switching dates and back', async () => {
     const user = userEvent.setup()
     await renderApp(calendarClient())
 
@@ -317,13 +317,13 @@ describe('Archive', () => {
     await user.keyboard('S')
     expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('S')
 
+    // Reset Test State (dev/Preview only) is the only remaining reset.
     await user.click(screen.getByRole('button', { name: /^settings$/i }))
-    await user.click(screen.getByRole('button', { name: /reset current puzzle/i }))
-    await user.click(screen.getByRole('button', { name: /^reset$/i }))
+    await user.click(screen.getByRole('button', { name: 'Reset Test State' }))
     expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('')
 
     // Switching away and back after a reset must not resurrect the
-    // pre-reset progress that was cached under the old session key.
+    // pre-reset progress, whether cached in memory or saved in storage.
     await openArchive(user)
     await user.click(screen.getByRole('button', { name: /open puzzle for august 4, 2026/i }))
     await openArchive(user)

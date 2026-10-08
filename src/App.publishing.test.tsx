@@ -262,7 +262,7 @@ describe('persistence', () => {
     expect(screen.getByTestId('score-badge').textContent).toBe(score)
   })
 
-  it('keeps unfinished progress for the page session only', async () => {
+  it('keeps unfinished progress across a reload, as progress rather than a completed result', async () => {
     const user = userEvent.setup()
     const { unmount } = await renderApp(fakeCalendarClient(RELEASED))
     await user.click(screen.getByRole('button', { name: /^reveal letter/i }))
@@ -270,8 +270,9 @@ describe('persistence', () => {
     expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('C')
     unmount()
     await renderApp(fakeCalendarClient(RELEASED))
-    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('')
+    expect((screen.getByTestId('cell-r0c0') as HTMLInputElement).value).toBe('C')
     expect(localStorage.getItem('cluecross:puzzle-results')).toBeNull()
+    expect(Object.keys(JSON.parse(localStorage.getItem('cluecross:puzzle-progress') ?? '{}'))).toEqual(['2026-10-12:current'])
   })
 })
 

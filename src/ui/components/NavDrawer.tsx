@@ -8,8 +8,6 @@ import './NavDrawer.scss'
 export interface NavDrawerProps {
   reduceMotion: boolean
   onReduceMotionChange: (enabled: boolean) => void
-  onResetCurrentPuzzle: () => void
-  currentPuzzleCompleted: boolean
   onClose: () => void
   /** Dev/Preview builds only (see state/testTools.ts). */
   onResetTestState?: () => void
@@ -25,25 +23,12 @@ const FOCUSABLE_SELECTOR =
 export function NavDrawer({
   reduceMotion,
   onReduceMotionChange,
-  onResetCurrentPuzzle,
-  currentPuzzleCompleted,
   onClose,
   onResetTestState,
 }: NavDrawerProps) {
-  // A completed puzzle's archived result is permanent (it always reflects
-  // the first completion, by design — see puzzleResults.ts), so there's no
-  // real reason for a player to reset and replay one. import.meta.env.DEV
-  // is Vite's build-time flag: true only for a local dev server, and false
-  // (with this whole branch dead-code-eliminated) in what actually ships —
-  // this is a developer-only escape hatch for testing an already-completed
-  // puzzle's flows again, not a hidden feature reachable in production.
-  const resetLocked = currentPuzzleCompleted && !import.meta.env.DEV
-  const devOverrideActive = currentPuzzleCompleted && import.meta.env.DEV
-  const [confirmingReset, setConfirmingReset] = useState(false)
   const [open, setOpen] = useState(false)
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
-  const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   // Captured once via a lazy state initializer rather than read inside the
   // effect below: the initializer form is stable across React StrictMode's
@@ -83,12 +68,6 @@ export function NavDrawer({
     titleRef.current?.focus()
   }, [])
 
-  useEffect(() => {
-    if (confirmingReset) {
-      cancelButtonRef.current?.focus()
-    }
-  }, [confirmingReset])
-
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === 'Escape') {
       onClose()
@@ -121,11 +100,6 @@ export function NavDrawer({
     if (event.target === event.currentTarget) {
       onClose()
     }
-  }
-
-  function handleConfirmedReset() {
-    onResetCurrentPuzzle()
-    onClose()
   }
 
   return (
@@ -167,39 +141,6 @@ export function NavDrawer({
             </span>
             Reduce motion
           </label>
-        </section>
-
-        <section className="nav-drawer__section">
-          <h3 className="nav-drawer__section-title">Puzzle</h3>
-          {confirmingReset ? (
-            <div className="nav-drawer__confirm">
-              <p className="nav-drawer__confirm-text">
-                Reset your progress on this puzzle? Entered and revealed letters will be cleared.
-                {devOverrideActive &&
-                  ' Its archived result stays recorded (dev override only clears the board).'}
-              </p>
-              <div className="nav-drawer__confirm-actions">
-                <Button ref={cancelButtonRef} onClick={() => setConfirmingReset(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleConfirmedReset}>Reset</Button>
-              </div>
-            </div>
-          ) : resetLocked ? (
-            <>
-              <Button disabled>Reset current puzzle</Button>
-              <p className="nav-drawer__hint">This puzzle is already complete.</p>
-            </>
-          ) : (
-            <>
-              <Button onClick={() => setConfirmingReset(true)}>Reset current puzzle</Button>
-              {devOverrideActive && (
-                <p className="nav-drawer__hint">
-                  Dev override: this puzzle is complete, but only local dev builds can reset it.
-                </p>
-              )}
-            </>
-          )}
         </section>
 
         {/* Manual-testing tool: compiled out of Production builds entirely. */}

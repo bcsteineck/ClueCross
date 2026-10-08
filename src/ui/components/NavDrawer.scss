@@ -147,18 +147,6 @@
   visibility: visible;
 }
 
-.nav-drawer__confirm-text {
-  margin: 0 0 $spacing-12;
-  font-family: $font-body;
-  font-size: $font-size-14;
-  color: $color-gray-90;
-}
-
-.nav-drawer__confirm-actions {
-  display: flex;
-  gap: $spacing-8;
-}
-
 .nav-drawer__hint {
   margin: $spacing-8 0 0;
   font-family: $font-body;

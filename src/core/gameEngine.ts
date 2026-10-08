@@ -141,3 +141,61 @@ export function revealLetter(state: GameState, rawLetter: string): GameState {
     revealHistory: [historyEntry, ...state.revealHistory],
   }
 }
+
+// Unfinished-puzzle progress in its smallest faithful form: the non-empty
+// cell values and the order letters were revealed. Everything else —
+// score, free reveals left, Reveal History (costs and cell counts), and
+// locked cells — follows from those through revealLetter, so it is never
+// stored separately and can't drift out of sync. See puzzleProgress.ts.
+export interface PuzzleProgress {
+  values: Record<CellId, string>
+  /** Revealed letters, oldest first. */
+  reveals: string[]
+}
+
+export function progressFromState(state: GameState): PuzzleProgress {
+  const values: Record<CellId, string> = {}
+  for (const [cellId, value] of Object.entries(state.values)) {
+    if (value) values[cellId] = value
+  }
+  return { values, reveals: state.revealHistory.map((entry) => entry.letter).reverse() }
+}
+
+const SINGLE_LETTER = /^[A-Z]$/
+
+// Rebuilds an unfinished game by replaying the saved progress through the
+// same engine functions play uses: every saved value first, then every
+// reveal in its original order. Replaying values first is exact: a reveal
+// overwrites all cells of its letter with that letter regardless of what
+// they held, and its cost and cell count never depend on cell contents —
+// so the resulting values, locks, score, free reveals, and history match
+// the original game. Returns null for anything that isn't a faithful,
+// still-unfinished game for this puzzle (unknown cells, non-letters,
+// repeated reveals, a round trip that doesn't reproduce the saved values,
+// or a board that would already be complete).
+export function restoreGameState(puzzle: PuzzleDefinition, progress: PuzzleProgress): GameState | null {
+  const savedValues = Object.entries(progress.values)
+  if (savedValues.some(([cellId, value]) => !Object.hasOwn(puzzle.cells, cellId) || !SINGLE_LETTER.test(value))) {
+    return null
+  }
+  if (
+    progress.reveals.length > 26 ||
+    new Set(progress.reveals).size !== progress.reveals.length ||
+    progress.reveals.some((letter) => !SINGLE_LETTER.test(letter))
+  ) {
+    return null
+  }
+
+  let state = createInitialGameState(puzzle)
+  for (const [cellId, value] of savedValues) state = setCellValue(state, cellId, value)
+  for (const letter of progress.reveals) state = revealLetter(state, letter)
+
+  if (isPuzzleComplete(state)) return null
+  // The replay must reproduce exactly what was saved.
+  const restored = progressFromState(state)
+  const sameValues =
+    Object.keys(restored.values).length === savedValues.length &&
+    savedValues.every(([cellId, value]) => restored.values[cellId] === value)
+  if (!sameValues || restored.reveals.join() !== progress.reveals.join()) return null
+  return state
+}

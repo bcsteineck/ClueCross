@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { GameState } from './core/gameEngine'
 import { toDateKey } from './core/archiveCalendar'
-import { clearDateCompleted, isDateCompleted } from './core/completionTracking'
+import { clearDateCompleted } from './core/completionTracking'
+import { clearPuzzleProgress } from './core/puzzleProgress'
 import { clearPuzzleResult, getPuzzleResultStarCount } from './core/puzzleResults'
 import { archiveMonthRange, createPuzzleCalendarClient, dateFromKey } from './data/puzzleCalendar'
 import type { PublishedPuzzle, PuzzleCalendar, PuzzleCalendarClient } from './data/puzzleCalendar'
@@ -73,15 +74,15 @@ function PuzzlePlayer({ calendar, client, onArchiveOpen, testTools }: PuzzlePlay
   // Only the newest selection's response may be applied.
   const selectionRequest = useRef(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // Per-date, not global: resetting one date's puzzle must not invalidate
+  // Per-date, not global: Reset Test State on one date must not invalidate
   // the cached in-progress session of any other date.
   const [resetGenerations, setResetGenerations] = useState<Record<string, number>>({})
   const [reduceMotion, setReduceMotion] = useReducedMotionPreference()
   // Outlives the PuzzleSessionProvider remount boundary (below) so
   // switching Archive dates and back restores exact in-session progress —
   // see spec section 15 ("restores its existing saved state if previously
-  // played"). Session-only: a full page reload still resets, matching
-  // existing behavior for anything short of a completed puzzle.
+  // played"). Across reloads, unfinished progress is restored from
+  // localStorage instead (see puzzleProgress.ts).
   const sessionCache = useRef<Record<string, GameState>>({})
 
   const entry = loaded.current.get(selectedKey) as PublishedPuzzle
@@ -89,14 +90,6 @@ function PuzzlePlayer({ calendar, client, onArchiveOpen, testTools }: PuzzlePlay
   const dateKey = selectedKey
   const resetGeneration = resetGenerations[dateKey] ?? 0
   const isCurrentPuzzle = selectedKey === current.publishDate
-  // There's no reason for a player to replay a puzzle they've already
-  // completed — its archived result is permanent regardless (see
-  // completionTracking.ts/puzzleResults.ts) — so NavDrawer disables the
-  // reset control once this is true. Recomputed fresh on every render
-  // (including the one triggered by opening Settings), so it reflects a
-  // completion that just happened in this same session.
-  const currentPuzzleCompleted = isDateCompleted(dateKey, entry.puzzle.id)
-
   const puzzleIdByDate = useMemo(
     () => new Map(calendar.dates.map((date) => [date.publishDate, date.puzzleId])),
     [calendar.dates],
@@ -138,21 +131,16 @@ function PuzzlePlayer({ calendar, client, onArchiveOpen, testTools }: PuzzlePlay
     selectKey(toDateKey(date))
   }
 
-  function handleResetCurrentPuzzle() {
-    delete sessionCache.current[dateKey]
-    setResetGenerations((generations) => ({
-      ...generations,
-      [dateKey]: (generations[dateKey] ?? 0) + 1,
-    }))
-  }
-
   // Manual testing only (dev/Preview): forgets this one puzzle's local state
-  // — its completion and saved result under ${publishDate}:${puzzleId} and
-  // its in-memory session — then remounts it fresh on the same date. Never
-  // touches the published puzzle, the calendar, or any other puzzle.
+  // — its completion, saved result, and unfinished progress under
+  // ${publishDate}:${puzzleId}, and its in-memory session — then remounts
+  // it fresh on the same date. Never touches the published puzzle, the
+  // calendar, or any other puzzle. Players have no reset (it would hand
+  // back free reveals).
   function handleResetTestState() {
     clearDateCompleted(dateKey, entry.puzzle.id)
     clearPuzzleResult(dateKey, entry.puzzle.id)
+    clearPuzzleProgress(dateKey, entry.puzzle.id)
     delete sessionCache.current[dateKey]
     setResetGenerations((generations) => ({
       ...generations,
@@ -231,8 +219,6 @@ function PuzzlePlayer({ calendar, client, onArchiveOpen, testTools }: PuzzlePlay
         <NavDrawer
           reduceMotion={reduceMotion}
           onReduceMotionChange={setReduceMotion}
-          onResetCurrentPuzzle={handleResetCurrentPuzzle}
-          currentPuzzleCompleted={currentPuzzleCompleted}
           onClose={() => setSettingsOpen(false)}
           onResetTestState={TEST_TOOLS_ENABLED && testTools ? handleResetTestState : undefined}
         />
