@@ -7,13 +7,13 @@ import { usePuzzleSession } from '../../state/PuzzleSessionContext'
 import { useMessageBanner } from '../../state/useMessageBanner'
 import { MessageBanner } from './MessageBanner'
 import { PuzzleBoard } from './PuzzleBoard'
-import { ResultModal } from './ResultModal'
+import { IncompleteSolutionModal, ResultModal } from './ResultModal'
 
 // The breakpoint-agnostic core of the Puzzle view (spec section 4): the
-// board itself, the impossible-letter banner, and the completion result
-// modal. Completion tracking/persistence itself lives in
-// PuzzleSessionProvider, not here — see justCompleted's doc comment for
-// why. Surrounding chrome (clue display, the Reveal Letter action,
+// board itself, the impossible-letter banner, the completion result
+// modal, and its full-but-incorrect counterpart. Completion tracking/
+// persistence itself lives in PuzzleSessionProvider, not here — see
+// justCompleted's doc comment for why. Surrounding chrome (clue display, the Reveal Letter action,
 // native/on-screen input) is composed differently per layout — see
 // DesktopLayout — since it differs enough between desktop and mobile that
 // forcing one shared component to cover both would need more conditional
@@ -33,7 +33,8 @@ export function PuzzleView({
   onActiveCellChange,
   onActiveDirectionChange,
 }: PuzzleViewProps) {
-  const { state, setCellValue, justCompleted, dismissCompletion } = usePuzzleSession()
+  const { state, setCellValue, justCompleted, dismissCompletion, justFilledIncorrectly, dismissIncorrectFill } =
+    usePuzzleSession()
   const [impossibleCellId, setImpossibleCellId] = useState<CellId | null>(null)
   const { message: bannerMessage, showMessage, dismiss: dismissBanner } = useMessageBanner()
 
@@ -89,6 +90,7 @@ export function PuzzleView({
           onClose={dismissCompletion}
         />
       )}
+      {justFilledIncorrectly && <IncompleteSolutionModal onClose={dismissIncorrectFill} />}
     </>
   )
 }

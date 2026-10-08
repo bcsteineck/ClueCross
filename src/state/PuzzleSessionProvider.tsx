@@ -4,6 +4,7 @@ import { markDateCompleted } from '../core/completionTracking'
 import {
   createCompletedGameState,
   createInitialGameState,
+  isBoardFull,
   isPuzzleComplete,
   progressFromState,
   restoreGameState,
@@ -138,6 +139,23 @@ export function PuzzleSessionProvider({
     wasCompleteRef.current = complete
   }, [complete, sessionKey, puzzle.id, state.score, state.revealHistory])
 
+  // "Not Quite There": raised when the board goes from having an empty
+  // cell to full-but-incorrect through play (typing or a reveal), never on
+  // mount — so a refresh, a remount from the cache, or returning to an
+  // archived puzzle that's already full stays quiet. Replacing a letter
+  // keeps the board full and doesn't raise it again; emptying a cell and
+  // filling the board again does. Purely transient UI feedback: not
+  // persisted, and it changes nothing about the game. Like justCompleted,
+  // it lives here so a reveal that fills the board survives the switch
+  // back to the Puzzle view.
+  const full = isBoardFull(state)
+  const wasFullRef = useRef(full)
+  const [justFilledIncorrectly, setJustFilledIncorrectly] = useState(false)
+  useEffect(() => {
+    if (full && !complete && !wasFullRef.current) setJustFilledIncorrectly(true)
+    wasFullRef.current = full
+  }, [full, complete])
+
   // Saves unfinished progress after every change (an untouched board saves
   // nothing), so a refresh continues this game. Runs after the completion
   // effect above: once complete, the result is recorded there and the
@@ -151,12 +169,22 @@ export function PuzzleSessionProvider({
   }, [state, complete, sessionKey, puzzle.id])
 
   const dismissCompletion = useCallback(() => setJustCompleted(false), [])
+  const dismissIncorrectFill = useCallback(() => setJustFilledIncorrectly(false), [])
 
   // sessionKey is the selected puzzle's publish date (see App), so it is
   // exposed as publishDate for consumers that need the puzzle's own date.
   const value = useMemo(
-    () => ({ state, publishDate: sessionKey, setCellValue, revealLetter, justCompleted, dismissCompletion }),
-    [state, sessionKey, setCellValue, revealLetter, justCompleted, dismissCompletion],
+    () => ({
+      state,
+      publishDate: sessionKey,
+      setCellValue,
+      revealLetter,
+      justCompleted,
+      dismissCompletion,
+      justFilledIncorrectly,
+      dismissIncorrectFill,
+    }),
+    [state, sessionKey, setCellValue, revealLetter, justCompleted, dismissCompletion, justFilledIncorrectly, dismissIncorrectFill],
   )
 
   return (

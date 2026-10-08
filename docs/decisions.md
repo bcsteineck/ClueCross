@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-10-08 (later)
+
+### "Not Quite There!" when a full board is wrong
+
+Filling every cell with at least one wrong letter used to give no feedback at all. Now the moment play (typing or a reveal) fills the last empty cell while any letter is wrong, the player sees a "Not Quite There!" dialog: the completion dialog's shell, with a short message and a Continue Puzzle button.
+
+- **Informational only.** It never says which letters are wrong or how many, and no cell is highlighted or marked.
+- **No penalty, no state change.** Score, reveals, Reveal History, free reveals, and completion status are untouched; the puzzle isn't marked complete and no result is recorded.
+- **Shown on the transition, not the state.** It appears only when the board goes from having an empty cell to full. Replacing letters on a full board doesn't bring it back; emptying a cell and filling the board again does. Correct completion always shows the existing completion dialog instead.
+- **Not persisted.** Nothing about it is stored. A refresh, a remount, or returning to an archived puzzle that's already full and wrong restores the board without the dialog.
+
+---
+
 ## 2026-10-08
 
 ### Unfinished puzzles persist across refreshes

@@ -62,6 +62,13 @@ export function isPuzzleComplete(state: GameState): boolean {
   )
 }
 
+// Every cell holds a letter, right or wrong. Full but not complete means
+// at least one letter is incorrect — which ones is deliberately never
+// exposed to the player.
+export function isBoardFull(state: GameState): boolean {
+  return Object.values(state.puzzle.cells).every((cell) => Boolean(state.values[cell.id]))
+}
+
 // Once complete, the whole board freezes. Before that, only cells whose
 // letter has been revealed are locked — running out of budget does not
 // lock anything by itself.

@@ -1,5 +1,5 @@
 import { Share, X } from 'lucide-react'
-import type { KeyboardEvent, MouseEvent } from 'react'
+import type { KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import { useEffect, useId, useRef, useState } from 'react'
 import { getStarCount } from '../../core/awardLevel'
 import { useShareResult } from '../../state/useShareResult'
@@ -25,6 +25,62 @@ const FOCUSABLE_SELECTOR =
 export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) {
   const starCount = getStarCount(score)
   const { share, message } = useShareResult()
+
+  return (
+    <ResultDialog title="Puzzle Complete!" onClose={onClose}>
+      <div className="result-modal__award">
+        <StarRating count={starCount} size={40} />
+      </div>
+      <div className="result-modal__score-block">
+        <p className="result-modal__score-label">Final score</p>
+        <p className="result-modal__score">
+          <span className="result-modal__score-value">{SCORE_FORMAT.format(score)}</span>{' '}
+          <span className="result-modal__score-total">/ {SCORE_FORMAT.format(unlockBudget)}</span>
+        </p>
+      </div>
+
+      <button type="button" className="result-modal__share" onClick={share}>
+        <Share size={22} aria-hidden="true" />
+        <span>Share Result</span>
+      </button>
+      <p role="status" className="result-modal__status">
+        {message}
+      </p>
+    </ResultDialog>
+  )
+}
+
+export interface IncompleteSolutionModalProps {
+  onClose: () => void
+}
+
+// The same dialog when play fills every cell but some letter is wrong.
+// Informational only: it never says which letters or how many, and
+// closing it just returns to the board.
+export function IncompleteSolutionModal({ onClose }: IncompleteSolutionModalProps) {
+  const descriptionId = useId()
+
+  return (
+    <ResultDialog title="Not Quite There!" describedBy={descriptionId} onClose={onClose}>
+      <p id={descriptionId} className="result-modal__message">
+        You've filled every cell, but at least one letter isn't correct. Take another look at your answers and keep
+        trying!
+      </p>
+      <button type="button" className="result-modal__continue" onClick={onClose}>
+        Continue Puzzle
+      </button>
+    </ResultDialog>
+  )
+}
+
+interface ResultDialogProps {
+  title: string
+  describedBy?: string
+  onClose: () => void
+  children: ReactNode
+}
+
+function ResultDialog({ title, describedBy, onClose, children }: ResultDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLHeadingElement>(null)
   const titleId = useId()
@@ -36,10 +92,10 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
   // Locks background scroll, moves focus into the dialog, and restores
   // both on close — the page behind genuinely can't be scrolled or
   // interacted with while this is open. Focuses the title, not the first
-  // focusable control (the close button) — a screen reader gets "Puzzle
-  // Complete!" first, and this modal popping up (it's not a response to any
-  // click) doesn't leave a focus-visible ring sitting on the close button,
-  // which reads as a stray highlight rather than a deliberate one.
+  // focusable control (the close button) — a screen reader gets the title
+  // first, and this modal popping up (it's not a response to any click)
+  // doesn't leave a focus-visible ring sitting on the close button, which
+  // reads as a stray highlight rather than a deliberate one.
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -49,7 +105,9 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
       document.body.style.overflow = previousOverflow
       // The control that completed the puzzle (usually the last cell typed
       // into) is disabled by now, so focus would fall to <body>. Land on the
-      // completed puzzle's persistent Share Result control instead.
+      // completed puzzle's persistent Share Result control instead. An
+      // unfinished puzzle has no such control, so focus goes back to the
+      // cell it came from.
       const shareControl = document.querySelector<HTMLElement>(`[${PERSISTENT_SHARE_ATTRIBUTE}]`)
       ;(shareControl ?? previouslyFocused)?.focus()
     }
@@ -97,11 +155,12 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        aria-describedby={describedBy}
         onKeyDown={handleKeyDown}
       >
         <div className="result-modal__header">
           <h2 ref={titleRef} id={titleId} tabIndex={-1} className="result-modal__title">
-            Puzzle Complete!
+            {title}
           </h2>
           <button
             type="button"
@@ -112,25 +171,7 @@ export function ResultModal({ score, unlockBudget, onClose }: ResultModalProps) 
             <X size={20} aria-hidden="true" />
           </button>
         </div>
-
-        <div className="result-modal__award">
-          <StarRating count={starCount} size={40} />
-        </div>
-        <div className="result-modal__score-block">
-          <p className="result-modal__score-label">Final score</p>
-          <p className="result-modal__score">
-            <span className="result-modal__score-value">{SCORE_FORMAT.format(score)}</span>{' '}
-            <span className="result-modal__score-total">/ {SCORE_FORMAT.format(unlockBudget)}</span>
-          </p>
-        </div>
-
-        <button type="button" className="result-modal__share" onClick={share}>
-          <Share size={22} aria-hidden="true" />
-          <span>Share Result</span>
-        </button>
-        <p role="status" className="result-modal__status">
-          {message}
-        </p>
+        {children}
       </div>
     </div>
   )
