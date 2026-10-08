@@ -63,6 +63,7 @@ Neon `published_puzzles` → `released_puzzles` view → `cluecross_reader` → 
 - **Load order:** this page's in-memory session, then a completed result (authoritative), then saved unfinished progress, then a fresh game. Completing a puzzle removes its unfinished entry.
 - **Players can't reset a puzzle.** The only reset is the dev/Preview-only Reset Test State, which also clears the puzzle's unfinished progress.
 - Everything is per browser and device. It stops a casual refresh from handing back free reveals; it doesn't stop someone from clearing site data or replaying on another device. There are no accounts and no cross-device sync.
+- **"Not Quite There!"** is not persisted. It is transient UI state in `PuzzleSessionProvider` (`justFilledIncorrectly`), shown only when play fills the last empty cell while a letter is wrong, so a restored full-but-incorrect board loads quietly.
 
 ## Environments
 

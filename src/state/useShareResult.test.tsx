@@ -61,7 +61,16 @@ function Harness() {
 function renderWith(state: GameState = COMPLETED, publishDate = '2026-10-06') {
   return render(
     <PuzzleSessionContext.Provider
-      value={{ state, publishDate, setCellValue: () => {}, revealLetter: () => {}, justCompleted: false, dismissCompletion: () => {} }}
+      value={{
+        state,
+        publishDate,
+        setCellValue: () => {},
+        revealLetter: () => {},
+        justCompleted: false,
+        dismissCompletion: () => {},
+        justFilledIncorrectly: false,
+        dismissIncorrectFill: () => {},
+      }}
     >
       <Harness />
     </PuzzleSessionContext.Provider>,

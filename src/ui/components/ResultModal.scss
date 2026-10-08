@@ -111,8 +111,18 @@
   color: $color-gray-60;
 }
 
+// The incomplete-solution message, in the slot the score occupies on the
+// completed dialog.
+.result-modal__message {
+  margin: 0 0 $spacing-24;
+  font-family: $font-body;
+  font-size: $font-size-16;
+  color: $color-gray-80;
+}
+
 // The primary action, in the same green pill language as Reveal Letter.
-.result-modal__share {
+.result-modal__share,
+.result-modal__continue {
   display: flex;
   align-items: center;
   justify-content: center;

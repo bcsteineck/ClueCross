@@ -25,6 +25,11 @@ export interface PuzzleSessionValue {
   // from a freshly (re)mounted Puzzle view's own perspective.
   justCompleted: boolean
   dismissCompletion: () => void
+  // True from the moment play fills the last empty cell while some letter
+  // is wrong, until dismissed — never on load or revisit (see
+  // PuzzleSessionProvider). Transient feedback only; not persisted.
+  justFilledIncorrectly: boolean
+  dismissIncorrectFill: () => void
 }
 
 export const PuzzleSessionContext = createContext<PuzzleSessionValue | null>(null)

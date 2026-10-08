@@ -3,6 +3,7 @@ import {
   createCompletedGameState,
   createInitialGameState,
   getLockedCellIds,
+  isBoardFull,
   isCellLocked,
   isPuzzleComplete,
   revealLetter,
@@ -285,6 +286,28 @@ describe('isCellLocked / getLockedCellIds', () => {
   it('locks every cell once the puzzle is complete, regardless of reveal history', () => {
     const state = fillCorrectly(createInitialGameState(makeFixturePuzzle()))
     expect(getLockedCellIds(state)).toEqual({ a: true, b: true, c: true, d: true })
+  })
+})
+
+describe('isBoardFull', () => {
+  it('is false when empty or partially filled', () => {
+    const state = createInitialGameState(makeFixturePuzzle())
+    expect(isBoardFull(state)).toBe(false)
+    expect(isBoardFull(setCellValue(state, 'a', 'X'))).toBe(false)
+  })
+
+  it('is true when every cell has a letter, right or wrong', () => {
+    let state = createInitialGameState(makeFixturePuzzle())
+    for (const cellId of ['a', 'b', 'c', 'd']) state = setCellValue(state, cellId, 'Q')
+    expect(isBoardFull(state)).toBe(true)
+    expect(isPuzzleComplete(state)).toBe(false)
+    expect(isBoardFull(fillCorrectly(createInitialGameState(makeFixturePuzzle())))).toBe(true)
+  })
+
+  it('is false again once a letter is cleared', () => {
+    let state = fillCorrectly(createInitialGameState(makeFixturePuzzle()))
+    state = { ...state, values: { ...state.values, b: '' } }
+    expect(isBoardFull(state)).toBe(false)
   })
 })
 
