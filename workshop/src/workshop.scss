@@ -38,8 +38,14 @@ h3 {
   margin: 0 auto;
   padding: $spacing-24 $spacing-16 $spacing-32;
   display: flex;
+  row-gap: $spacing-20;
+  flex-wrap: wrap;
+}
+
+.ws-header {
+  display: flex;
   flex-direction: column;
-  gap: $spacing-20;
+  gap: $spacing-8;
 }
 
 .ws-header h1 {
@@ -48,7 +54,7 @@ h3 {
 
 .ws-muted {
   color: $color-gray-70;
-  margin: $spacing-4 0 0;
+  margin: 0;
   font-size: 13px;
 }
 
@@ -71,7 +77,13 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: $spacing-16;
-  max-width: 720px;
+  flex: 0 1 33%;
+  border-radius: $radius-8 0 0 $radius-8;
+}
+
+.ws-candidates {
+  border-radius: 0 $radius-8 $radius-8 0;
+  border-left: 0;
 }
 
 .ws-field {
@@ -304,6 +316,7 @@ h3 {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   gap: $spacing-20;
   align-items: start;
+  flex: 2;
 
   @media (max-width: 1000px) {
     grid-template-columns: minmax(0, 1fr);
@@ -349,7 +362,7 @@ h3 {
   text-align: left;
   color: inherit;
   background: $color-gray-00;
-  border: $border-2 solid $color-gray-20;
+  border: $border-1 solid $color-gray-40;
   border-radius: $radius-8;
   cursor: pointer;
 
@@ -362,7 +375,7 @@ h3 {
   &--selected,
   &--selected:hover {
     border-color: $ws-accent;
-    box-shadow: 0 0 0 2px $ws-accent;
+    box-shadow: 0 0 0 $border-1 $ws-accent;
     background: $color-brand-primary-wash;
   }
 }
@@ -739,10 +752,9 @@ h3 {
   flex-wrap: wrap;
   align-items: center;
   gap: $spacing-8 $spacing-16;
-  padding: $spacing-8 $spacing-16;
-  border-left: 4px solid $color-gray-90;
-  background: $color-brand-secondary-wash;
-  border-radius: $radius-4;
+  padding: $spacing-16;
+  border-left: 4px solid $color-brand-secondary;
+  background: $color-gray-00;
 
   p {
     margin: 0;
@@ -752,8 +764,28 @@ h3 {
 .ws-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: $spacing-8;
-  margin-left: auto;
+
+  .ws-button {
+    border-radius: 0;
+    background-color: $color-gray-00;
+    color: $color-gray-90;
+    box-shadow: none;
+    border-bottom: solid 2px $color-gray-30;
+
+    &:hover:not(:disabled):not([aria-disabled='true']) {
+      background-color: $color-gray-20;
+      color: $color-gray-90;
+    }
+
+    &[aria-current='page'] {
+      background-color: $color-gray-20;
+      border-bottom: solid 2px $color-gray-90;
+
+      &:hover {
+        background-color: $color-gray-20;
+      }
+    }
+  }
 }
 
 .ws-button--production {
@@ -796,6 +828,7 @@ h3 {
   flex-direction: column;
   gap: $spacing-16;
   font-size: 14px;
+  flex: 1;
 }
 
 .ws-schedule__header {
