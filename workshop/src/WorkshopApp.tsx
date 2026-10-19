@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { CandidateCard } from './CandidateCard'
@@ -10,24 +10,26 @@ import type { ProductionClient } from './production/productionClient'
 import { PRODUCTION_OPS_ENABLED } from './production/productionOpsMode'
 import { ProductionSchedule } from './ProductionSchedule'
 import type { PublishingClient } from './publishing/publishingClient'
-import type { PublishedState } from './PublishSection'
-import { suggestPuzzleId } from './finalPuzzle/finalPuzzle'
-import type { FinalPuzzleInputs } from './finalPuzzle/finalPuzzle'
 import { MAX_DISPLAYED_CANDIDATES, WORKSHOP_GENERATION_CONFIG, generateBatch } from './generateBatch'
-import type { WorkshopBatch } from './generateBatch'
-import { parsePool } from './parsePool'
-import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE, analyzeCandidatePool, buildPoolSummary } from './poolDiagnostics'
+import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE, buildPoolSummary } from './poolDiagnostics'
 import type { DiagnosticSeverity } from './poolDiagnostics'
 import { PoolReview } from './PoolReview'
 import { PriorityWordsPicker } from './PriorityWordsPicker'
-import { analyzePriorityWords, togglePriorityWord } from './priorityWords'
+import { analyzePriorityWords } from './priorityWords'
 import { createSourcingRequest } from './sourcing/contract'
 import type { AbbreviationSetting, CandidateSource, ProperNounSetting, SourcingErrorCategory } from './sourcing/contract'
 import { fixtureCandidateSource } from './sourcing/fixtureSource'
 import { createLiveCandidateSource } from './sourcing/liveSource'
-import { poolReviewEntries, setCandidateIncluded } from './sourcing/reviewPool'
 import { sourceCandidates } from './sourcing/sourceCandidates'
-import type { SourcedPool } from './sourcing/sourceCandidates'
+import {
+  analyzeActivePool,
+  createInitialWorkshopState,
+  selectActivePriorityWords,
+  selectApprovedId,
+  selectPublished,
+  workshopReducer,
+} from './state/workshopReducer'
+import type { PoolSource, SourceKind } from './state/workshopReducer'
 
 // Pool summary, then errors, warnings and info, then Generate. Severity is
 // spelled out in text so it never relies on color alone.
@@ -39,6 +41,9 @@ const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', war
 // persists, publishes, or writes files; selection, approval, and the Final
 // Puzzle's id/clue live only in this component's state, and a new batch
 // clears them so approval never appears to outlive what it approved.
+// Authoring and workflow state lives in workshopReducer (state/), split
+// into the durable draft and session-only state; this component runs the
+// side effects (sourcing, generation, publishing) and dispatches results.
 //
 // The pool comes either from the manual list or from candidate sourcing
 // followed by human Pool Review; either way the same Pool Diagnostics
@@ -46,8 +51,6 @@ const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', war
 // a failed live request never falls back to the fixture. Each mode keeps its
 // own Priority Words (see priorityWords.ts), which every generated candidate
 // must contain; a selection missing from the pool blocks Generate.
-type SourceKind = 'live' | 'fixture'
-type PoolSource = 'manual' | 'sourced'
 
 const SOURCE_DESCRIPTION: Record<SourceKind, string> = {
   live: 'Live AI: candidates come from the model configured on the Workshop server. Each request is billed.',
@@ -80,41 +83,22 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     live: sources.live ?? defaultLiveSource,
     fixture: sources.fixture ?? fixtureCandidateSource,
   }
-  const [clue, setClue] = useState('')
-  const [poolSource, setPoolSource] = useState<PoolSource>('manual')
-  // Each mode keeps its own Priority Words; only the active mode's apply.
-  const [priorityWords, setPriorityWords] = useState<Record<PoolSource, string[]>>({ manual: [], sourced: [] })
-  const [priorityLimitReached, setPriorityLimitReached] = useState(false)
-  const [poolText, setPoolText] = useState('')
-  const [context, setContext] = useState('')
-  const [properNouns, setProperNouns] = useState<ProperNounSetting>('exclude')
-  const [abbreviations, setAbbreviations] = useState<AbbreviationSetting>('exclude')
-  const [sourcedPool, setSourcedPool] = useState<SourcedPool | null>(null)
-  const [sourceKind, setSourceKind] = useState<SourceKind>('live')
+  const [state, dispatch] = useReducer(workshopReducer, undefined, createInitialWorkshopState)
+  const { draft, session } = state
+  const { clue, poolSource, poolText, finalPuzzle } = draft
+  const { context, properNouns, abbreviations, sourceKind, pool: sourcedPool } = draft.sourcing
+  const { batch, selectedId, generationErrors: errors, stage, priorityLimitReached } = session
   const [sourcing, setSourcing] = useState(false)
   // Guards against a second submission before the `sourcing` state re-renders.
   const sourcingInFlight = useRef(false)
   const [sourcingError, setSourcingError] = useState<{ label: string; message: string } | null>(null)
-  // Counts successful generations this session; batch N uses seed
-  // "workshop-generation-N", so each press yields a new but reproducible batch.
-  const [generationCount, setGenerationCount] = useState(0)
-  const [batch, setBatch] = useState<WorkshopBatch | null>(null)
-  const [errors, setErrors] = useState<string[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  // The approved candidate is the Final Puzzle; approving another replaces it.
-  // `published` survives Back → reopen for the session (publishing is durable).
-  const [finalPuzzle, setFinalPuzzle] = useState<{
-    candidate: PoolCandidate
-    number: number
-    inputs: FinalPuzzleInputs
-    published: PublishedState | null
-  } | null>(null)
-  const [stage, setStage] = useState<'review' | 'final'>('review')
   // Authoring state stays mounted in this component while the schedule is shown.
   const [view, setView] = useState<'authoring' | 'schedule'>('authoring')
   const approveButtonRef = useRef<HTMLButtonElement>(null)
   const returningToReview = useRef(false)
-  const approvedId = finalPuzzle?.candidate.identitySignature ?? null
+  const approvedId = selectApprovedId(draft)
+  // `published` survives Back → reopen for the session (publishing is durable).
+  const published = selectPublished(state)
 
   // Back from Final Puzzle returns focus to the approve control it came from.
   useEffect(() => {
@@ -124,14 +108,8 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     }
   }, [stage])
 
-  const pool = useMemo(
-    () =>
-      poolSource === 'manual'
-        ? parsePool(poolText)
-        : analyzeCandidatePool(poolReviewEntries(sourcedPool?.candidates ?? [])),
-    [poolSource, poolText, sourcedPool],
-  )
-  const activePriorityWords = priorityWords[poolSource]
+  const pool = useMemo(() => analyzeActivePool(poolSource, poolText, sourcedPool), [poolSource, poolText, sourcedPool])
+  const activePriorityWords = selectActivePriorityWords(draft)
   const diagnostics = useMemo(
     () => [...pool.diagnostics, ...analyzePriorityWords(activePriorityWords, pool.usableAnswers)],
     [pool, activePriorityWords],
@@ -156,7 +134,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     try {
       // The current Pool Review stays in place until a new one succeeds.
       const result = await sourceCandidates(candidateSources[sourceKind], request.request)
-      if (result.ok) setSourcedPool(result.pool)
+      if (result.ok) dispatch({ type: 'SOURCED_POOL_RECEIVED', pool: result.pool })
       else setSourcingError({ label: ERROR_LABEL[result.category], message: result.error })
     } finally {
       sourcingInFlight.current = false
@@ -164,53 +142,24 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     }
   }
 
-  function handleToggleIncluded(id: string, included: boolean) {
-    setSourcedPool((current) => current && { ...current, candidates: setCandidateIncluded(current.candidates, id, included) })
-  }
-
   function handleSelectPoolSource(source: PoolSource) {
-    setPoolSource(source)
-    setPriorityLimitReached(false)
+    dispatch({ type: 'SET_POOL_SOURCE', poolSource: source })
   }
 
-  function handleTogglePriority(word: string) {
-    const { selection, limitReached } = togglePriorityWord(activePriorityWords, word)
-    setPriorityLimitReached(limitReached)
-    if (!limitReached) setPriorityWords((current) => ({ ...current, [poolSource]: selection }))
-  }
-
-  function handleRemovePriority(word: string) {
-    setPriorityLimitReached(false)
-    setPriorityWords((current) => ({ ...current, [poolSource]: current[poolSource].filter((w) => w !== word) }))
-  }
-
+  // Generation runs here, not in the reducer: it's timed, and the reducer stays pure.
   function handleGenerate(event: FormEvent) {
     event.preventDefault()
-    const next = generationCount + 1
-    const result = generateBatch(clue, pool, next, activePriorityWords)
-    if (!result.ok) {
-      setErrors(result.errors)
-      return
-    }
-    setErrors([])
-    setGenerationCount(next)
-    setBatch(result.batch)
-    setSelectedId(null)
-    setFinalPuzzle(null)
+    const result = generateBatch(clue, pool, draft.generationCount + 1, activePriorityWords)
+    dispatch(result.ok ? { type: 'GENERATION_SUCCEEDED', batch: result.batch } : { type: 'GENERATION_FAILED', errors: result.errors })
   }
 
   function handleApprove(candidate: PoolCandidate, number: number) {
-    // Re-opening the current Final Puzzle keeps the author's id and clue.
-    if (candidate.identitySignature !== approvedId) {
-      const clueDefault = batch?.clue ?? ''
-      setFinalPuzzle({ candidate, number, inputs: { id: suggestPuzzleId(clueDefault), clue: clueDefault }, published: null })
-    }
-    setStage('final')
+    dispatch({ type: 'APPROVE_CANDIDATE', candidate, number })
   }
 
   function handleBack() {
     returningToReview.current = true
-    setStage('review')
+    dispatch({ type: 'RETURN_TO_REVIEW' })
   }
 
   const candidates = batch?.candidates ?? []
@@ -270,19 +219,15 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
           candidate={finalPuzzle.candidate}
           number={finalPuzzle.number}
           inputs={finalPuzzle.inputs}
-          onInputsChange={(inputs) => setFinalPuzzle({ ...finalPuzzle, inputs })}
+          onInputsChange={(inputs) => dispatch({ type: 'SET_FINAL_PUZZLE_INPUTS', inputs })}
           onBack={handleBack}
           publisher={publisher}
           production={production}
-          published={finalPuzzle.published}
-          onPublished={(published) => {
-            // Applies only to the Final Puzzle that published, even if the
-            // author has moved on while the request was in flight.
-            const signature = finalPuzzle.candidate.identitySignature
-            setFinalPuzzle((current) =>
-              current && current.candidate.identitySignature === signature ? { ...current, published } : current,
-            )
-          }}
+          published={published}
+          onPublished={(confirmed) =>
+            // The reducer ignores it if the author has since approved another candidate.
+            dispatch({ type: 'FINAL_PUZZLE_PUBLISHED', signature: finalPuzzle.candidate.identitySignature, published: confirmed })
+          }
         />
       </div>
     )
@@ -297,7 +242,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
 
         <div className="ws-field">
           <label htmlFor="ws-clue">Clue</label>
-          <input id="ws-clue" type="text" value={clue} onChange={(event) => setClue(event.target.value)} />
+          <input id="ws-clue" type="text" value={clue} onChange={(event) => dispatch({ type: 'SET_CLUE', clue: event.target.value })} />
         </div>
 
         <fieldset className="ws-field ws-source">
@@ -329,7 +274,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               id="ws-pool"
               rows={10}
               value={poolText}
-              onChange={(event) => setPoolText(event.target.value)}
+              onChange={(event) => dispatch({ type: 'SET_POOL_TEXT', poolText: event.target.value })}
               aria-describedby="ws-pool-guidance ws-pool-summary"
               placeholder={'BEAGLE\nPOODLE\nCOLLIE\n…'}
               spellCheck={false}
@@ -354,7 +299,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               id="ws-context"
               type="text"
               value={context}
-              onChange={(event) => setContext(event.target.value)}
+              onChange={(event) => dispatch({ type: 'SET_SOURCING_CONTEXT', context: event.target.value })}
               aria-describedby="ws-context-hint"
             />
             <p id="ws-context-hint" className="ws-muted">
@@ -365,7 +310,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               <select
                 id="ws-proper-nouns"
                 value={properNouns}
-                onChange={(event) => setProperNouns(event.target.value as ProperNounSetting)}
+                onChange={(event) => dispatch({ type: 'SET_PROPER_NOUNS', properNouns: event.target.value as ProperNounSetting })}
               >
                 <option value="exclude">Exclude</option>
                 <option value="allow">Allow</option>
@@ -374,7 +319,9 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               <select
                 id="ws-abbreviations"
                 value={abbreviations}
-                onChange={(event) => setAbbreviations(event.target.value as AbbreviationSetting)}
+                onChange={(event) =>
+                  dispatch({ type: 'SET_ABBREVIATIONS', abbreviations: event.target.value as AbbreviationSetting })
+                }
               >
                 <option value="exclude">Exclude</option>
                 <option value="allow">Allow</option>
@@ -383,7 +330,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               <select
                 id="ws-source-kind"
                 value={sourceKind}
-                onChange={(event) => setSourceKind(event.target.value as SourceKind)}
+                onChange={(event) => dispatch({ type: 'SET_SOURCE_KIND', sourceKind: event.target.value as SourceKind })}
                 disabled={sourcing}
                 aria-describedby="ws-source-kind-hint"
               >
@@ -411,7 +358,10 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
                 {sourcedPool && ' The previous Pool Review below is unchanged.'}
               </div>
             )}
-            {sourcedPool && <PoolReview pool={sourcedPool} onToggleIncluded={handleToggleIncluded} />}
+            {sourcedPool && <PoolReview
+                pool={sourcedPool}
+                onToggleIncluded={(id, included) => dispatch({ type: 'SET_CANDIDATE_INCLUDED', id, included })}
+              />}
           </div>
         )}
 
@@ -419,8 +369,8 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
           words={pool.usableAnswers}
           selected={activePriorityWords}
           limitReached={priorityLimitReached}
-          onToggle={handleTogglePriority}
-          onRemove={handleRemovePriority}
+          onToggle={(word) => dispatch({ type: 'TOGGLE_PRIORITY_WORD', word })}
+          onRemove={(word) => dispatch({ type: 'REMOVE_PRIORITY_WORD', word })}
         />
 
         <div id="ws-pool-summary" className="ws-pool-summary">
@@ -503,7 +453,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
                       number={index + 1}
                       isSelected={candidate.identitySignature === selectedId}
                       isApproved={candidate.identitySignature === approvedId}
-                      onSelect={() => setSelectedId(candidate.identitySignature)}
+                      onSelect={() => dispatch({ type: 'SELECT_CANDIDATE', id: candidate.identitySignature })}
                     />
                   </li>
                 ))}
