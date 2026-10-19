@@ -30,6 +30,16 @@ Workshop browser → `/api/production/*` (same-origin, JSON, typed puzzle-ID con
 - **Privacy:** the schedule is metadata only (ID, clue, date, release instant, status, fingerprint) and never passes through the player's `api/`. `cluecross_reader` is unchanged and still sees released rows only.
 - **Out of scope:** correcting or replacing a released (live) puzzle, editing a scheduled puzzle in place, reordering, and any removal history.
 
+## Workshop authoring state
+
+The Workshop's authoring workflow runs through one pure reducer, `workshopReducer` (`workshop/src/state/workshopReducer.ts`). `WorkshopApp` runs the side effects (sourcing requests, generation, publishing) and dispatches their results.
+
+- **`draft`** is the durable working draft. It holds the clue, the active mode, the manual word text, the sourcing settings and reviewed pool (with include choices), each mode's Priority Words, the generation count (batch N uses seed `workshop-generation-N`), and the Final Puzzle (approved candidate, batch number, ID and clue). It is plain JSON-compatible data. `selectPersistableDraft` is the boundary a draft store will persist; nothing persists it yet.
+- **`session`** is workflow state that changes in the same transitions but never outlives the session: the unsaved batch, the selected candidate, the last Generate errors, the review/final stage, the Priority Word limit notice, and the server-confirmed publication that locks the Final Puzzle. That publication is tagged with the candidate's `identitySignature` and applies only while that candidate is the Final Puzzle.
+- **Outside the reducer:** sourcing in-flight state and its error, the Authoring / Production Schedule view, focus bookkeeping, and everything inside `FinalPuzzle`, `PublishSection`, `ProductionPublishSection`, and `ProductionSchedule` (previews, confirmations, request status).
+- **Derived, never stored:** the active pool's analysis (`analyzeActivePool`), Priority Word diagnostics, whether Generate is allowed, and the selected or approved candidate's position in the batch.
+- **Behavior a later phase will change:** a new batch still clears the selection, the Final Puzzle, and its publication, and `finalPuzzle` still embeds the candidate it was approved from.
+
 ## Release and read path
 
 Neon `published_puzzles` → `released_puzzles` view → `cluecross_reader` → `PUZZLES_READ_DATABASE_URL` → `/api/calendar`, `/api/puzzle?date=` → player.
