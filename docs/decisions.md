@@ -1,5 +1,22 @@
 # Decisions
 
+## 2026-10-19
+
+### Priority Words
+
+Authors can mark up to 10 Priority Words in Authoring inputs. Every generated candidate must contain all of them. This is a hard constraint, not a preference, weighting, or ranking boost.
+
+- **Chosen from the pool, never added to it.** Priority Words are picked from the active mode's usable candidate words, in construction form, so selecting one never adds, duplicates, or rewrites a pool entry.
+- **Per mode.** Enter manually and Source from clue keep separate selections. Switching modes keeps both; only the active mode's apply to Generate.
+- **At most 10.** That equals the Workshop's 10-answer minimum, so every target subset size can hold them all. An eleventh selection is refused with an explanation; existing selections are never removed to make room.
+- **Missing words block, never vanish.** If a Priority Word leaves the pool (an edited list, an excluded Pool Review candidate, or a re-sourced pool), it stays selected, is listed with a Remove action, and blocks Generate until the author restores it or removes it.
+- **Provably uncrossable words block.** A Priority Word that shares no letter with any other candidate word can never cross an answer, so it is reported as an error. No other speculative checks are applied.
+- **Enforced in the generator.** `generateCandidatePoolSelection` takes `requiredAnswers` and validates them itself (valid, unique, in the pool, at most `minAnswers`). Each subset trial starts with every required word and fills the rest from a seeded shuffle of the other words, so the unchanged placement engine places every required word or the trial fails. A final assertion throws if a candidate is ever missing one; it never filters. With no Priority Words, the RNG draws, subsets, and results are identical to before (golden-tested).
+- **Fewer candidates are expected.** Constraints can reduce a batch to a few candidates or none. Nothing relaxes them or falls back to unconstrained generation. An empty constrained batch says no candidate containing all Priority Words was found in that batch, and does not claim the words can never fit together: the batch searches a sample of subsets with a bounded budget, which proves nothing about the combination.
+- **Generation metadata only.** The batch records the Priority Words it used and shows them with its statistics. They aren't saved with the Final Puzzle and play no part in publishing validation or the content fingerprint.
+
+---
+
 ## 2026-10-08 (later)
 
 ### "Not Quite There!" when a full board is wrong

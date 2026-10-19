@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { assignEntryIds, derivePlayableEntries } from '../../tools/generator/src/derive/derivePlayableEntries.js'
 import { DEFAULT_MAX_ATTEMPTS } from '../../tools/generator/src/placement/backtrack.js'
 import { DOGS_BREEDS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsBreedsCandidatePool.js'
+import { DESSERTS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dessertsCandidatePool.js'
 import { DOGS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsCandidatePool.js'
 import { generateCandidatePoolSelection } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import {
@@ -173,6 +174,50 @@ describe('generateBatch', () => {
 
   it('trims the clue', () => {
     expect(generateBatch('  Dogs  ', dogsPool, 1)).toMatchObject({ ok: true, batch: { clue: 'Dogs' } })
+  })
+})
+
+describe('generateBatch with Priority Words', () => {
+  const dessertsPool = parsePool(DESSERTS_CANDIDATE_POOL.join('\n'))
+
+  it('passes Priority Words to the generator: every candidate contains all of them', () => {
+    const required = ['BEAGLE', 'KENNEL']
+    const result = generateBatch('Dogs', dogsPool, 1, required)
+    if (!result.ok) throw new Error(result.errors.join(' '))
+    expect(result.batch.priorityWords).toEqual(required)
+    expect(result.batch.candidates.length).toBeGreaterThan(0)
+    for (const candidate of result.batch.candidates) {
+      expect(candidate.selectedAnswers).toEqual(expect.arrayContaining(required))
+      expect(candidate.metrics.derivedEntries.incidentalEntryCount).toBe(0)
+    }
+    // The pool itself is untouched: no added or duplicated words.
+    expect(result.batch.pool).toEqual(DOGS_CANDIDATE_POOL)
+  })
+
+  it('zero Priority Words generates exactly the unconstrained batch', () => {
+    const result = generateBatch('Dogs', dogsPool, 1, [])
+    if (!result.ok) throw new Error(result.errors.join(' '))
+    expect(result.batch.priorityWords).toEqual([])
+    expect(result.batch.candidates).toEqual(generateOk(1).candidates)
+  })
+
+  it('blocks a Priority Word that is not in the pool, naming it, without generating', () => {
+    const result = generateBatch('Dogs', dogsPool, 1, ['BEAGLE', 'PARROT'])
+    expect(result).toEqual({
+      ok: false,
+      errors: [
+        'PARROT is a Priority Word but is no longer in your candidate list. Restore it or remove it from Priority Words to continue.',
+      ],
+    })
+  })
+
+  it('returns an empty batch (no fallback to unconstrained) when no candidate contains them all', () => {
+    const required = ['BREADPUDDING', 'FROZENYOGURT', 'GINGERBREAD']
+    const result = generateBatch('Desserts', dessertsPool, 1, required)
+    if (!result.ok) throw new Error(result.errors.join(' '))
+    expect(result.batch.candidates).toEqual([])
+    expect(result.batch.priorityWords).toEqual(required)
+    expect(result.batch.diversity.subsetTrialsAttempted).toBe(100)
   })
 })
 

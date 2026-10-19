@@ -3,6 +3,7 @@ import { act, cleanup, render, screen, waitFor, within } from '@testing-library/
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOGS_BREEDS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsBreedsCandidatePool.js'
+import { DESSERTS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dessertsCandidatePool.js'
 import { DOGS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsCandidatePool.js'
 import type { PreviewResponseBody, PublicationSummary, PublishRequest, PublishResponseBody } from './publishing/contract'
 import type { ClientResult, PublishingClient } from './publishing/publishingClient'
@@ -499,6 +500,200 @@ describe('WorkshopApp candidate sourcing and Pool Review', () => {
     for (const card of candidateCards()) {
       expect(card.textContent).not.toMatch(/\bBEAGLE\b|STBERNARD/)
     }
+  })
+})
+
+describe('WorkshopApp Priority Words', () => {
+  const picker = () => screen.getByRole('group', { name: /^Priority Words/ })
+  const priorityBox = (word: string) => within(picker()).getByRole('checkbox', { name: word }) as HTMLInputElement
+  const generateButton = () => screen.getByRole('button', { name: 'Generate Candidates' })
+  const poolField = () => screen.getByLabelText('Candidate words') as HTMLTextAreaElement
+
+  async function replacePool(user: ReturnType<typeof userEvent.setup>, words: string[]) {
+    await user.clear(poolField())
+    await user.click(poolField())
+    await user.paste(words.join('\n'))
+  }
+
+  async function sourceFixture(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('radio', { name: 'Source from clue' }))
+    await user.selectOptions(screen.getByLabelText('Candidate source'), 'fixture')
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    return screen.findByRole('region', { name: 'Pool Review' })
+  }
+
+  it('selects from the manual pool without changing it, and every candidate contains the Priority Words', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    expect(within(picker()).getAllByRole('checkbox')).toHaveLength(DOGS_CANDIDATE_POOL.length)
+    expect(picker().textContent).toMatch('(0 of 10 selected)')
+
+    await user.click(priorityBox('BEAGLE'))
+    await user.click(priorityBox('KENNEL'))
+    expect(priorityBox('BEAGLE').checked).toBe(true)
+    expect(picker().textContent).toMatch('(2 of 10 selected)')
+    expect(picker().textContent).toMatch('Selected: BEAGLE, KENNEL')
+    // The candidate pool is untouched: same text, same 18 usable answers.
+    expect(poolField().value).toBe(DOGS_CANDIDATE_POOL.join('\n'))
+    expect(screen.getByText('18 usable answers')).toBeTruthy()
+
+    await generate(user)
+    expect(screen.getByText(/· Priority Words: BEAGLE, KENNEL/)).toBeTruthy()
+    const cards = candidateCards()
+    expect(cards.length).toBeGreaterThan(0)
+    for (const card of cards) {
+      const words = card.querySelector('.ws-card__words')?.textContent?.split(' · ')
+      expect(words).toEqual(expect.arrayContaining(['BEAGLE', 'KENNEL']))
+    }
+
+    // The batch reports the constraints it used, not later selections.
+    await user.click(priorityBox('PUPPY'))
+    expect(screen.getByText(/· Priority Words: BEAGLE, KENNEL$/)).toBeTruthy()
+  })
+
+  it('without Priority Words the batch line has no Priority Words note', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    await generate(user)
+    expect(screen.getByText(/Clue “Dogs” · 18 words/).textContent).not.toMatch('Priority Words')
+  })
+
+  it('keeps separate selections per authoring mode, and only the active mode applies', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    await user.click(priorityBox('BEAGLE'))
+
+    await sourceFixture(user)
+    expect(picker().textContent).toMatch('(0 of 10 selected)')
+    expect(priorityBox('BEAGLE').checked).toBe(false)
+    await user.click(priorityBox('POODLE'))
+
+    await user.click(screen.getByRole('radio', { name: 'Enter manually' }))
+    expect(priorityBox('BEAGLE').checked).toBe(true)
+    expect(priorityBox('POODLE').checked).toBe(false)
+    expect(picker().textContent).toMatch('Selected: BEAGLE')
+
+    await user.click(screen.getByRole('radio', { name: 'Source from clue' }))
+    expect(priorityBox('POODLE').checked).toBe(true)
+    expect(priorityBox('BEAGLE').checked).toBe(false)
+    await generate(user)
+    expect(screen.getByText(/· Priority Words: POODLE$/)).toBeTruthy()
+  })
+
+  it('allows 10 selections and refuses an eleventh with an explanation, keeping the 10', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    const ten = DOGS_CANDIDATE_POOL.slice(0, 10)
+    for (const word of ten) await user.click(priorityBox(word))
+    expect(picker().textContent).toMatch('(10 of 10 selected)')
+
+    const eleventh = priorityBox(DOGS_CANDIDATE_POOL[10])
+    expect(eleventh.getAttribute('aria-disabled')).toBe('true')
+    expect(eleventh.getAttribute('aria-describedby')).toBe('ws-priority-limit')
+    await user.click(eleventh)
+    expect(eleventh.checked).toBe(false)
+    expect(within(picker()).getByRole('status').textContent).toMatch(
+      'Not selected: you can choose at most 10 Priority Words',
+    )
+    for (const word of ten) expect(priorityBox(word).checked).toBe(true)
+
+    // Deselecting is always allowed, and frees a slot.
+    await user.click(priorityBox(ten[0]))
+    expect(eleventh.getAttribute('aria-disabled')).toBeNull()
+    await user.click(eleventh)
+    expect(eleventh.checked).toBe(true)
+  })
+
+  it('keeps a Priority Word removed from the manual list, blocks Generate, and resolves on Remove', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    await user.click(priorityBox('BEAGLE'))
+    await replacePool(user, DOGS_CANDIDATE_POOL.filter((word) => word !== 'BEAGLE'))
+
+    const message =
+      'BEAGLE is a Priority Word but is no longer in your candidate list. Restore it or remove it from Priority Words to continue.'
+    expect(screen.getByText(message)).toBeTruthy()
+    expect(picker().textContent).toMatch('(1 of 10 selected)')
+    expect(within(picker()).getByText('Not in the candidate list:')).toBeTruthy()
+    expect(generateButton().getAttribute('aria-disabled')).toBe('true')
+    expect(generateButton().getAttribute('aria-describedby')).toMatch('ws-diagnostic-priority-word-missing')
+
+    await generate(user)
+    expect(screen.getByRole('alert').textContent).toMatch(message)
+    expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Remove BEAGLE from Priority Words' }))
+    // The diagnostic clears at once; the earlier submit alert, as for any
+    // other input error, stays until the next Generate.
+    expect(document.getElementById('ws-diagnostic-priority-word-missing')).toBeNull()
+    expect(picker().textContent).toMatch('(0 of 10 selected)')
+    expect(generateButton().getAttribute('aria-disabled')).toBe('false')
+  })
+
+  it('restoring a missing word to the list resolves its error and keeps it selected', async () => {
+    const user = await setup()
+    await fillInputs(user)
+    await user.click(priorityBox('BEAGLE'))
+    await replacePool(user, DOGS_CANDIDATE_POOL.filter((word) => word !== 'BEAGLE'))
+    expect(generateButton().getAttribute('aria-disabled')).toBe('true')
+
+    await replacePool(user, DOGS_CANDIDATE_POOL)
+    expect(screen.queryByText(/BEAGLE is a Priority Word/)).toBeNull()
+    expect(priorityBox('BEAGLE').checked).toBe(true)
+    expect(generateButton().getAttribute('aria-disabled')).toBe('false')
+  })
+
+  it('keeps a sourced Priority Word excluded in Pool Review, blocking Generate until it is included again', async () => {
+    const user = await setup()
+    await user.type(screen.getByLabelText('Clue'), 'Dogs')
+    const review = await sourceFixture(user)
+    await user.click(priorityBox('BEAGLE'))
+    const include = within(review).getByRole('checkbox', { name: 'Include Beagle' })
+
+    await user.click(include)
+    expect(screen.getByText(/^BEAGLE is a Priority Word but is no longer in your candidate list/)).toBeTruthy()
+    expect(generateButton().getAttribute('aria-disabled')).toBe('true')
+
+    await user.click(include)
+    expect(screen.queryByText(/BEAGLE is a Priority Word/)).toBeNull()
+    expect(priorityBox('BEAGLE').checked).toBe(true)
+  })
+
+  it('re-sourcing a pool without a Priority Word keeps the selection and blocks Generate', async () => {
+    const withoutBeagle = {
+      candidates: FIXTURE_SOURCING_RESPONSE.candidates.filter((candidate) => candidate.answer !== 'Beagle'),
+    }
+    const fixture = {
+      generate: vi.fn().mockResolvedValueOnce(FIXTURE_SOURCING_RESPONSE).mockResolvedValueOnce(withoutBeagle),
+    }
+    const user = userEvent.setup()
+    render(<WorkshopApp sources={{ fixture }} publisher={notConfiguredPublisher()} />)
+    await user.type(screen.getByLabelText('Clue'), 'Dogs')
+    await sourceFixture(user)
+    await user.click(priorityBox('BEAGLE'))
+
+    await user.click(screen.getByRole('button', { name: 'Source Candidates' }))
+    await waitFor(() => expect(fixture.generate).toHaveBeenCalledTimes(2))
+    await screen.findByText(/^BEAGLE is a Priority Word but is no longer in your candidate list/)
+    expect(picker().textContent).toMatch('(1 of 10 selected)')
+    expect(screen.getByRole('button', { name: 'Remove BEAGLE from Priority Words' })).toBeTruthy()
+    expect(generateButton().getAttribute('aria-disabled')).toBe('true')
+  })
+
+  it('explains an empty constrained batch without claiming the words can never fit', async () => {
+    const user = await setup()
+    await user.type(screen.getByLabelText('Clue'), 'Desserts')
+    await user.click(poolField())
+    await user.paste(DESSERTS_CANDIDATE_POOL.join('\n'))
+    for (const word of ['BREADPUDDING', 'FROZENYOGURT', 'GINGERBREAD']) await user.click(priorityBox(word))
+    await generate(user)
+
+    const region = screen.getByRole('region', { name: 'Generated Candidates (0)' })
+    expect(region.textContent).toMatch(
+      'No candidates containing all Priority Words (BREADPUDDING, FROZENYOGURT, GINGERBREAD) were found in this generation batch of 100 trials.',
+    )
+    expect(region.textContent).toMatch('doesn’t mean they can’t fit together')
+    expect(region.textContent).not.toMatch(/impossible/i)
   })
 })
 

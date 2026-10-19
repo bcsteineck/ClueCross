@@ -33,6 +33,10 @@ export type DiagnosticCode =
   | 'high-average-length'
   | 'duplicates-removed'
   | 'invalid-entries-excluded'
+  // Priority Word checks (see priorityWords.ts), reported alongside the pool's.
+  | 'priority-word-missing'
+  | 'too-many-priority-words'
+  | 'priority-word-isolated'
 
 export interface PoolDiagnostic {
   code: DiagnosticCode

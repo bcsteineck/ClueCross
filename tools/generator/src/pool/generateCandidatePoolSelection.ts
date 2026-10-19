@@ -93,6 +93,13 @@ export interface CandidatePoolSelectionConfig {
   minAnswers: number
   /** Hard ceiling: a trial is never attempted with more than this many words (clamped to the normalized pool size if larger). */
   maxAnswers: number
+  /**
+   * Words every trial's subset must contain (normalized like candidatePool;
+   * each must be in the pool, unique, and at most minAnswers of them), so
+   * every candidate contains all of them — a hard constraint, never a
+   * preference. Omitted or empty = unconstrained, exactly as before.
+   */
+  requiredAnswers?: string[]
 }
 
 // targetAnswers was considered and deliberately left out: the trial
@@ -192,6 +199,7 @@ export type CandidatePoolSelectionResult = CandidatePoolSelectionSuccess | Candi
 interface ConfigValidationSuccess {
   ok: true
   normalizedPool: string[]
+  requiredAnswers: string[]
 }
 interface ConfigValidationFailure {
   ok: false
@@ -234,7 +242,28 @@ function validateConfig(
         `(${normalized.answers.length}); these bounds can never be satisfied.`,
     }
   }
-  return { ok: true, normalizedPool: normalized.answers }
+  const required = config.requiredAnswers ?? []
+  if (required.length === 0) return { ok: true, normalizedPool: normalized.answers, requiredAnswers: [] }
+
+  const normalizedRequired = normalizeAnswers(required)
+  if (!normalizedRequired.ok) {
+    return { ok: false, reason: `Invalid requiredAnswers: ${normalizedRequired.errors.join(' ')}` }
+  }
+  const missing = normalizedRequired.answers.filter((word) => !normalized.answers.includes(word))
+  if (missing.length > 0) {
+    return { ok: false, reason: `requiredAnswers must all be in the candidate pool; missing: ${missing.join(', ')}.` }
+  }
+  // Every trial's subset holds at least minAnswers words, so up to that
+  // many required words fit every target size without changing the cycle.
+  if (normalizedRequired.answers.length > config.minAnswers) {
+    return {
+      ok: false,
+      reason:
+        `requiredAnswers has ${normalizedRequired.answers.length} words; at most minAnswers ` +
+        `(${config.minAnswers}) are allowed.`,
+    }
+  }
+  return { ok: true, normalizedPool: normalized.answers, requiredAnswers: normalizedRequired.answers }
 }
 
 function sortedWords(words: string[]): string[] {
@@ -297,6 +326,21 @@ function constructSubset(
   }
 }
 
+// Programmer-error guard, not a filter: subset construction already puts
+// every required word in every trial, and fixed-answer construction places
+// every word it's given, so a miss here means an upstream invariant broke.
+function assertContainsRequiredAnswers(candidates: PoolCandidate[], requiredAnswers: string[]): void {
+  for (const candidate of candidates) {
+    const missing = requiredAnswers.filter((word) => !candidate.selectedAnswers.includes(word))
+    if (missing.length > 0) {
+      throw new Error(
+        `Internal error: candidate from trial ${candidate.representativeTrialIndex} is missing required ` +
+          `answer(s) ${missing.join(', ')}.`,
+      )
+    }
+  }
+}
+
 function isSuccess(trial: SubsetTrial): trial is SubsetTrialSuccess {
   return trial.ok
 }
@@ -308,7 +352,10 @@ export function generateCandidatePoolSelection(
   if (!validated.ok) {
     return { ok: false, reason: validated.reason }
   }
-  const normalizedPool = validated.normalizedPool
+  const { normalizedPool, requiredAnswers } = validated
+  // With no required words this is the whole pool in its original order,
+  // so the shuffle below draws exactly as it did before requiredAnswers.
+  const optionalPool = normalizedPool.filter((word) => !requiredAnswers.includes(word))
 
   const maxAnswers = Math.min(config.maxAnswers, normalizedPool.length)
   const minAnswers = config.minAnswers
@@ -329,7 +376,10 @@ export function generateCandidatePoolSelection(
     const constructionSeed = `${trialSeedBase}-construct`
 
     const targetSize = sizes[trialIndex % sizes.length]
-    const attemptedSubset = shuffle(normalizedPool, subsetRng).slice(0, targetSize)
+    const attemptedSubset = [
+      ...requiredAnswers,
+      ...shuffle(optionalPool, subsetRng).slice(0, targetSize - requiredAnswers.length),
+    ]
 
     const { result, seed, attemptsUsed, restarts } = constructSubset(attemptedSubset, constructionSeed, config)
     const restartLog = restarts ? { restarts } : {}
@@ -419,6 +469,8 @@ export function generateCandidatePoolSelection(
       sourceTrialIndices: group.map((t) => t.trialIndex),
     }
   })
+
+  assertContainsRequiredAnswers(candidates, requiredAnswers)
 
   const uniqueSelectedAnswerSetCount = new Set(
     viableTrials.map((trial) => sortedWords(trial.construction.placedAnswers.map((a) => a.word)).join(',')),

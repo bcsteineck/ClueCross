@@ -19,6 +19,8 @@ import { parsePool } from './parsePool'
 import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE, analyzeCandidatePool, buildPoolSummary } from './poolDiagnostics'
 import type { DiagnosticSeverity } from './poolDiagnostics'
 import { PoolReview } from './PoolReview'
+import { PriorityWordsPicker } from './PriorityWordsPicker'
+import { analyzePriorityWords, togglePriorityWord } from './priorityWords'
 import { createSourcingRequest } from './sourcing/contract'
 import type { AbbreviationSetting, CandidateSource, ProperNounSetting, SourcingErrorCategory } from './sourcing/contract'
 import { fixtureCandidateSource } from './sourcing/fixtureSource'
@@ -41,8 +43,11 @@ const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', war
 // The pool comes either from the manual list or from candidate sourcing
 // followed by human Pool Review; either way the same Pool Diagnostics
 // decide whether Generate is allowed. Sourcing never starts generation, and
-// a failed live request never falls back to the fixture.
+// a failed live request never falls back to the fixture. Each mode keeps its
+// own Priority Words (see priorityWords.ts), which every generated candidate
+// must contain; a selection missing from the pool blocks Generate.
 type SourceKind = 'live' | 'fixture'
+type PoolSource = 'manual' | 'sourced'
 
 const SOURCE_DESCRIPTION: Record<SourceKind, string> = {
   live: 'Live AI: candidates come from the model configured on the Workshop server. Each request is billed.',
@@ -76,7 +81,10 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     fixture: sources.fixture ?? fixtureCandidateSource,
   }
   const [clue, setClue] = useState('')
-  const [poolSource, setPoolSource] = useState<'manual' | 'sourced'>('manual')
+  const [poolSource, setPoolSource] = useState<PoolSource>('manual')
+  // Each mode keeps its own Priority Words; only the active mode's apply.
+  const [priorityWords, setPriorityWords] = useState<Record<PoolSource, string[]>>({ manual: [], sourced: [] })
+  const [priorityLimitReached, setPriorityLimitReached] = useState(false)
   const [poolText, setPoolText] = useState('')
   const [context, setContext] = useState('')
   const [properNouns, setProperNouns] = useState<ProperNounSetting>('exclude')
@@ -123,8 +131,14 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
         : analyzeCandidatePool(poolReviewEntries(sourcedPool?.candidates ?? [])),
     [poolSource, poolText, sourcedPool],
   )
+  const activePriorityWords = priorityWords[poolSource]
+  const diagnostics = useMemo(
+    () => [...pool.diagnostics, ...analyzePriorityWords(activePriorityWords, pool.usableAnswers)],
+    [pool, activePriorityWords],
+  )
+  const canGenerate = !diagnostics.some((diagnostic) => diagnostic.severity === 'error')
   const summary = buildPoolSummary(pool.stats)
-  const blockingIds = pool.diagnostics
+  const blockingIds = diagnostics
     .filter((diagnostic) => diagnostic.severity === 'error')
     .map((diagnostic) => `ws-diagnostic-${diagnostic.code}`)
     .join(' ')
@@ -154,10 +168,26 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     setSourcedPool((current) => current && { ...current, candidates: setCandidateIncluded(current.candidates, id, included) })
   }
 
+  function handleSelectPoolSource(source: PoolSource) {
+    setPoolSource(source)
+    setPriorityLimitReached(false)
+  }
+
+  function handleTogglePriority(word: string) {
+    const { selection, limitReached } = togglePriorityWord(activePriorityWords, word)
+    setPriorityLimitReached(limitReached)
+    if (!limitReached) setPriorityWords((current) => ({ ...current, [poolSource]: selection }))
+  }
+
+  function handleRemovePriority(word: string) {
+    setPriorityLimitReached(false)
+    setPriorityWords((current) => ({ ...current, [poolSource]: current[poolSource].filter((w) => w !== word) }))
+  }
+
   function handleGenerate(event: FormEvent) {
     event.preventDefault()
     const next = generationCount + 1
-    const result = generateBatch(clue, pool, next)
+    const result = generateBatch(clue, pool, next, activePriorityWords)
     if (!result.ok) {
       setErrors(result.errors)
       return
@@ -277,7 +307,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               type="radio"
               name="ws-pool-source"
               checked={poolSource === 'manual'}
-              onChange={() => setPoolSource('manual')}
+              onChange={() => handleSelectPoolSource('manual')}
             />{' '}
             Enter manually
           </label>
@@ -286,7 +316,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               type="radio"
               name="ws-pool-source"
               checked={poolSource === 'sourced'}
-              onChange={() => setPoolSource('sourced')}
+              onChange={() => handleSelectPoolSource('sourced')}
             />{' '}
             Source from clue
           </label>
@@ -385,6 +415,14 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
           </div>
         )}
 
+        <PriorityWordsPicker
+          words={pool.usableAnswers}
+          selected={activePriorityWords}
+          limitReached={priorityLimitReached}
+          onToggle={handleTogglePriority}
+          onRemove={handleRemovePriority}
+        />
+
         <div id="ws-pool-summary" className="ws-pool-summary">
           <p className="ws-pool-summary__headline">{summary.headline}</p>
           <ul className="ws-pool-summary__bands">
@@ -396,11 +434,11 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
         </div>
 
         {SEVERITY_ORDER.map((severity) => {
-          const diagnostics = pool.diagnostics.filter((diagnostic) => diagnostic.severity === severity)
-          if (diagnostics.length === 0) return null
+          const ofSeverity = diagnostics.filter((diagnostic) => diagnostic.severity === severity)
+          if (ofSeverity.length === 0) return null
           return (
             <ul key={severity} className={`ws-diagnostics ws-diagnostics--${severity}`}>
-              {diagnostics.map((diagnostic) => (
+              {ofSeverity.map((diagnostic) => (
                 <li key={diagnostic.code} id={`ws-diagnostic-${diagnostic.code}`}>
                   <strong>{SEVERITY_LABEL[severity]}:</strong> {diagnostic.message}
                   {diagnostic.entries && (
@@ -434,7 +472,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
         <button
           type="submit"
           className="ws-button"
-          aria-disabled={!pool.canGenerate}
+          aria-disabled={!canGenerate}
           aria-describedby={blockingIds || undefined}
         >
           Generate Candidates
@@ -453,6 +491,7 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               {batch.diversity.uniqueCandidateCount > MAX_DISPLAYED_CANDIDATES &&
                 ` (showing first ${MAX_DISPLAYED_CANDIDATES})`}{' '}
               · {Math.round(batch.elapsedMs)} ms
+              {batch.priorityWords.length > 0 && ` · Priority Words: ${batch.priorityWords.join(', ')}`}
               {approvedIndex >= 0 && ` · Candidate ${approvedIndex + 1} approved`}
             </p>
             {candidates.length > 0 ? (
@@ -469,6 +508,12 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
                   </li>
                 ))}
               </ul>
+            ) : batch.priorityWords.length > 0 ? (
+              <p>
+                No candidates containing all Priority Words ({batch.priorityWords.join(', ')}) were found in this
+                generation batch of {batch.diversity.subsetTrialsAttempted} trials. That doesn’t mean they can’t fit
+                together — try generating again, removing a Priority Word, or adjusting your candidate word list.
+              </p>
             ) : (
               <p>
                 No valid candidates with {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers}{' '}

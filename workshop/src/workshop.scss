@@ -162,6 +162,85 @@ h3 {
   }
 }
 
+// Priority Words: a wrapping checkbox grid over the usable pool. At the
+// limit, unselected boxes are aria-disabled (still focusable) and muted;
+// the limit message says so in text.
+
+.ws-priority {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+
+  legend {
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: $spacing-4;
+  }
+
+  p {
+    margin: 0;
+  }
+}
+
+.ws-priority__count {
+  font-weight: 400;
+  color: $color-gray-70;
+}
+
+.ws-priority__options {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: $spacing-2 $spacing-12;
+  max-height: 240px;
+  overflow-y: auto;
+
+  label {
+    font-weight: 400;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    overflow-wrap: anywhere;
+  }
+
+  label:has(input[aria-disabled='true']) {
+    color: $color-gray-70;
+  }
+}
+
+.ws-priority__selected {
+  font-size: 14px;
+}
+
+.ws-priority__missing {
+  border-left: 4px solid $color-gray-90;
+  background: $color-gray-10;
+  padding: $spacing-8 $spacing-12;
+  font-size: 14px;
+
+  ul {
+    list-style: none;
+    margin: $spacing-4 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: $spacing-8;
+  }
+
+  li {
+    display: flex;
+    align-items: center;
+    gap: $spacing-8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  .ws-button {
+    padding: $spacing-2 $spacing-8;
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+}
+
 // Pool Review
 
 .ws-review {
