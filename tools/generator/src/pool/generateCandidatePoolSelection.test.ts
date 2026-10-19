@@ -5,7 +5,7 @@ import {
   SELECTED_CONSTRUCTION_RESTARTS,
 } from './generateCandidatePoolSelection'
 import type { CandidatePoolSelectionConfig } from './generateCandidatePoolSelection'
-import { DESSERTS_OBSERVED_11 } from './dessertsCandidatePool'
+import { DESSERTS_CANDIDATE_POOL, DESSERTS_OBSERVED_11 } from './dessertsCandidatePool'
 import { constructFixedAnswerPuzzle } from '../placement/backtrack'
 import { computeMetrics } from '../metrics/metrics'
 import { compareCandidatesStructurally } from './compare'
@@ -598,5 +598,122 @@ describe('generateCandidatePoolSelection: deterministic construction restarts', 
     if (!plain.ok) throw new Error(plain.reason)
     expect(plain.subsetTrials[0]).not.toHaveProperty('restarts')
     expect(plain.subsetTrials[0].seed).toBe('restart-test-1-trial-0-construct')
+  })
+})
+
+describe('generateCandidatePoolSelection: requiredAnswers', () => {
+  // The Workshop's own configuration, spelled out so this suite stays
+  // independent of workshop/.
+  const WORKSHOP_LIKE = {
+    mode: 'candidate-pool' as const,
+    maxWidth: 12,
+    maxHeight: 12,
+    minAnswers: 10,
+    maxAnswers: 16,
+    maxSubsetTrials: 100,
+    constructionRestarts: SELECTED_CONSTRUCTION_RESTARTS,
+  }
+  const dogs = (requiredAnswers?: string[], seed = 'workshop-generation-1'): CandidatePoolSelectionConfig => ({
+    ...WORKSHOP_LIKE,
+    candidatePool: DOGS_CANDIDATE_POOL,
+    seed,
+    ...(requiredAnswers ? { requiredAnswers } : {}),
+  })
+  const runOk = (config: CandidatePoolSelectionConfig) => {
+    const result = generateCandidatePoolSelection(config)
+    if (!result.ok) throw new Error(result.reason)
+    return result
+  }
+
+  // FNV-1a over the JSON of the result's trials and candidates. The golden
+  // values were recorded from the implementation BEFORE requiredAnswers
+  // existed, so these prove unconstrained generation is byte-for-byte
+  // unchanged (same RNG draws, subsets, construction, order, identities).
+  const fnv = (text: string) => {
+    let hash = 2166136261
+    for (let i = 0; i < text.length; i++) {
+      hash ^= text.charCodeAt(i)
+      hash = Math.imul(hash, 16777619)
+    }
+    return (hash >>> 0).toString(16)
+  }
+  const fingerprint = (config: CandidatePoolSelectionConfig) => {
+    const result = runOk(config)
+    return [fnv(JSON.stringify(result.subsetTrials)), fnv(JSON.stringify(result.candidates)), result.candidates.length]
+  }
+
+  it('omitted or empty requiredAnswers reproduces pre-feature output exactly', () => {
+    expect(fingerprint(dogs())).toEqual(['e641b112', '81826bc9', 26])
+    expect(fingerprint(dogs([]))).toEqual(['e641b112', '81826bc9', 26])
+    expect(
+      fingerprint({ ...WORKSHOP_LIKE, candidatePool: DESSERTS_CANDIDATE_POOL, seed: 'workshop-generation-1', requiredAnswers: [] }),
+    ).toEqual(['40d121c9', '3c4e52ea', 4])
+  })
+
+  function expectEveryCandidateContains(result: ReturnType<typeof runOk>, required: string[]) {
+    for (const trial of result.subsetTrials) {
+      for (const word of required) expect(trial.attemptedSubset.filter((w) => w === word)).toHaveLength(1)
+    }
+    for (const candidate of result.candidates) {
+      expect(candidate.selectedAnswers).toEqual(expect.arrayContaining(required))
+      expect(new Set(candidate.selectedAnswers).size).toBe(candidate.selectedAnswers.length)
+      const placed = candidate.construction.placedAnswers.map((answer) => answer.word)
+      for (const word of required) expect(placed.filter((w) => w === word)).toHaveLength(1)
+      expect(matchDerivedEntriesToAuthored(candidate.construction.placedAnswers, candidate.construction.positions).ok).toBe(true)
+      expect(candidate.answerCount).toBeGreaterThanOrEqual(10)
+      expect(candidate.answerCount).toBeLessThanOrEqual(16)
+    }
+  }
+
+  it('one required word appears exactly once in every trial subset and every candidate', () => {
+    const result = runOk(dogs(['BEAGLE']))
+    expect(result.candidates.length).toBeGreaterThan(0)
+    expectEveryCandidateContains(result, ['BEAGLE'])
+    expect(result.wordSelectionFrequency.BEAGLE).toBe(result.candidates.length)
+  })
+
+  it('multiple required words all appear in every candidate, deterministically, across the full size range', () => {
+    const required = ['BEAGLE', 'KENNEL', 'PUPPY']
+    const result = runOk(dogs(required))
+    expect(result.candidates.length).toBeGreaterThan(0)
+    expectEveryCandidateContains(result, required)
+    expect(generateCandidatePoolSelection(dogs(required))).toEqual(result)
+    const sizes = new Set(result.subsetTrials.map((trial) => trial.attemptedSubset.length))
+    expect([...sizes].sort((a, b) => a - b)).toEqual([10, 11, 12, 13, 14, 15, 16])
+  })
+
+  it('normalizes required words with the pool rules', () => {
+    const result = runOk(dogs([' beagle ']))
+    expectEveryCandidateContains(result, ['BEAGLE'])
+  })
+
+  it('rejects required words that are not in the pool, duplicated, invalid, or more than minAnswers', () => {
+    const notInPool = generateCandidatePoolSelection(dogs(['BEAGLE', 'PARROT']))
+    expect(notInPool).toEqual({ ok: false, reason: expect.stringMatching(/missing: PARROT/) })
+
+    const duplicate = generateCandidatePoolSelection(dogs(['BEAGLE', 'beagle']))
+    expect(duplicate).toEqual({ ok: false, reason: expect.stringMatching(/duplicate/i) })
+
+    const invalid = generateCandidatePoolSelection(dogs(['K9']))
+    expect(invalid).toEqual({ ok: false, reason: expect.stringMatching(/invalid requiredAnswers/i) })
+
+    const eleven = generateCandidatePoolSelection(dogs(DOGS_CANDIDATE_POOL.slice(0, 11)))
+    expect(eleven).toEqual({ ok: false, reason: expect.stringMatching(/at most minAnswers \(10\)/) })
+
+    expect(runOk(dogs(DOGS_CANDIDATE_POOL.slice(0, 10))).subsetTrials).toHaveLength(100)
+  })
+
+  it('returns zero candidates for hard constraints rather than falling back to unconstrained generation', () => {
+    const required = ['BREADPUDDING', 'FROZENYOGURT', 'GINGERBREAD']
+    const result = runOk({ ...WORKSHOP_LIKE, candidatePool: DESSERTS_CANDIDATE_POOL, seed: 'workshop-generation-1', requiredAnswers: required })
+    expect(result.candidates).toEqual([])
+    expect(result.diversity.subsetTrialsAttempted).toBe(100)
+    expectEveryCandidateContains(result, required)
+  })
+
+  it('a required word sharing no letter with the pool yields no candidates', () => {
+    const result = runOk({ ...RICH_FIXTURE, candidatePool: [...RICH_FIXTURE.candidatePool, 'ZOO'], requiredAnswers: ['ZOO'] })
+    expect(result.candidates).toEqual([])
+    expect(result.subsetTrials.every((trial) => !trial.ok && trial.attemptedSubset[0] === 'ZOO')).toBe(true)
   })
 })
