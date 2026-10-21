@@ -1,19 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type {
   PreviewResponseBody,
-  PublicationSummary,
   PublishRequest,
   PublishResponseBody,
   PublishValidationErrors,
+  PublishedState,
 } from './publishing/contract'
 import { formatPublishDate, formatReleaseInstant } from './publishing/formatPublication'
 import type { PublishingClient } from './publishing/publishingClient'
 
-/** A durable publication confirmed by the server for this Final Puzzle. */
-export interface PublishedState {
-  kind: 'created' | 'existing'
-  publication: PublicationSummary
-}
+export type { PublishedState }
 
 interface PublishSectionProps {
   request: PublishRequest

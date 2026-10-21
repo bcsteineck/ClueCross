@@ -1,13 +1,14 @@
 // Workshop authoring state: one pure reducer over two explicit slices.
 //
 //   draft   — the author's durable working draft: everything needed to
-//             resume the same puzzle. Plain JSON-compatible data only, and
-//             the boundary a later phase persists (selectPersistableDraft).
+//             resume the same puzzle. Plain JSON-compatible data only; the
+//             Workshop saves it to a local file (see draft/) and restores
+//             it on startup (selectPersistableDraft, DRAFT_RESTORED).
 //   session — workflow state that changes in the same transitions as the
 //             draft but never outlives the session: the unsaved batch, its
 //             selection, Generate errors, the review/final stage, the
-//             Priority Word limit notice, and the server-confirmed
-//             publication that locks the Final Puzzle.
+//             Priority Word limit notice, and the result of re-checking a
+//             restored publication record.
 //
 // Request state (sourcing in flight, its error), navigation between the
 // Authoring and Production Schedule views, and focus bookkeeping stay as
@@ -15,9 +16,8 @@
 // draft. Side effects — sourcing requests, generation (timing), publishing
 // — run in WorkshopApp, which dispatches their results here.
 //
-// Existing behavior is kept exactly, including transitions later phases
-// will deliberately change: a new batch clears the selection, the Final
-// Puzzle, and its publication.
+// A new batch still clears the selection, the Final Puzzle, and its
+// publication record (a later phase changes this with saved candidates).
 
 import type { PoolCandidate } from '../../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { suggestPuzzleId } from '../finalPuzzle/finalPuzzle'
@@ -26,7 +26,7 @@ import type { WorkshopBatch } from '../generateBatch'
 import { parsePool } from '../parsePool'
 import { analyzeCandidatePool } from '../poolDiagnostics'
 import type { CandidatePoolAnalysis } from '../poolDiagnostics'
-import type { PublishedState } from '../PublishSection'
+import type { PublishedState } from '../publishing/contract'
 import { togglePriorityWord } from '../priorityWords'
 import type { AbbreviationSetting, ProperNounSetting } from '../sourcing/contract'
 import { poolReviewEntries, setCandidateIncluded } from '../sourcing/reviewPool'
@@ -41,7 +41,24 @@ export interface FinalPuzzleDraft {
   /** The candidate's 1-based position in the batch it was approved from. */
   number: number
   inputs: FinalPuzzleInputs
+  /**
+   * The dev-calendar publication the server confirmed for this Final
+   * Puzzle; it locks the ID and clue. Kept in the draft so a restored Final
+   * Puzzle stays locked, and re-checked against the server on restore
+   * (PUBLICATION_CHECKED) rather than trusted as current.
+   */
+  publication: PublishedState | null
 }
+
+/** Outcome of re-checking a restored publication record with the dev calendar. */
+export type PublicationCheck =
+  | 'checking'
+  /** The dev calendar still has exactly this puzzle under this ID. */
+  | 'confirmed'
+  /** The dev calendar has no puzzle with this ID any more; the record was cleared. */
+  | 'not-found'
+  /** The dev calendar couldn't confirm it (unavailable, or different content); the record and lock stay. */
+  | 'unconfirmed'
 
 /** The durable working draft. Every value is JSON-compatible. */
 export interface WorkshopDraft {
@@ -76,8 +93,8 @@ export interface WorkshopSession {
   stage: 'review' | 'final'
   /** The last Priority Word selection was refused because the limit was reached. */
   priorityLimitReached: boolean
-  /** Server-confirmed publication of the Final Puzzle with this identitySignature. */
-  published: { signature: string; state: PublishedState } | null
+  /** Set only for a Final Puzzle restored with a publication record. */
+  publicationCheck: PublicationCheck | null
 }
 
 export interface WorkshopState {
@@ -104,6 +121,11 @@ export type WorkshopAction =
   | { type: 'RETURN_TO_REVIEW' }
   | { type: 'SET_FINAL_PUZZLE_INPUTS'; inputs: FinalPuzzleInputs }
   | { type: 'FINAL_PUZZLE_PUBLISHED'; signature: string; published: PublishedState }
+  /** Replaces the whole draft with a saved one; the session starts fresh. */
+  | { type: 'DRAFT_RESTORED'; draft: WorkshopDraft }
+  /** Starts over with `draft` (a createInitialDraft() already saved) and a fresh session. */
+  | { type: 'NEW_PUZZLE'; draft: WorkshopDraft }
+  | { type: 'PUBLICATION_CHECKED'; signature: string; outcome: Exclude<PublicationCheck, 'checking'> }
 
 export function createInitialDraft(): WorkshopDraft {
   return {
@@ -124,7 +146,7 @@ export function createInitialSession(): WorkshopSession {
     generationErrors: [],
     stage: 'review',
     priorityLimitReached: false,
-    published: null,
+    publicationCheck: null,
   }
 }
 
@@ -201,7 +223,7 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
       // approval never appears to outlive what it approved.
       return {
         draft: { ...state.draft, generationCount: action.batch.generationNumber, finalPuzzle: null },
-        session: { ...state.session, batch: action.batch, selectedId: null, generationErrors: [], published: null },
+        session: { ...state.session, batch: action.batch, selectedId: null, generationErrors: [], publicationCheck: null },
       }
     case 'SELECT_CANDIDATE':
       return { ...state, session: { ...state.session, selectedId: action.id } }
@@ -218,9 +240,10 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
             candidate: action.candidate,
             number: action.number,
             inputs: { id: suggestPuzzleId(clueDefault), clue: clueDefault },
+            publication: null,
           },
         },
-        session: { ...session, published: null },
+        session: { ...session, publicationCheck: null },
       }
     }
     case 'RETURN_TO_REVIEW':
@@ -233,8 +256,27 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
     case 'FINAL_PUZZLE_PUBLISHED':
       // Applies only to the Final Puzzle that published, even if the author
       // has moved on while the request was in flight.
-      if (action.signature !== selectApprovedId(state.draft)) return state
-      return { ...state, session: { ...state.session, published: { signature: action.signature, state: action.published } } }
+      if (action.signature !== selectApprovedId(state.draft) || !state.draft.finalPuzzle) return state
+      return {
+        draft: { ...state.draft, finalPuzzle: { ...state.draft.finalPuzzle, publication: action.published } },
+        session: { ...state.session, publicationCheck: null },
+      }
+    case 'DRAFT_RESTORED':
+      return {
+        draft: action.draft,
+        session: { ...createInitialSession(), publicationCheck: action.draft.finalPuzzle?.publication ? 'checking' : null },
+      }
+    case 'NEW_PUZZLE':
+      return { draft: action.draft, session: createInitialSession() }
+    case 'PUBLICATION_CHECKED': {
+      const finalPuzzle = state.draft.finalPuzzle
+      // Only for the restored record still being checked.
+      if (!finalPuzzle?.publication || action.signature !== finalPuzzle.candidate.identitySignature) return state
+      if (state.session.publicationCheck !== 'checking') return state
+      const session = { ...state.session, publicationCheck: action.outcome }
+      if (action.outcome !== 'not-found') return { ...state, session }
+      return { draft: { ...state.draft, finalPuzzle: { ...finalPuzzle, publication: null } }, session }
+    }
     default:
       return state
   }
@@ -269,8 +311,7 @@ export function selectApprovedId(draft: WorkshopDraft): string | null {
   return draft.finalPuzzle?.candidate.identitySignature ?? null
 }
 
-/** The publication confirmed for the current Final Puzzle, if any. */
+/** The publication recorded for the current Final Puzzle, if any. */
 export function selectPublished(state: WorkshopState): PublishedState | null {
-  const { published } = state.session
-  return published && published.signature === selectApprovedId(state.draft) ? published.state : null
+  return state.draft.finalPuzzle?.publication ?? null
 }

@@ -27,6 +27,12 @@ export interface PublicationSummary {
   fingerprintVersion: FingerprintVersion
 }
 
+/** A durable publication confirmed by the server for a Final Puzzle (shown and locked by PublishSection). */
+export interface PublishedState {
+  kind: 'created' | 'existing'
+  publication: PublicationSummary
+}
+
 export interface PublishValidationErrors {
   metadata: MetadataIssue[]
   production: string[]

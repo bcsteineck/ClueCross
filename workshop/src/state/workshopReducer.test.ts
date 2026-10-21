@@ -86,7 +86,7 @@ describe('workshopReducer: initial state', () => {
         generationErrors: [],
         stage: 'review',
         priorityLimitReached: false,
-        published: null,
+        publicationCheck: null,
       },
     })
   })
@@ -250,7 +250,7 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
     expect(state.draft.generationCount).toBe(2)
     expect(state.draft.finalPuzzle).toBeNull()
     expect(state.session.selectedId).toBeNull()
-    expect(state.session.published).toBeNull()
+    expect(selectPublished(state)).toBeNull()
     // The stage is left alone; WorkshopApp only shows Final Puzzle when one exists.
     expect(state.session.stage).toBe('final')
   })
@@ -262,6 +262,7 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
       candidate: batch1.candidates[0],
       number: 1,
       inputs: { id: 'dogs', clue: 'Dogs' },
+      publication: null,
     })
     expect(selectApprovedId(state.draft)).toBe(batch1.candidates[0].identitySignature)
   })
@@ -292,7 +293,7 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
       approvedState(),
     )
     expect(state.draft.finalPuzzle).toMatchObject({ candidate: batch1.candidates[1], number: 2, inputs: { id: 'dogs' } })
-    expect(state.session.published).toBeNull()
+    expect(state.draft.finalPuzzle?.publication).toBeNull()
     expect(selectPublished(state)).toBeNull()
   })
 
@@ -355,7 +356,73 @@ describe('workshopReducer: purity and the persistence boundary', () => {
     )
     const json = JSON.stringify(draft)
     expect(json).not.toContain('"batch"')
-    expect(json).not.toContain('contentFingerprint')
+    expect(json).not.toContain('generationErrors')
+    // The server-confirmed dev publication is part of the Final Puzzle, so a restored one stays locked.
+    expect(draft.finalPuzzle?.publication).toBe(PUBLISHED)
     expect(JSON.parse(json)).toEqual(draft)
+  })
+
+})
+
+describe('workshopReducer: restore, New Puzzle, and publication checks', () => {
+  function publishedDraft() {
+    return run([
+      { type: 'GENERATION_SUCCEEDED', batch: batch1 },
+      { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 },
+      { type: 'FINAL_PUZZLE_PUBLISHED', signature: batch1.candidates[0].identitySignature, published: PUBLISHED },
+    ]).draft
+  }
+
+  it('DRAFT_RESTORED replaces the draft and starts a fresh session', () => {
+    const busy = run([
+      { type: 'GENERATION_SUCCEEDED', batch: batch1 },
+      { type: 'SELECT_CANDIDATE', id: batch1.candidates[0].identitySignature },
+      { type: 'GENERATION_FAILED', errors: ['x'] },
+    ])
+    const saved = { ...createInitialWorkshopState().draft, clue: 'Pirates', generationCount: 7 }
+    const restored = workshopReducer(busy, { type: 'DRAFT_RESTORED', draft: saved })
+    expect(restored.draft).toBe(saved)
+    expect(restored.session).toEqual(createInitialWorkshopState().session)
+  })
+
+  it('a restored publication record starts a check; other restores do not', () => {
+    const draft = publishedDraft()
+    expect(workshopReducer(createInitialWorkshopState(), { type: 'DRAFT_RESTORED', draft }).session.publicationCheck).toBe(
+      'checking',
+    )
+    const unpublished = { ...draft, finalPuzzle: { ...draft.finalPuzzle!, publication: null } }
+    expect(
+      workshopReducer(createInitialWorkshopState(), { type: 'DRAFT_RESTORED', draft: unpublished }).session.publicationCheck,
+    ).toBeNull()
+  })
+
+  it('a confirmed or unconfirmed check keeps the record; not-found clears it', () => {
+    const restored = workshopReducer(createInitialWorkshopState(), { type: 'DRAFT_RESTORED', draft: publishedDraft() })
+    const signature = batch1.candidates[0].identitySignature
+    for (const outcome of ['confirmed', 'unconfirmed'] as const) {
+      const checked = workshopReducer(restored, { type: 'PUBLICATION_CHECKED', signature, outcome })
+      expect(checked.session.publicationCheck).toBe(outcome)
+      expect(selectPublished(checked)).toBe(PUBLISHED)
+    }
+    const notFound = workshopReducer(restored, { type: 'PUBLICATION_CHECKED', signature, outcome: 'not-found' })
+    expect(notFound.session.publicationCheck).toBe('not-found')
+    expect(selectPublished(notFound)).toBeNull()
+    // A check for another candidate, or one that isn't pending, is ignored.
+    expect(workshopReducer(restored, { type: 'PUBLICATION_CHECKED', signature: 'other', outcome: 'not-found' })).toBe(restored)
+    expect(workshopReducer(notFound, { type: 'PUBLICATION_CHECKED', signature, outcome: 'confirmed' })).toBe(notFound)
+  })
+
+  it('NEW_PUZZLE replaces everything with the given empty draft and a fresh session', () => {
+    const fresh = createInitialWorkshopState().draft
+    const state = run([
+      { type: 'SET_CLUE', clue: 'Dogs' },
+      { type: 'TOGGLE_PRIORITY_WORD', word: 'BEAGLE' },
+      { type: 'GENERATION_SUCCEEDED', batch: batch1 },
+      { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 },
+      { type: 'NEW_PUZZLE', draft: fresh },
+    ])
+    expect(state.draft).toBe(fresh)
+    expect(state.draft.generationCount).toBe(0)
+    expect(state.session).toEqual(createInitialWorkshopState().session)
   })
 })

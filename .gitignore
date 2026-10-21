@@ -16,6 +16,10 @@ dist-ssr
 # analogous to dist, not source.
 tools/generator/output
 
+# The Workshop's local working draft (see vite.workshop.config.ts). Also
+# matched by *.local above; listed so the intent is explicit.
+workshop/.local/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

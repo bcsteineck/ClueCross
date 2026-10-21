@@ -3,7 +3,13 @@ import type { FormEvent } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { CandidateCard } from './CandidateCard'
 import { CandidateDetail } from './CandidateDetail'
+import { createDraftClient } from './draft/draftClient'
+import type { DraftClient } from './draft/draftClient'
+import { useWorkingDraft } from './draft/useWorkingDraft'
+import { DraftGate } from './DraftGate'
+import { DraftStatus } from './DraftStatus'
 import { FinalPuzzle } from './FinalPuzzle'
+import { NewPuzzleControl } from './NewPuzzleControl'
 import { createPublishingClient } from './publishing/publishingClient'
 import { createProductionClient } from './production/productionClient'
 import type { ProductionClient } from './production/productionClient'
@@ -29,21 +35,25 @@ import {
   selectPublished,
   workshopReducer,
 } from './state/workshopReducer'
-import type { PoolSource, SourceKind } from './state/workshopReducer'
+import type { PoolSource, PublicationCheck, SourceKind } from './state/workshopReducer'
+import type { PreviewResponseBody, PublicationSummary } from './publishing/contract'
+import type { ClientResult } from './publishing/publishingClient'
+import type { PublishedState } from './PublishSection'
 
 // Pool summary, then errors, warnings and info, then Generate. Severity is
 // spelled out in text so it never relies on color alone.
 const SEVERITY_ORDER: DiagnosticSeverity[] = ['error', 'warning', 'info']
 const SEVERITY_LABEL: Record<DiagnosticSeverity, string> = { error: 'Error', warning: 'Warning', info: 'Note' }
 
-// Session-only authoring loop: clue + word pool -> candidate batch ->
-// select -> approve -> Final Puzzle -> validate -> export. Nothing here
-// persists, publishes, or writes files; selection, approval, and the Final
-// Puzzle's id/clue live only in this component's state, and a new batch
-// clears them so approval never appears to outlive what it approved.
-// Authoring and workflow state lives in workshopReducer (state/), split
-// into the durable draft and session-only state; this component runs the
-// side effects (sourcing, generation, publishing) and dispatches results.
+// Authoring loop: clue + word pool -> candidate batch -> select -> approve
+// -> Final Puzzle -> validate -> publish or export. Authoring and workflow
+// state lives in workshopReducer (state/), split into the durable working
+// draft and session-only state; this component runs the side effects
+// (sourcing, generation, publishing) and dispatches results. The draft is
+// saved to a local file through the Workshop server and restored on
+// startup (draft/useWorkingDraft); the current batch and its selection are
+// session-only, and a new batch still clears the Final Puzzle so approval
+// never appears to outlive what it approved.
 //
 // The pool comes either from the manual list or from candidate sourcing
 // followed by human Pool Review; either way the same Pool Diagnostics
@@ -68,6 +78,34 @@ const defaultLiveSource = createLiveCandidateSource()
 const defaultPublisher = createPublishingClient()
 // Only a Workshop started with `npm run workshop:production-ops` has one.
 const defaultProduction = PRODUCTION_OPS_ENABLED ? createProductionClient() : null
+const defaultDrafts = createDraftClient()
+
+const PUBLICATION_NOTICE: Record<PublicationCheck, string> = {
+  checking: 'Restored from the working draft as published to the dev calendar. Checking with the dev calendar…',
+  confirmed: 'Restored from the working draft. The dev calendar still has this puzzle, so its ID and clue stay locked.',
+  'not-found':
+    'This Final Puzzle was recorded as published to the dev calendar, but the dev calendar no longer has a puzzle with its ID, so the ID and clue are unlocked.',
+  unconfirmed:
+    'Restored from the working draft as published to the dev calendar, but the dev calendar couldn’t confirm it right now. The ID and clue stay locked.',
+}
+
+/** Re-checks a restored publication record against the dev calendar's own answer. */
+function classifyPublicationCheck(
+  result: ClientResult<PreviewResponseBody>,
+  record: PublicationSummary,
+): Exclude<PublicationCheck, 'checking'> {
+  if (!result.ok) return 'unconfirmed'
+  const { body } = result
+  if (body.status === 'estimate') return 'not-found'
+  if (
+    body.status === 'existing' &&
+    body.publication.puzzleId === record.puzzleId &&
+    body.publication.contentFingerprint === record.contentFingerprint
+  ) {
+    return 'confirmed'
+  }
+  return 'unconfirmed'
+}
 
 interface WorkshopAppProps {
   /** Injectable for tests; default to the live server endpoint and the deterministic fixture. */
@@ -76,15 +114,24 @@ interface WorkshopAppProps {
   publisher?: PublishingClient
   /** Production operations; null (the default outside Production-operations mode) hides them entirely. */
   production?: ProductionClient | null
+  /** Injectable for tests; defaults to the Workshop server's working-draft endpoint. */
+  drafts?: DraftClient
 }
 
-export function WorkshopApp({ sources = {}, publisher = defaultPublisher, production = defaultProduction }: WorkshopAppProps = {}) {
+export function WorkshopApp({
+  sources = {},
+  publisher = defaultPublisher,
+  production = defaultProduction,
+  drafts = defaultDrafts,
+}: WorkshopAppProps = {}) {
   const candidateSources: Record<SourceKind, CandidateSource> = {
     live: sources.live ?? defaultLiveSource,
     fixture: sources.fixture ?? fixtureCandidateSource,
   }
-  const [state, dispatch] = useReducer(workshopReducer, undefined, createInitialWorkshopState)
+  const [state, rawDispatch] = useReducer(workshopReducer, undefined, createInitialWorkshopState)
   const { draft, session } = state
+  const working = useWorkingDraft(drafts, draft, rawDispatch)
+  const { dispatch, currentEpoch } = working
   const { clue, poolSource, poolText, finalPuzzle } = draft
   const { context, properNouns, abbreviations, sourceKind, pool: sourcedPool } = draft.sourcing
   const { batch, selectedId, generationErrors: errors, stage, priorityLimitReached } = session
@@ -95,7 +142,9 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
   // Authoring state stays mounted in this component while the schedule is shown.
   const [view, setView] = useState<'authoring' | 'schedule'>('authoring')
   const approveButtonRef = useRef<HTMLButtonElement>(null)
+  const clueInputRef = useRef<HTMLInputElement>(null)
   const returningToReview = useRef(false)
+  const focusClueAfterReset = useRef(false)
   const approvedId = selectApprovedId(draft)
   // `published` survives Back → reopen for the session (publishing is durable).
   const published = selectPublished(state)
@@ -107,6 +156,35 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
       approveButtonRef.current?.focus()
     }
   }, [stage])
+
+  // After New Puzzle, focus starts again at the clue.
+  useEffect(() => {
+    if (focusClueAfterReset.current) {
+      focusClueAfterReset.current = false
+      clueInputRef.current?.focus()
+    }
+  })
+
+  // A Final Puzzle restored with a dev-calendar publication record keeps
+  // its lock, but the record is re-checked with the dev calendar rather
+  // than trusted: if the calendar no longer has that ID, the lock is lifted.
+  const publicationCheck = session.publicationCheck
+  useEffect(() => {
+    const record = finalPuzzle?.publication?.publication
+    if (publicationCheck !== 'checking' || !finalPuzzle || !record) return
+    const epoch = currentEpoch()
+    const signature = finalPuzzle.candidate.identitySignature
+    let active = true
+    void publisher
+      .preview({ construction: finalPuzzle.candidate.construction, id: record.puzzleId, clue: finalPuzzle.inputs.clue })
+      .then((result) => {
+        if (!active || epoch !== currentEpoch()) return
+        dispatch({ type: 'PUBLICATION_CHECKED', signature, outcome: classifyPublicationCheck(result, record) })
+      })
+    return () => {
+      active = false
+    }
+  }, [publicationCheck, finalPuzzle, publisher, currentEpoch, dispatch])
 
   const pool = useMemo(() => analyzeActivePool(poolSource, poolText, sourcedPool), [poolSource, poolText, sourcedPool])
   const activePriorityWords = selectActivePriorityWords(draft)
@@ -131,9 +209,12 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     sourcingInFlight.current = true
     setSourcingError(null)
     setSourcing(true)
+    // A response that arrives after the draft was replaced (New Puzzle) belongs to the old puzzle.
+    const epoch = currentEpoch()
     try {
       // The current Pool Review stays in place until a new one succeeds.
       const result = await sourceCandidates(candidateSources[sourceKind], request.request)
+      if (epoch !== currentEpoch()) return
       if (result.ok) dispatch({ type: 'SOURCED_POOL_RECEIVED', pool: result.pool })
       else setSourcingError({ label: ERROR_LABEL[result.category], message: result.error })
     } finally {
@@ -146,7 +227,8 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
     dispatch({ type: 'SET_POOL_SOURCE', poolSource: source })
   }
 
-  // Generation runs here, not in the reducer: it's timed, and the reducer stays pure.
+  // Generation runs here, not in the reducer: it's timed, and the reducer
+  // stays pure. It is synchronous, so no reset can land mid-generation.
   function handleGenerate(event: FormEvent) {
     event.preventDefault()
     const result = generateBatch(clue, pool, draft.generationCount + 1, activePriorityWords)
@@ -160,6 +242,21 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
   function handleBack() {
     returningToReview.current = true
     dispatch({ type: 'RETURN_TO_REVIEW' })
+  }
+
+  // Captures the draft epoch when the Final Puzzle renders: a publish that
+  // completes after New Puzzle (or a reload) is dropped, even if the new
+  // draft happens to approve the same layout again.
+  function publishedHandler(signature: string) {
+    const epoch = currentEpoch()
+    return (confirmed: PublishedState) => {
+      if (epoch === currentEpoch()) dispatch({ type: 'FINAL_PUZZLE_PUBLISHED', signature, published: confirmed })
+    }
+  }
+
+  function handleNewPuzzleReset() {
+    setSourcingError(null)
+    focusClueAfterReset.current = true
   }
 
   const candidates = batch?.candidates ?? []
@@ -197,8 +294,32 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
           </nav>
         </div>
       )}
+      {working.phase.kind === 'ready' && view === 'authoring' && (
+        <div className="ws-header__draft">
+          <DraftStatus
+            status={working.saveStatus}
+            onRetry={working.retrySave}
+            onReload={working.reload}
+            onOverwrite={working.overwriteAfterConflict}
+          />
+          <NewPuzzleControl onConfirm={working.startNewPuzzle} onReset={handleNewPuzzleReset} />
+        </div>
+      )}
     </header>
   )
+
+  if (working.phase.kind !== 'ready') {
+    return (
+      <div className="ws-app">
+        {header}
+        <DraftGate
+          phase={working.phase}
+          onRetry={working.reload}
+          onReplaceInvalid={working.replaceInvalidDraft}
+        />
+      </div>
+    )
+  }
 
   if (production && view === 'schedule') {
     return (
@@ -224,10 +345,8 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
           publisher={publisher}
           production={production}
           published={published}
-          onPublished={(confirmed) =>
-            // The reducer ignores it if the author has since approved another candidate.
-            dispatch({ type: 'FINAL_PUZZLE_PUBLISHED', signature: finalPuzzle.candidate.identitySignature, published: confirmed })
-          }
+          onPublished={publishedHandler(finalPuzzle.candidate.identitySignature)}
+          notice={publicationCheck ? PUBLICATION_NOTICE[publicationCheck] : null}
         />
       </div>
     )
@@ -242,7 +361,13 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
 
         <div className="ws-field">
           <label htmlFor="ws-clue">Clue</label>
-          <input id="ws-clue" type="text" value={clue} onChange={(event) => dispatch({ type: 'SET_CLUE', clue: event.target.value })} />
+          <input
+            id="ws-clue"
+            type="text"
+            ref={clueInputRef}
+            value={clue}
+            onChange={(event) => dispatch({ type: 'SET_CLUE', clue: event.target.value })}
+          />
         </div>
 
         <fieldset className="ws-field ws-source">
@@ -429,6 +554,28 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
         </button>
       </form>
 
+      {finalPuzzle && approvedIndex < 0 && (
+        <section className="ws-panel ws-restored-final" aria-labelledby="ws-restored-final-heading">
+          <h2 id="ws-restored-final-heading" className="ws-panel__heading">
+            Final Puzzle
+          </h2>
+          <p>
+            Approved Candidate {finalPuzzle.number}
+            {finalPuzzle.inputs.id.trim() && ` · ${finalPuzzle.inputs.id.trim()}`}
+            {finalPuzzle.inputs.clue.trim() && ` · “${finalPuzzle.inputs.clue.trim()}”`}. Its original batch isn’t
+            kept, but the approved puzzle is saved in the working draft.
+          </p>
+          <button
+            type="button"
+            className="ws-button"
+            ref={approveButtonRef}
+            onClick={() => handleApprove(finalPuzzle.candidate, finalPuzzle.number)}
+          >
+            Open Final Puzzle
+          </button>
+        </section>
+      )}
+
       {batch && (
         <div className="ws-results">
           <section className="ws-panel ws-candidates" aria-labelledby="ws-candidates-heading">
@@ -443,6 +590,10 @@ export function WorkshopApp({ sources = {}, publisher = defaultPublisher, produc
               · {Math.round(batch.elapsedMs)} ms
               {batch.priorityWords.length > 0 && ` · Priority Words: ${batch.priorityWords.join(', ')}`}
               {approvedIndex >= 0 && ` · Candidate ${approvedIndex + 1} approved`}
+            </p>
+            <p className="ws-muted ws-candidates__note">
+              Generated candidates are temporary until approved as the Final Puzzle. Unsaved candidates will be lost when
+              you close or refresh the Workshop.
             </p>
             {candidates.length > 0 ? (
               <ul className="ws-card-grid">
