@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-10-21
+
+### Workshop application shell and workspaces
+
+The Workshop's single long page became an application shell with four workspaces — Author, Candidates, Final Puzzle, and Publish — plus Production Schedule in Production-operations mode. See `docs/architecture.md`, "Workshop navigation".
+
+- **A slim, labelled sidebar, not a collapsible one.** From 1024px up, the sidebar is always visible at about 200px; below that, a top bar and a modal drawer. An icon-only rail was judged unnecessary.
+- **Hash routes, no router dependency.** `#/author`, `#/candidates`, `#/final`, `#/publish`, `#/schedule`. Navigation is view state, never part of the working draft.
+- **Final Puzzle and Publish are separate.** Final Puzzle keeps the board, ID, clue, and validation (and is where the word editor will go); Publish holds the dev calendar, Production, and the developer export, which is collapsed under Advanced.
+- **Saved Candidates is a tab within Candidates,** shown but not available until saved candidates exist.
+- **Generating over a Final Puzzle asks first.** A new batch has always cleared the approved Final Puzzle; with drafts now persisted (and a publication record possibly attached), doing that silently was too easy. The behavior is unchanged once confirmed.
+- **The review/final stage left the reducer.** Which workspace is showing is the route; `APPROVE_CANDIDATE` now only changes the draft, and the caller navigates.
+
+---
+
 ## 2026-10-19 (later)
 
 ### Persistent working drafts and New Puzzle

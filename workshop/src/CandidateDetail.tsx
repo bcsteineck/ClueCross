@@ -40,10 +40,10 @@ export function CandidateDetail({
 
   return (
     <section className="ws-detail" aria-labelledby="ws-detail-heading">
-      <h2 id="ws-detail-heading" className="ws-detail__heading">
+      <h3 id="ws-detail-heading" className="ws-detail__heading">
         Selected Candidate {number}
         {isApproved && <span className="ws-badge">Approved</span>}
-      </h2>
+      </h3>
 
       <div className="ws-detail__board">
         <CandidateBoard construction={candidate.construction} label={describeBoard(candidate.construction)} />
@@ -70,14 +70,14 @@ export function CandidateDetail({
         </div>
       </dl>
 
-      <h3 className="ws-detail__subheading">Selected answers ({candidate.selectedAnswers.length})</h3>
+      <h4 className="ws-detail__subheading">Selected answers ({candidate.selectedAnswers.length})</h4>
       <ul className="ws-word-list">
         {candidate.selectedAnswers.map((word) => (
           <li key={word}>{word}</li>
         ))}
       </ul>
 
-      <h3 className="ws-detail__subheading">Unselected candidate words ({candidate.unselectedAnswers.length})</h3>
+      <h4 className="ws-detail__subheading">Unselected candidate words ({candidate.unselectedAnswers.length})</h4>
       {candidate.unselectedAnswers.length > 0 ? (
         <ul className="ws-word-list ws-word-list--muted">
           {candidate.unselectedAnswers.map((word) => (
@@ -88,7 +88,7 @@ export function CandidateDetail({
         <p className="ws-muted">Every candidate word was used.</p>
       )}
 
-      <h3 className="ws-detail__subheading">Additional metrics</h3>
+      <h4 className="ws-detail__subheading">Additional metrics</h4>
       <dl className="ws-metrics">
         <dt>Authored intersections</dt>
         <dd>{authoredIntersections.totalAuthoredIntersections}</dd>
@@ -106,7 +106,7 @@ export function CandidateDetail({
         <dd>{formatPercent(letters.maxLetterShare)}</dd>
       </dl>
 
-      <h3 className="ws-detail__subheading">Provenance</h3>
+      <h4 className="ws-detail__subheading">Provenance</h4>
       <dl className="ws-metrics ws-metrics--debug">
         <dt>Batch seed</dt>
         <dd>{batchSeed}</dd>
@@ -123,8 +123,8 @@ export function CandidateDetail({
           {isApproved ? 'Open Final Puzzle' : 'Approve Candidate'}
         </button>
         <p className="ws-muted">
-          Approving opens the Final Puzzle for validation and export. Nothing is saved or published, and approval
-          lasts only for this session.
+          Approving saves this candidate as your Final Puzzle in the local working draft. It isn’t published.
+          Unapproved candidates aren’t saved and will be lost when you refresh.
         </p>
       </div>
     </section>

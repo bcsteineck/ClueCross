@@ -6,9 +6,10 @@
 //             it on startup (selectPersistableDraft, DRAFT_RESTORED).
 //   session — workflow state that changes in the same transitions as the
 //             draft but never outlives the session: the unsaved batch, its
-//             selection, Generate errors, the review/final stage, the
-//             Priority Word limit notice, and the result of re-checking a
-//             restored publication record.
+//             selection, Generate errors, the Priority Word limit notice,
+//             and the result of re-checking a restored publication record.
+//             Which workspace is showing is navigation, not state: it lives
+//             in the URL (shell/useWorkspaceRoute).
 //
 // Request state (sourcing in flight, its error), navigation between the
 // Authoring and Production Schedule views, and focus bookkeeping stay as
@@ -90,7 +91,6 @@ export interface WorkshopSession {
   selectedId: string | null
   /** Errors from the last refused Generate; cleared by the next successful one. */
   generationErrors: string[]
-  stage: 'review' | 'final'
   /** The last Priority Word selection was refused because the limit was reached. */
   priorityLimitReached: boolean
   /** Set only for a Final Puzzle restored with a publication record. */
@@ -118,7 +118,6 @@ export type WorkshopAction =
   | { type: 'GENERATION_SUCCEEDED'; batch: WorkshopBatch }
   | { type: 'SELECT_CANDIDATE'; id: string }
   | { type: 'APPROVE_CANDIDATE'; candidate: PoolCandidate; number: number }
-  | { type: 'RETURN_TO_REVIEW' }
   | { type: 'SET_FINAL_PUZZLE_INPUTS'; inputs: FinalPuzzleInputs }
   | { type: 'FINAL_PUZZLE_PUBLISHED'; signature: string; published: PublishedState }
   /** Replaces the whole draft with a saved one; the session starts fresh. */
@@ -144,7 +143,6 @@ export function createInitialSession(): WorkshopSession {
     batch: null,
     selectedId: null,
     generationErrors: [],
-    stage: 'review',
     priorityLimitReached: false,
     publicationCheck: null,
   }
@@ -228,10 +226,10 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
     case 'SELECT_CANDIDATE':
       return { ...state, session: { ...state.session, selectedId: action.id } }
     case 'APPROVE_CANDIDATE': {
-      // Re-opening the current Final Puzzle keeps the author's ID and clue
-      // (and its publication); approving another replaces it.
-      const session = { ...state.session, stage: 'final' as const }
-      if (action.candidate.identitySignature === selectApprovedId(state.draft)) return { ...state, session }
+      // Re-opening the current Final Puzzle changes nothing, keeping the
+      // author's ID and clue (and its publication); approving another
+      // replaces it. Showing the Final Puzzle is the caller's navigation.
+      if (action.candidate.identitySignature === selectApprovedId(state.draft)) return state
       const clueDefault = state.session.batch?.clue ?? ''
       return {
         draft: {
@@ -243,11 +241,9 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
             publication: null,
           },
         },
-        session: { ...session, publicationCheck: null },
+        session: { ...state.session, publicationCheck: null },
       }
     }
-    case 'RETURN_TO_REVIEW':
-      return { ...state, session: { ...state.session, stage: 'review' } }
     case 'SET_FINAL_PUZZLE_INPUTS': {
       const finalPuzzle = state.draft.finalPuzzle
       if (!finalPuzzle) return state
