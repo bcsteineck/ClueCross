@@ -11,6 +11,12 @@
 //   filesystem APIs, so approval can't write puzzle data. Its one read of
 //   reserved puzzle ids is the dependency-free src/publishing/
 //   reservedPuzzleIds.ts, used to reject ids with pre-existing meaning.
+// - The one approved persistence exception is the local working draft: the
+//   Workshop server (never the browser, never browser storage) writes one
+//   JSON file in workshop/.local, which is gitignored, denied to Vite's
+//   static serving, and unknown to the player app. It exists because the
+//   regular and Production-operations Workshops run on different ports, so
+//   browser storage couldn't share one draft between them.
 
 import { describe, expect, it } from 'vitest'
 import gameIndexHtml from '/index.html?raw'
@@ -18,6 +24,7 @@ import gameViteConfig from '/vite.config.ts?raw'
 import workshopIndexHtml from '/workshop/index.html?raw'
 import workshopViteConfig from '/vite.workshop.config.ts?raw'
 import packageJsonText from '/package.json?raw'
+import gitignoreText from '/.gitignore?raw'
 
 const gameSources = import.meta.glob<string>('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true })
 const serverSources = import.meta.glob<string>('/server/**/*.ts', { query: '?raw', import: 'default', eager: true })
@@ -135,8 +142,17 @@ describe('production game / Workshop isolation', () => {
 
   it('the player API read layer (server/) is never imported by player or Workshop browser code', () => {
     expect(Object.keys(serverSources).length).toBeGreaterThan(0)
+    // Relative specifiers are resolved against the importing file, so a
+    // Workshop test importing workshop/server helpers ("../server/…") isn't
+    // mistaken for the player's server/. (Non-test Workshop browser code
+    // may not import any server module at all; see the endpoint test below.)
+    const target = (from: string, specifier: string) =>
+      specifier.startsWith('.') ? new URL(specifier, `file://${from}`).pathname : specifier
     for (const [path, source] of [...Object.entries(gameSources), ...Object.entries(workshopSources)]) {
-      expect(importSpecifiers(source).filter((s) => /(^|\/)server\//.test(s) && !/workshop\/server/.test(s)), path).toEqual([])
+      const playerServer = importSpecifiers(source)
+        .map((specifier) => target(path, specifier))
+        .filter((s) => (s.startsWith('/') ? s.startsWith('/server/') : /(^|\/)server\//.test(s) && !/workshop\/server/.test(s)))
+      expect(playerServer, path).toEqual([])
     }
     expect([...gameImportGraph().reachedSources].filter((path) => path.startsWith('/server/'))).toEqual([])
   })
@@ -217,12 +233,14 @@ describe('production game / Workshop isolation', () => {
 
   it('Workshop browser code talks only to its own sourcing, publishing, and Production-operations endpoints, never a provider or credential', () => {
     // The only allowed network calls: the live source's POST to /api/sourcing,
-    // the publishing client's POSTs to /api/publishing/{preview,publish}, and
-    // the Production client's POSTs to its own /api/production/* paths.
+    // the publishing client's POSTs to /api/publishing/{preview,publish}, the
+    // Production client's POSTs to its own /api/production/* paths, and the
+    // draft client's GET/PUT of /api/draft.
     const fetchers = [
       '/workshop/src/sourcing/liveSource.ts',
       '/workshop/src/publishing/publishingClient.ts',
       '/workshop/src/production/productionClient.ts',
+      '/workshop/src/draft/draftClient.ts',
     ]
     for (const [path, source] of Object.entries(workshopSources)) {
       if (path.endsWith('.test.ts') || path.endsWith('.test.tsx')) continue
@@ -252,9 +270,40 @@ describe('production game / Workshop isolation', () => {
     expect([...productionClient.matchAll(/post\(PRODUCTION_PATHS\.(\w+)/g)].map((m) => m[1]).sort()).toEqual(
       ['publish', 'publishPreview', 'remove', 'removePreview', 'schedule'],
     )
+    const draftClient = workshopSources['/workshop/src/draft/draftClient.ts']
+    expect(draftClient.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
+    expect(draftClient).toMatch(/fetchImpl\(DRAFT_PATH,/)
+    expect(workshopSources['/workshop/src/draft/contract.ts']).toMatch(/DRAFT_PATH = '\/api\/draft'/)
+
     const productionContract = workshopSources['/workshop/src/production/contract.ts']
     for (const path of Object.values(productionContract.match(/'\/api\/[^']+'/g) ?? [])) {
       expect(path).toMatch(/^'\/api\/production\//)
+    }
+  })
+
+  it('the working draft is the one approved local-file exception, and it stays local', () => {
+    // Only the file store touches the file system among the draft server modules.
+    const draftServer = Object.entries(workshopServerSources).filter(
+      ([path]) => path.startsWith('/workshop/server/draft/') && !/\.test\.ts$/.test(path),
+    )
+    expect(draftServer.length).toBeGreaterThan(3)
+    for (const [path, source] of draftServer) {
+      const fsImports = importSpecifiers(source).filter((s) => /^node:fs|^fs$/.test(s))
+      expect(fsImports, path).toEqual(path.endsWith('/fileDraftStore.ts') ? ['node:fs/promises'] : [])
+    }
+    // A fixed, server-chosen directory, gitignored and never served as a static file.
+    expect(workshopViteConfig).toMatch(/DRAFT_DIRECTORY = fileURLToPath\(new URL\('\.\/workshop\/\.local', import\.meta\.url\)\)/)
+    expect(workshopViteConfig).toMatch(/draftApiPlugin\(\(\) => createFileDraftStore\(\{ directory: DRAFT_DIRECTORY \}\)\)/)
+    const deny = workshopViteConfig.match(/deny: \[([^\]]*)\]/)?.[1] ?? ''
+    for (const pattern of ['.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}', '.npmrc', '.yarnrc.yml', '**/.git/**', '**/.local/**']) {
+      expect(deny).toContain(`'${pattern}'`)
+    }
+    expect(gitignoreText.split('\n')).toContain('workshop/.local/')
+    // The player never mounts or names the draft endpoint.
+    expect(gameViteConfig).not.toMatch(/draft/i)
+    for (const [path, source] of Object.entries({ ...gameSources, ...serverSources, ...apiSources })) {
+      if (/\.test\.tsx?$/.test(path)) continue
+      expect(source, path).not.toMatch(/\/api\/draft|working-draft|draftApiPlugin/)
     }
   })
 

@@ -23,6 +23,8 @@ interface FinalPuzzleProps {
   /** Set once the server confirms a durable publication; locks the ID and clue. */
   published: PublishedState | null
   onPublished: (state: PublishedState) => void
+  /** Context for a Final Puzzle restored from the working draft, such as its publication re-check. */
+  notice?: string | null
 }
 
 // Browser download of one generated module; nothing is written anywhere else.
@@ -53,6 +55,7 @@ export function FinalPuzzle({
   production = null,
   published,
   onPublished,
+  notice = null,
 }: FinalPuzzleProps) {
   const headingRef = useRef<HTMLHeadingElement>(null)
   const validation = useMemo(() => prepareFinalPuzzle(candidate.construction, inputs), [candidate, inputs])
@@ -93,6 +96,11 @@ export function FinalPuzzle({
         <button type="button" className="ws-button ws-button--secondary" onClick={onBack}>
           Back to Candidate Review
         </button>
+        {notice && (
+          <p className="ws-final__notice" aria-live="polite">
+            {notice}
+          </p>
+        )}
       </div>
 
       <div className="ws-final__body">

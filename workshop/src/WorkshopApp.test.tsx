@@ -11,6 +11,12 @@ import type { ProductionClient } from './production/productionClient'
 import { CandidateSourcingError } from './sourcing/contract'
 import { FIXTURE_SOURCING_RESPONSE } from './sourcing/fixtureSource'
 import { WorkshopApp } from './WorkshopApp'
+import { createMemoryDraftStore, memoryDraftClient } from '../server/draft/memoryDraftStore'
+
+// Every render gets its own in-memory working draft (starting empty), so no
+// test ever touches the author's real draft file.
+const freshDrafts = () => memoryDraftClient(createMemoryDraftStore())
+const authoringReady = () => screen.findByLabelText('Clue')
 
 afterEach(() => {
   cleanup()
@@ -60,7 +66,8 @@ const notConfiguredPublisher = () =>
 
 async function setup(publisher: PublishingClient = notConfiguredPublisher(), production: ProductionClient | null = null) {
   const user = userEvent.setup()
-  render(<WorkshopApp publisher={publisher} production={production} />)
+  render(<WorkshopApp publisher={publisher} production={production} drafts={freshDrafts()} />)
+  await authoringReady()
   return user
 }
 
@@ -427,7 +434,8 @@ describe('WorkshopApp candidate sourcing and Pool Review', () => {
       },
     }
     const user = userEvent.setup()
-    render(<WorkshopApp sources={{ live: spySource }} />)
+    render(<WorkshopApp sources={{ live: spySource }} drafts={freshDrafts()} />)
+    await authoringReady()
     await user.type(screen.getByLabelText('Clue'), 'Car Brands')
     await user.click(screen.getByRole('radio', { name: 'Source from clue' }))
     await user.type(screen.getByLabelText('Author context (optional)'), 'Manufacturers only')
@@ -667,7 +675,8 @@ describe('WorkshopApp Priority Words', () => {
       generate: vi.fn().mockResolvedValueOnce(FIXTURE_SOURCING_RESPONSE).mockResolvedValueOnce(withoutBeagle),
     }
     const user = userEvent.setup()
-    render(<WorkshopApp sources={{ fixture }} publisher={notConfiguredPublisher()} />)
+    render(<WorkshopApp sources={{ fixture }} publisher={notConfiguredPublisher()} drafts={freshDrafts()} />)
+    await authoringReady()
     await user.type(screen.getByLabelText('Clue'), 'Dogs')
     await sourceFixture(user)
     await user.click(priorityBox('BEAGLE'))
@@ -702,7 +711,8 @@ describe('WorkshopApp live sourcing', () => {
 
   async function startLive(sources: NonNullable<Parameters<typeof WorkshopApp>[0]>['sources']) {
     const user = userEvent.setup()
-    render(<WorkshopApp sources={sources} />)
+    render(<WorkshopApp sources={sources} drafts={freshDrafts()} />)
+    await authoringReady()
     await user.type(screen.getByLabelText('Clue'), 'Dogs')
     await user.click(screen.getByRole('radio', { name: 'Source from clue' }))
     return user

@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-10-19 (later)
+
+### Persistent working drafts and New Puzzle
+
+The Workshop keeps one working draft in a local JSON file (`workshop/.local/working-draft.json`) through its own Vite server, restored on startup. See `docs/architecture.md`, "Workshop working draft", for the mechanics.
+
+- **A local file, not browser storage.** The regular and Production-operations Workshops run on different ports, which are different browser origins; only the server-side file lets them share one draft. The isolation tests now allow exactly this: the server's file store and the browser's draft client. Browser storage is still banned.
+- **Revisioned, never last-write-wins.** A stale write is refused and the author chooses to load the saved draft or keep their own.
+- **Unreadable files are kept.** They're reported, never overwritten, and only set aside (not deleted) after confirmation.
+- **Unsaved candidates are temporary.** Only the approved Final Puzzle survives a refresh; saved candidates are a later phase.
+- **New Puzzle is confirmed and durable.** The empty draft is saved before anything resets. Publishing a puzzle never clears the draft; editing the clue never resets anything.
+- **Restored publications stay locked, but are re-checked.** The server-confirmed dev-calendar publication is part of the saved Final Puzzle, so restoring it can't unlock the ID and clue and invite a duplicate under a new ID. On restore it is re-checked with the existing preview endpoint, and unlocked only if the dev calendar no longer has that ID. This moved the publication record from session to draft state.
+
+---
+
 ## 2026-10-19
 
 ### Priority Words

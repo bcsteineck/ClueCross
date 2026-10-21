@@ -980,3 +980,73 @@ h3 {
 .ws-schedule__removal p {
   margin: 0;
 }
+
+// Working draft: save status and New Puzzle in the header, the startup
+// gate, and the restored Final Puzzle entry point. Problems are labelled in
+// text ("Draft not saved."), never by color alone.
+
+.ws-header__draft {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-8 $spacing-16;
+}
+
+.ws-draft-status {
+  align-self: center;
+
+  p {
+    margin: 0 0 $spacing-8;
+  }
+}
+
+.ws-draft-status--problem {
+  flex: 1 1 320px;
+  align-self: stretch;
+}
+
+.ws-draft-status__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-8;
+}
+
+.ws-new-puzzle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: $spacing-8;
+  margin-left: auto;
+}
+
+.ws-new-puzzle__confirm {
+  max-width: 480px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.ws-draft-gate,
+.ws-restored-final {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+
+  p {
+    margin: 0;
+  }
+}
+
+.ws-final__notice {
+  margin: 0;
+  padding: $spacing-8 $spacing-12;
+  border-left: 4px solid $color-gray-50;
+  background: $color-gray-10;
+  font-size: 14px;
+}
+
+.ws-candidates__note {
+  margin-bottom: $spacing-8;
+}

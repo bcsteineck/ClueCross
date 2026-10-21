@@ -1,5 +1,8 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { draftApiPlugin } from './workshop/server/draft/draftApiPlugin'
+import { createFileDraftStore } from './workshop/server/draft/fileDraftStore'
 import { createNeonPublicationStore } from './workshop/server/publishing/neonPublicationStore'
 import { publishingApiPlugin } from './workshop/server/publishing/publishingApiPlugin'
 import { createProductionBridge } from './workshop/server/production/productionBridge'
@@ -38,6 +41,15 @@ import { sourcingApiPlugin } from './workshop/server/sourcingApiPlugin'
 // credential. The opt-in is read from the process environment only, never
 // from .env files. Plain `npm run workshop` answers every
 // /api/production/* request "disabled".
+//
+// Working draft: the same server serves GET/PUT /api/draft
+// (workshop/server/draft), which keeps the one working draft in
+// workshop/.local/working-draft.json — resolved from this file, not from
+// the port or working directory, so the regular Workshop and Production-
+// operations mode share it. The directory is gitignored and denied to Vite's
+// static file serving; nothing in it is part of either build.
+const DRAFT_DIRECTORY = fileURLToPath(new URL('./workshop/.local', import.meta.url))
+
 export default defineConfig(({ mode }) => {
   const fileEnv = loadEnv(mode, process.cwd(), '')
   const sourcingConfig = () => ({
@@ -59,6 +71,7 @@ export default defineConfig(({ mode }) => {
     root: 'workshop',
     plugins: [
       react(),
+      draftApiPlugin(() => createFileDraftStore({ directory: DRAFT_DIRECTORY })),
       sourcingApiPlugin(sourcingConfig),
       publishingApiPlugin(getPublicationStore),
       productionOpsApiPlugin({
@@ -69,7 +82,11 @@ export default defineConfig(({ mode }) => {
     define: {
       __WORKSHOP_PRODUCTION_OPS__: JSON.stringify(productionOps),
     },
-    server: productionOps ? { port: 5175, strictPort: true } : { port: 5174 },
+    server: {
+      ...(productionOps ? { port: 5175, strictPort: true } : { port: 5174 }),
+      // Vite's own defaults, plus the working-draft directory.
+      fs: { deny: ['.env', '.env.*', '*.{crt,pem,key,p12,pfx,cer,der}', '.npmrc', '.yarnrc.yml', '**/.git/**', '**/.local/**'] },
+    },
     build: {
       outDir: 'dist',
       emptyOutDir: true,
