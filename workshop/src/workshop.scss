@@ -37,9 +37,12 @@ h3 {
   max-width: 1440px;
   margin: 0 auto;
   padding: $spacing-24 $spacing-16 $spacing-32;
-  display: flex;
+  // One full-width column: the header, inputs, and results stack in order.
+  // minmax(0, 1fr) lets a section shrink to the viewport instead of growing
+  // to fit its widest content, so nothing reflows into side-by-side columns.
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   row-gap: $spacing-20;
-  flex-wrap: wrap;
 }
 
 .ws-header {
@@ -77,13 +80,7 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: $spacing-16;
-  flex: 0 1 33%;
-  border-radius: $radius-8 0 0 $radius-8;
-}
-
-.ws-candidates {
-  border-radius: 0 $radius-8 $radius-8 0;
-  border-left: 0;
+  max-width: 720px;
 }
 
 .ws-field {
@@ -149,16 +146,6 @@ h3 {
     border-radius: $radius-4;
     background: $color-gray-00;
     color: inherit;
-  }
-}
-
-.ws-button--secondary {
-  background: $color-gray-00;
-  color: $ws-accent;
-  box-shadow: inset 0 0 0 $border-2 $ws-accent;
-
-  &:hover:not(:disabled):not([aria-disabled='true']) {
-    background: $color-brand-primary-wash;
   }
 }
 
@@ -387,6 +374,24 @@ h3 {
   }
 }
 
+// Variants follow the base rule: same specificity, so order decides. The
+// base disabled state (higher specificity) still applies to a variant; only
+// the outline is muted to match it.
+.ws-button--secondary {
+  background: $color-gray-00;
+  color: $ws-accent;
+  box-shadow: inset 0 0 0 $border-2 $ws-accent;
+
+  &:hover:not(:disabled):not([aria-disabled='true']) {
+    background: $color-brand-primary-wash;
+  }
+
+  &:disabled,
+  &[aria-disabled='true'] {
+    box-shadow: inset 0 0 0 $border-2 $color-gray-30;
+  }
+}
+
 // Results: candidate grid beside a sticky detail panel on wide screens,
 // stacked on narrow ones.
 
@@ -395,7 +400,6 @@ h3 {
   grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
   gap: $spacing-20;
   align-items: start;
-  flex: 2;
 
   @media (max-width: 1000px) {
     grid-template-columns: minmax(0, 1fr);
@@ -907,7 +911,6 @@ h3 {
   flex-direction: column;
   gap: $spacing-16;
   font-size: 14px;
-  flex: 1;
 }
 
 .ws-schedule__header {
