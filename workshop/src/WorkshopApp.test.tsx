@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOGS_BREEDS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsBreedsCandidatePool.js'
 import { DESSERTS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dessertsCandidatePool.js'
 import { DOGS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsCandidatePool.js'
@@ -17,6 +17,9 @@ import { createMemoryDraftStore, memoryDraftClient } from '../server/draft/memor
 // test ever touches the author's real draft file.
 const freshDrafts = () => memoryDraftClient(createMemoryDraftStore())
 const authoringReady = () => screen.findByLabelText('Clue')
+
+// Each test starts at the Workshop's default route (jsdom keeps the URL between tests).
+beforeEach(() => window.history.replaceState(null, '', '/'))
 
 afterEach(() => {
   cleanup()
@@ -84,6 +87,27 @@ function candidateCards() {
 
 async function generate(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
+}
+
+// Workspaces are reached through the sidebar navigation, as an author would.
+async function goTo(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(within(screen.getByRole('navigation', { name: 'Workshop' })).getByRole('link', { name: label }))
+}
+
+function publishRegion() {
+  return screen.getByRole('region', { name: 'Publish' })
+}
+
+// The developer export sits in a collapsed Advanced disclosure in Publish.
+async function openAdvanced(user: ReturnType<typeof userEvent.setup>) {
+  const summary = screen.getByText(/^Advanced: developer export/)
+  if (!(summary.parentElement as HTMLDetailsElement).open) await user.click(summary)
+}
+
+// A new batch while a Final Puzzle exists asks first; confirm it.
+async function confirmGenerateClearingFinal(user: ReturnType<typeof userEvent.setup>) {
+  const confirm = screen.getByRole('group', { name: 'Generate a new batch and clear the Final Puzzle?' })
+  await user.click(within(confirm).getByRole('button', { name: 'Generate and Clear Final Puzzle' }))
 }
 
 describe('WorkshopApp inputs', () => {
@@ -224,7 +248,10 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     expect(validationStatus()).toMatch('Validation errors (1)')
     expect(validationStatus()).toMatch('Puzzle ID “dogs” is reserved (a legacy development puzzle or test fixture) and can’t be used.')
     expect(screen.getByLabelText('Puzzle ID').getAttribute('aria-invalid')).toBe('true')
-    const blocked = within(region).getByRole('button', { name: 'Download Puzzle Modules' })
+    await goTo(user, 'Publish')
+    expect(within(publishRegion()).getByText(/Not ready to publish/)).toBeTruthy()
+    await openAdvanced(user)
+    const blocked = within(publishRegion()).getByRole('button', { name: 'Download Puzzle Modules' })
     expect(blocked.getAttribute('aria-disabled')).toBe('true')
 
     // Session-only: nothing is persisted.
@@ -247,23 +274,29 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     expect(validationStatus()).toMatch('Ready to export.')
     expect(id.getAttribute('aria-invalid')).toBe('false')
 
-    const region = finalPuzzle()
-    expect(within(region).getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
-    expect(within(region).getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' })).toBeTruthy()
+    await goTo(user, 'Publish')
+    await openAdvanced(user)
+    expect(within(publishRegion()).getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
+    expect(within(publishRegion()).getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' })).toBeTruthy()
 
-    const clue = screen.getByLabelText('Clue')
-    await user.clear(clue)
-    await user.type(clue, '   ')
+    await goTo(user, 'Final Puzzle')
+    await user.clear(screen.getByLabelText('Clue'))
+    await user.type(screen.getByLabelText('Clue'), '   ')
     expect(validationStatus()).toMatch('Clue is required.')
-    expect(within(region).queryByRole('button', { name: /Download workshopdogs/ })).toBeNull()
-    expect(within(region).getByRole('button', { name: 'Download Puzzle Modules' }).getAttribute('aria-disabled')).toBe(
-      'true',
-    )
+    await goTo(user, 'Publish')
+    await openAdvanced(user)
+    expect(within(publishRegion()).queryByRole('button', { name: /Download workshopdogs/ })).toBeNull()
+    expect(
+      within(publishRegion()).getByRole('button', { name: 'Download Puzzle Modules' }).getAttribute('aria-disabled'),
+    ).toBe('true')
 
-    await user.clear(clue)
-    await user.type(clue, "Man's best friend")
+    await goTo(user, 'Final Puzzle')
+    await user.clear(screen.getByLabelText('Clue'))
+    await user.type(screen.getByLabelText('Clue'), "Man's best friend")
     expect(validationStatus()).toMatch('Ready to export.')
-    expect(within(region).getByText(/clue: 'Man\\'s best friend'/)).toBeTruthy()
+    await goTo(user, 'Publish')
+    await openAdvanced(user)
+    expect(within(publishRegion()).getByText(/clue: 'Man\\'s best friend'/)).toBeTruthy()
   })
 
   it('downloads each module with its filename, as a developer-only export', async () => {
@@ -284,6 +317,8 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     await approve(user, 0)
     await user.clear(screen.getByLabelText('Puzzle ID'))
     await user.type(screen.getByLabelText('Puzzle ID'), 'workshopdogs')
+    await goTo(user, 'Publish')
+    await openAdvanced(user)
 
     await user.click(screen.getByRole('button', { name: 'Download workshopdogsPuzzle.ts' }))
     await user.click(screen.getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' }))
@@ -293,7 +328,7 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     expect(source).toMatch('unlockBudget: DEFAULT_REVEAL_BUDGET,')
 
     // A developer-only export: no registry, schedule, or manual integration workflow.
-    const region = finalPuzzle()
+    const region = publishRegion()
     expect(within(region).getByRole('heading', { name: 'Developer export' })).toBeTruthy()
     expect(
       within(region).getByText(
@@ -320,11 +355,15 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     expect(cards[3].textContent).toMatch('Approved')
     expect(cards[3].getAttribute('aria-pressed')).toBe('true')
     expect(screen.getByText(/Candidate 4 approved/)).toBeTruthy()
-    expect((screen.getByLabelText('Clue') as HTMLInputElement).value).toBe('Dogs')
-    const reopen = screen.getByRole('button', { name: 'Open Final Puzzle' })
-    expect(document.activeElement).toBe(reopen)
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Final Puzzle' }))
 
-    await user.click(reopen)
+    // Moving between workspaces keeps the authoring inputs and the batch.
+    await goTo(user, 'Author')
+    expect((screen.getByLabelText('Clue') as HTMLInputElement).value).toBe('Dogs')
+    await goTo(user, 'Candidates')
+    expect(candidateCards()[3].getAttribute('aria-pressed')).toBe('true')
+
+    await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('edited')
     expect(within(finalPuzzle()).getByRole('img').innerHTML).toBe(firstBoard)
 
@@ -351,6 +390,7 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     expect(candidateCards()[0].textContent).toMatch('Approved')
 
     await generate(user)
+    await confirmGenerateClearingFinal(user)
 
     expect(screen.getByText(/seed workshop-generation-2/)).toBeTruthy()
     expect(screen.getByText('Select a candidate to inspect it.')).toBeTruthy()
@@ -378,6 +418,7 @@ describe('WorkshopApp small and empty batches', () => {
     expect(candidateCards()[0].textContent).toMatch('Approved')
 
     await generate(user)
+    await confirmGenerateClearingFinal(user)
     expect(screen.getByRole('heading', { name: 'Generated Candidates (4)' })).toBeTruthy()
     const cards = candidateCards()
     expect(cards.map((card) => card.textContent?.match(/Candidate \d+/)?.[0])).toEqual([
@@ -555,7 +596,9 @@ describe('WorkshopApp Priority Words', () => {
     }
 
     // The batch reports the constraints it used, not later selections.
+    await goTo(user, 'Author')
     await user.click(priorityBox('PUPPY'))
+    await goTo(user, 'Candidates')
     expect(screen.getByText(/· Priority Words: BEAGLE, KENNEL$/)).toBeTruthy()
   })
 
@@ -804,6 +847,7 @@ async function openReadyFinalPuzzle(publisher: PublishingClient, cardIndex = 0, 
   await approve(user, cardIndex)
   await user.clear(screen.getByLabelText('Puzzle ID'))
   await user.type(screen.getByLabelText('Puzzle ID'), 'workshopdogs')
+  await goTo(user, 'Publish')
   return user
 }
 
@@ -826,15 +870,21 @@ describe('WorkshopApp publishing: preview', () => {
     await approve(user, 0)
 
     // The suggested id "dogs" is reserved: not locally valid.
+    await goTo(user, 'Publish')
+    expect(within(publishRegion()).getByText(/Not ready to publish/)).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Publish to dev calendar (testing)' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Publish to Dev Calendar' })).toBeNull()
+    expect(publisher.preview).not.toHaveBeenCalled()
 
+    await goTo(user, 'Final Puzzle')
     await user.clear(screen.getByLabelText('Puzzle ID'))
     await user.type(screen.getByLabelText('Puzzle ID'), 'workshopdogs')
+    await goTo(user, 'Publish')
     expect(await screen.findByText('Expected: Scheduled for October 4, 2026')).toBeTruthy()
     expect(screen.getByText('Releases October 3 at 10:00 PM ET.')).toBeTruthy()
     expect(screen.getByText('Estimate only. The final date is assigned when you publish.')).toBeTruthy()
 
+    await openAdvanced(user)
     const publishHeading = screen.getByRole('heading', { name: 'Publish to dev calendar (testing)' })
     const exportHeading = screen.getByRole('heading', { name: 'Developer export' })
     expect(publishHeading.compareDocumentPosition(exportHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -858,7 +908,9 @@ describe('WorkshopApp publishing: preview', () => {
     await screen.findByText('Expected: Scheduled for October 4, 2026')
     const callsBefore = publisher.preview.mock.calls.length
 
+    await goTo(user, 'Final Puzzle')
     await user.type(screen.getByLabelText('Clue'), ' Breeds')
+    await goTo(user, 'Publish')
     await waitFor(() => expect(publisher.preview.mock.calls.at(-1)![0].clue).toBe('Dogs Breeds'))
     // Seven keystrokes, far fewer requests.
     expect(publisher.preview.mock.calls.length - callsBefore).toBeLessThan(3)
@@ -877,6 +929,7 @@ describe('WorkshopApp publishing: preview', () => {
     expect(screen.queryByRole('group', { name: /Publish “/ })).toBeNull() // no confirmation for a no-op
     expect(publisher.publish).toHaveBeenCalledTimes(1)
     expect(await screen.findByText('Already scheduled for October 4, 2026')).toBeTruthy()
+    await goTo(user, 'Final Puzzle')
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
   })
 
@@ -902,10 +955,11 @@ describe('WorkshopApp publishing: preview', () => {
 
   it('makes not-configured unmistakable and never looks published', async () => {
     const publisher = notConfiguredPublisher()
-    await openReadyFinalPuzzle(publisher)
+    const user = await openReadyFinalPuzzle(publisher)
     expect(await screen.findByText(/Publishing isn’t configured on this Workshop server/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Publish to Dev Calendar' })).toHaveProperty('disabled', true)
     expect(screen.queryByText(/Scheduled for/)).toBeNull()
+    await goTo(user, 'Final Puzzle')
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
   })
 })
@@ -951,15 +1005,20 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     })
     expect(screen.getByText('Scheduled for October 4, 2026')).toBeTruthy()
     expect(screen.getByText('Releases October 3 at 10:00 PM ET.')).toBeTruthy()
-    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
-    expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(true)
-    expect(screen.getByText('Published: the ID and clue are locked.')).toBeTruthy()
+    expect(within(publishRegion()).getByText(/Published: the ID and clue are locked\./)).toBeTruthy()
     expect(publisher.publish).toHaveBeenCalledTimes(1)
     expect(publisher.publish.mock.calls[0][0]).toMatchObject({ id: 'workshopdogs', clue: 'Dogs' })
 
     // Developer export is still available after publishing.
+    await openAdvanced(user)
     expect(screen.getByRole('button', { name: 'Download workshopdogsPuzzle.ts' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Download workshopdogsPuzzleLayout.ts' })).toBeTruthy()
+
+    // The ID and clue lock in Final Puzzle.
+    await goTo(user, 'Final Puzzle')
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
+    expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(true)
+    expect(screen.getByText('Published: the ID and clue are locked.')).toBeTruthy()
   })
 
   it('shows an idempotent existing result as success and locks', async () => {
@@ -971,6 +1030,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
     await user.click(screen.getByRole('button', { name: 'Publish' }))
     expect(await screen.findByText('Already scheduled for October 4, 2026')).toBeTruthy()
+    await goTo(user, 'Final Puzzle')
     expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(true)
   })
 
@@ -982,11 +1042,11 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     await screen.findByText('Expected: Scheduled for October 4, 2026')
     await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
     await user.click(screen.getByRole('button', { name: 'Publish' }))
-    return publisher
+    return user
   }
 
   it('shows a conflict from publish without locking', async () => {
-    await publishWith({
+    const user = await publishWith({
       status: 'conflict',
       message: 'server text',
       existing: { puzzleId: 'workshopdogs', publishDate: '2026-10-09', releaseInstant: '2026-10-09T02:00:00.000Z' },
@@ -996,6 +1056,7 @@ describe('WorkshopApp publishing: confirm and publish', () => {
         'Puzzle ID “workshopdogs” is already scheduled for October 9, 2026 with different content. Published puzzles can’t be changed; choose a new ID.',
       ),
     ).toBeTruthy()
+    await goTo(user, 'Final Puzzle')
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
   })
 
@@ -1019,9 +1080,11 @@ describe('WorkshopApp publishing: confirm and publish', () => {
     expect(await screen.findByText('Publishing is unavailable right now. Nothing was published; try again.')).toBeTruthy()
     expect(screen.queryByText(/^Scheduled for/)).toBeNull()
     cleanup()
+    window.history.replaceState(null, '', '/')
 
-    await publishWith(NOT_CONFIGURED)
+    const user = await publishWith(NOT_CONFIGURED)
     expect(await screen.findAllByText(/Publishing isn’t configured on this Workshop server/)).toHaveLength(1)
+    await goTo(user, 'Final Puzzle')
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
   })
 
@@ -1048,17 +1111,21 @@ describe('WorkshopApp publishing: session state', () => {
     await user.click(screen.getByRole('button', { name: 'Publish' }))
     await screen.findByText('Scheduled for October 4, 2026')
 
+    await goTo(user, 'Final Puzzle')
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
     await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
-    expect(screen.getByText('Scheduled for October 4, 2026')).toBeTruthy()
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('workshopdogs')
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
+    await goTo(user, 'Publish')
+    expect(screen.getByText('Scheduled for October 4, 2026')).toBeTruthy()
     const previewCalls = publisher.preview.mock.calls.length
 
+    await goTo(user, 'Final Puzzle')
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
     await approve(user, 7)
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
     expect(screen.getByLabelText('Clue').hasAttribute('readonly')).toBe(false)
+    await goTo(user, 'Publish')
     expect(screen.queryByText('Scheduled for October 4, 2026')).toBeNull()
     expect(publisher.publish).toHaveBeenCalledTimes(1)
     expect(publisher.preview.mock.calls.length).toBe(previewCalls) // "dogs" is invalid locally: no preview
@@ -1102,7 +1169,7 @@ describe('WorkshopApp Production operations', () => {
     const user = await openReadyFinalPuzzle(fakePublisher())
     await screen.findByText(/Expected: Scheduled for/)
     expect(screen.queryByText(/Production Operations Enabled/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Production Schedule' })).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Production Schedule' })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Publish to Production' })).toBeNull()
     expect(screen.getByRole('heading', { name: 'Publish to dev calendar (testing)' })).toBeTruthy()
     void user
@@ -1112,10 +1179,13 @@ describe('WorkshopApp Production operations', () => {
     const production = fakeProduction()
     const user = await openReadyFinalPuzzle(fakePublisher(), 0, production)
     expect(screen.getByText(/Production Operations Enabled/)).toBeTruthy()
-    await user.click(screen.getByRole('button', { name: 'Production Schedule' }))
+    await goTo(user, 'Production Schedule')
     expect(await screen.findByRole('heading', { name: 'Production Schedule' })).toBeTruthy()
+    expect(window.location.hash).toBe('#/schedule')
     expect(production.schedule).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole('button', { name: 'Authoring' }))
+    // The Production context stays visible in every workspace.
+    expect(screen.getByText(/Production Operations Enabled/)).toBeTruthy()
+    await goTo(user, 'Final Puzzle')
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('workshopdogs')
   })
 
@@ -1152,7 +1222,9 @@ describe('WorkshopApp Production operations', () => {
     const user = await openReadyFinalPuzzle(fakePublisher(), 0, production)
     await user.click(within(productionRegion()).getByRole('button', { name: 'Production Preview' }))
     await within(productionRegion()).findByText('Next Production date')
+    await goTo(user, 'Final Puzzle')
     await user.type(screen.getByLabelText('Clue'), ' Breeds')
+    await goTo(user, 'Publish')
     await waitFor(() => expect(within(productionRegion()).queryByText('Next Production date')).toBeNull())
     expect(within(productionRegion()).queryByRole('button', { name: 'Publish to Production' })).toBeNull()
   })

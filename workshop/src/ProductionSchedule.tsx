@@ -86,7 +86,7 @@ export function ProductionSchedule({ client }: ProductionScheduleProps) {
   return (
     <section className="ws-panel ws-schedule" aria-labelledby="ws-schedule-heading">
       <div className="ws-schedule__header">
-        <h2 id="ws-schedule-heading" className="ws-panel__heading">
+        <h2 id="ws-schedule-heading" className="ws-panel__heading" tabIndex={-1} data-workspace-heading>
           Production Schedule
         </h2>
         <button type="button" className="ws-button ws-button--secondary" onClick={() => void refresh()} disabled={load.kind === 'loading' || busy}>

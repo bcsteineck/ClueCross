@@ -84,7 +84,6 @@ describe('workshopReducer: initial state', () => {
         batch: null,
         selectedId: null,
         generationErrors: [],
-        stage: 'review',
         priorityLimitReached: false,
         publicationCheck: null,
       },
@@ -251,13 +250,10 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
     expect(state.draft.finalPuzzle).toBeNull()
     expect(state.session.selectedId).toBeNull()
     expect(selectPublished(state)).toBeNull()
-    // The stage is left alone; WorkshopApp only shows Final Puzzle when one exists.
-    expect(state.session.stage).toBe('final')
   })
 
-  it('approving opens Final Puzzle with an ID suggested from the batch clue', () => {
+  it('approving makes the candidate the Final Puzzle with an ID suggested from the batch clue', () => {
     const state = approvedState()
-    expect(state.session.stage).toBe('final')
     expect(state.draft.finalPuzzle).toEqual({
       candidate: batch1.candidates[0],
       number: 1,
@@ -273,12 +269,11 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
       [
         { type: 'SET_FINAL_PUZZLE_INPUTS', inputs: { id: 'dogs7', clue: 'Good dogs' } },
         { type: 'FINAL_PUZZLE_PUBLISHED', signature, published: PUBLISHED },
-        { type: 'RETURN_TO_REVIEW' },
-        { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 },
       ],
       approvedState(),
     )
-    expect(edited.session.stage).toBe('final')
+    // Re-approving the current Final Puzzle changes nothing (no new draft, so nothing to save).
+    expect(workshopReducer(edited, { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 })).toBe(edited)
     expect(edited.draft.finalPuzzle?.inputs).toEqual({ id: 'dogs7', clue: 'Good dogs' })
     expect(selectPublished(edited)).toBe(PUBLISHED)
   })
@@ -287,7 +282,6 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
     const state = run(
       [
         { type: 'FINAL_PUZZLE_PUBLISHED', signature: batch1.candidates[0].identitySignature, published: PUBLISHED },
-        { type: 'RETURN_TO_REVIEW' },
         { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[1], number: 2 },
       ],
       approvedState(),
@@ -315,12 +309,6 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
     expect(stale).toBe(state)
   })
 
-  it('Back returns to review without changing the draft', () => {
-    const state = approvedState()
-    const back = workshopReducer(state, { type: 'RETURN_TO_REVIEW' })
-    expect(back.session.stage).toBe('review')
-    expect(back.draft).toBe(state.draft)
-  })
 })
 
 describe('workshopReducer: purity and the persistence boundary', () => {

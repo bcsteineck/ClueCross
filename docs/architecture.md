@@ -35,10 +35,28 @@ Workshop browser → `/api/production/*` (same-origin, JSON, typed puzzle-ID con
 The Workshop's authoring workflow runs through one pure reducer, `workshopReducer` (`workshop/src/state/workshopReducer.ts`). `WorkshopApp` runs the side effects (sourcing requests, generation, publishing) and dispatches their results.
 
 - **`draft`** is the durable working draft. It holds the clue, the active mode, the manual word text, the sourcing settings and reviewed pool (with include choices), each mode's Priority Words, the generation count (batch N uses seed `workshop-generation-N`), and the Final Puzzle (approved candidate, batch number, ID and clue, and its dev-calendar publication record, if any). It is plain JSON-compatible data, saved and restored as described below.
-- **`session`** is workflow state that changes in the same transitions but never outlives the session: the unsaved batch, the selected candidate, the last Generate errors, the review/final stage, the Priority Word limit notice, and the result of re-checking a restored publication record.
-- **Outside the reducer:** sourcing in-flight state and its error, the Authoring / Production Schedule view, focus bookkeeping, and everything inside `FinalPuzzle`, `PublishSection`, `ProductionPublishSection`, and `ProductionSchedule` (previews, confirmations, request status).
+- **`session`** is workflow state that changes in the same transitions but never outlives the session: the unsaved batch, the selected candidate, the last Generate errors, the Priority Word limit notice, and the result of re-checking a restored publication record.
+- **Outside the reducer:** the current workspace (the URL hash; see below), sourcing in-flight state and its error, the pending Generate confirmation, focus bookkeeping, and everything inside `PublishSection`, `ProductionPublishSection`, and `ProductionSchedule` (previews, confirmations, request status).
 - **Derived, never stored:** the active pool's analysis (`analyzeActivePool`), Priority Word diagnostics, whether Generate is allowed, and the selected or approved candidate's position in the batch.
-- **Behavior a later phase will change:** a new batch still clears the selection, the Final Puzzle, and its publication record, and `finalPuzzle` still embeds the candidate it was approved from.
+- **Behavior a later phase will change:** a new batch still clears the selection, the Final Puzzle, and its publication record (now only after the author confirms), and `finalPuzzle` still embeds the candidate it was approved from.
+
+## Workshop navigation
+
+The Workshop is an application shell (`workshop/src/shell/`) around five workspaces (`workshop/src/workspaces/`, plus `FinalPuzzle` and `ProductionSchedule`):
+
+| Route | Workspace | Contains |
+| --- | --- | --- |
+| `#/author` | Author | Clue, authoring mode, manual words or sourcing and Pool Review, Priority Words, pool diagnostics, Generate |
+| `#/candidates` | Candidates | Generate, the current batch (gallery and inspector, Approve), and a Saved Candidates tab that isn't available yet |
+| `#/final` | Final Puzzle | The approved board, its ID and clue, validation |
+| `#/publish` | Publish | Readiness, the dev calendar, Production (Production-operations mode only), and the developer export under Advanced |
+| `#/schedule` | Production Schedule | Production-operations mode only |
+
+- **Routing:** a small hash router (`useWorkspaceRoute`). The route is view state only and never enters the working draft, so a refresh restores the workspace from the URL and the draft from its file. Back and Forward work. An unknown route, or `#/schedule` outside Production-operations mode, is replaced with `#/author`, so a URL alone never reaches a Production-only view.
+- **State across workspaces:** `WorkshopApp` stays mounted and owns the reducer, the working draft, and every side effect, so moving between workspaces never resets the batch, the selection, or an in-flight sourcing request, and never saves anything. Local state inside the publishing components (a preview, a confirmation, a typed Production ID) resets when Publish is left, as it did when leaving Final Puzzle before.
+- **Flow:** Generate (from Author or Candidates, one handler) shows the new batch in Candidates; Approve opens Final Puzzle; Back returns to Candidates with focus on that candidate's Approve/Open control; New Puzzle returns to Author with focus on the clue. A failed Generate stays where it was, with the error. Generating while a Final Puzzle exists asks first, because the new batch clears it.
+- **Empty states:** Candidates without a batch (for example after a refresh) says so and links to a restored Final Puzzle; Final Puzzle and Publish explain what's missing. Publishing is offered only for a valid Final Puzzle, however Publish is reached.
+- **Shell:** at 1024px and wider, a persistent 200px sidebar with labelled links (the current one has `aria-current="page"` and a visible bar). Below that, a top bar whose Menu opens the same links in a modal drawer: focus moves in, Tab stays inside, the rest of the page is `inert`, Escape or a choice closes it, and focus returns to Menu (or, after choosing another workspace, to its heading). Moving to a workspace focuses its heading. The Production-operations banner and the draft status bar (save status, New Puzzle) sit above every workspace.
 
 ## Workshop working draft
 
@@ -51,7 +69,7 @@ One working draft persists across refreshes, Workshop restarts, and switches bet
 - **Autosave:** text typed into the clue, word list, author context, and Final Puzzle ID/clue saves 750 ms after the last change; every other change saves at once. One save is in flight at a time and always sends the newest draft. The header shows Draft saved / Saving draft… / Draft not saved. A failed save keeps the draft in memory and offers Retry; nothing retries on a timer. On page hide, unsaved changes are sent with `keepalive` as a best effort, so an edit made just before abruptly closing the browser may not be saved. Leaving the page while a save has failed or conflicted asks first.
 - **Startup:** authoring stays hidden until the draft has loaded, so nothing can save an empty draft over a saved one. With no file, the Workshop starts empty and writes nothing until the first edit. A file that can't be read is reported and left untouched. The author can set it aside (renamed to `working-draft.invalid-<time>.json`, never deleted) and start a new draft, after confirming.
 - **Session-only:** the generated batch and its selection aren't saved. A refresh keeps the inputs, Priority Words, generation count, and Final Puzzle, but drops unapproved candidates. The candidate list says so.
-- **Restored Final Puzzle:** it can be opened from a "Final Puzzle" panel without its original batch.
+- **Restored Final Puzzle:** it opens from Final Puzzle (or from the empty Candidates batch) without its original batch.
 - **New Puzzle:** after confirmation, an empty draft is saved first, and the Workshop resets only once that write succeeds. If the write fails, the current draft stays. A draft epoch drops any sourcing or publish response that arrives after the reset. Generation is synchronous, so it can't straddle one. New Puzzle never calls publishing or schedule endpoints.
 - **Restored publications:** the dev-calendar publication that locks a Final Puzzle's ID and clue is saved with it. On restore it stays locked and is re-checked with the existing preview endpoint. If the dev calendar still has that ID with the same fingerprint, it stays locked. If the calendar has no puzzle with that ID, the record is cleared and the inputs unlock. If the calendar can't confirm (unreachable, or different content), the lock stays. Production publishing is unchanged; its own preview, typed-ID confirmation, and fingerprint check still apply.
 - **Local-only:** the endpoint answers loopback clients and same-origin browser requests only, accepts JSON bodies up to 1 MB, and never serves `workshop/.local` as a static file (middleware and Vite's `server.fs.deny`). The directory is gitignored, isn't part of either build, and the player never mounts the endpoint.

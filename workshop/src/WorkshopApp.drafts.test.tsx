@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOGS_CANDIDATE_POOL } from '../../tools/generator/src/pool/dogsCandidatePool.js'
 import { createMemoryDraftStore, memoryDraftClient } from '../server/draft/memoryDraftStore'
 import type { MemoryDraftStore } from '../server/draft/memoryDraftStore'
@@ -14,6 +14,9 @@ import { FIXTURE_SOURCING_RESPONSE } from './sourcing/fixtureSource'
 import { createInitialDraft } from './state/workshopReducer'
 import type { WorkshopDraft } from './state/workshopReducer'
 import { WorkshopApp } from './WorkshopApp'
+
+// Each test starts at the Workshop's default route (jsdom keeps the URL between tests).
+beforeEach(() => window.history.replaceState(null, '', '/'))
 
 afterEach(() => {
   cleanup()
@@ -68,6 +71,15 @@ const savedRevision = (store: MemoryDraftStore) => {
 const picker = () => screen.getByRole('group', { name: /^Priority Words/ })
 const priorityBox = (word: string) => within(picker()).getByRole('checkbox', { name: word }) as HTMLInputElement
 const clueField = () => screen.getByLabelText('Clue') as HTMLInputElement
+
+async function goTo(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(within(screen.getByRole('navigation', { name: 'Workshop' })).getByRole('link', { name: label }))
+}
+
+async function confirmGenerateClearingFinal(user: ReturnType<typeof userEvent.setup>) {
+  const confirm = screen.getByRole('group', { name: 'Generate a new batch and clear the Final Puzzle?' })
+  await user.click(within(confirm).getByRole('button', { name: 'Generate and Clear Final Puzzle' }))
+}
 
 async function fillDogs(user: ReturnType<typeof userEvent.setup>) {
   await user.type(clueField(), 'Dogs')
@@ -159,16 +171,22 @@ describe('working draft: restoring', () => {
     // The unsaved batch isn't restored, but the generation count is.
     expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
+    await confirmGenerateClearingFinal(user)
     expect(screen.getByText(/seed workshop-generation-4/)).toBeTruthy()
   })
 
   it('restores the approved Final Puzzle without its batch, openable and editable', async () => {
     const { user } = renderApp({ initial: { kind: 'ok', envelope: envelopeOf(fullDraft()) } })
     await ready()
-    const panel = screen.getByRole('region', { name: 'Final Puzzle' })
-    expect(panel.textContent).toMatch('Approved Candidate 2 · dogs7 · “Good dogs”.')
-    const open = within(panel).getByRole('button', { name: 'Open Final Puzzle' })
-    await user.click(open)
+    // Directly from navigation, with no batch at all.
+    await goTo(user, 'Final Puzzle')
+    await screen.findByRole('heading', { name: /^Final Puzzle/ })
+    expect(screen.getByRole('heading', { name: /^Final Puzzle/ }).textContent).toMatch('Approved Candidate 2')
+    await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    // The empty current batch points back to it.
+    expect(screen.getByText(/Approved Candidate 2 · dogs7 · “Good dogs” is saved in the working draft/)).toBeTruthy()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Final Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
 
     await screen.findByRole('heading', { name: /^Final Puzzle/ })
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('dogs7')
@@ -192,14 +210,17 @@ describe('working draft: restoring', () => {
     await waitFor(() => expect(savedDraft(first.store).finalPuzzle?.inputs.id).toBe('dogs9'), SAVE_WAIT)
     first.unmount()
 
+    // The refresh keeps the route (#/final) and restores the draft.
+    expect(window.location.hash).toBe('#/final')
     const second = renderApp({ store: first.store })
-    await ready()
+    expect((await screen.findByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('dogs9')
+    await goTo(second.user, 'Author')
     expect(clueField().value).toBe('Dogs')
     expect(priorityBox('BEAGLE').checked).toBe(true)
+    await goTo(second.user, 'Candidates')
     expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
-    expect(screen.getByRole('region', { name: 'Final Puzzle' }).textContent).toMatch('Approved Candidate 1 · dogs9 · “Dogs”.')
-    await second.user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
-    expect((await screen.findByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('dogs9')
+    expect(screen.getByText(/No current batch\./)).toBeTruthy()
+    expect(screen.getByText(/Approved Candidate 1 · dogs9 · “Dogs” is saved in the working draft/)).toBeTruthy()
   })
 
   it('explains that generated candidates are temporary', async () => {
@@ -291,10 +312,14 @@ describe('New Puzzle', () => {
     await ready()
     await first.user.click(screen.getByRole('radio', { name: 'Enter manually' }))
     await first.user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
+    await confirmGenerateClearingFinal(first.user)
+    expect(window.location.hash).toBe('#/candidates')
     await first.user.click(screen.getByRole('button', { name: 'New Puzzle' }))
     await first.user.click(screen.getByRole('button', { name: 'Start New Puzzle' }))
 
+    // New Puzzle returns to Author and starts at the clue.
     await waitFor(() => expect(clueField().value).toBe(''))
+    expect(window.location.hash).toBe('#/author')
     expect(document.activeElement).toBe(clueField())
     expect((screen.getByRole('radio', { name: 'Enter manually' }) as HTMLInputElement).checked).toBe(true)
     expect((screen.getByLabelText('Candidate words') as HTMLTextAreaElement).value).toBe('')
@@ -304,6 +329,10 @@ describe('New Puzzle', () => {
     await first.user.click(screen.getByRole('radio', { name: 'Source from clue' }))
     expect(screen.queryByRole('region', { name: 'Pool Review' })).toBeNull()
     expect(picker().textContent).toMatch('(0 of 10 selected)')
+
+    await goTo(first.user, 'Final Puzzle')
+    expect(screen.getByText(/No Final Puzzle has been approved\./)).toBeTruthy()
+    await goTo(first.user, 'Author')
 
     expect(savedDraft(first.store)).toEqual({ ...createInitialDraft(), poolSource: 'sourced' })
     // Purely local: nothing reached publishing.
@@ -332,8 +361,9 @@ describe('New Puzzle', () => {
       'The new puzzle wasn’t started, and the current draft is unchanged.',
     )
     expect(clueField().value).toBe('Dogs')
-    expect(screen.getByRole('region', { name: 'Final Puzzle' })).toBeTruthy()
     expect(savedRevision(store)).toBe(1)
+    await goTo(user, 'Final Puzzle')
+    expect(screen.getByRole('heading', { name: /^Final Puzzle/ }).textContent).toMatch('Approved Candidate 2')
   })
 
   it('a sourcing response that arrives after New Puzzle is dropped', async () => {
@@ -375,6 +405,7 @@ describe('New Puzzle', () => {
     const id = screen.getByLabelText('Puzzle ID')
     await user.clear(id)
     await user.type(id, 'dogs9') // "dogs" is a reserved fixture ID
+    await goTo(user, 'Publish')
     await user.click(await screen.findByRole('button', { name: 'Publish to Dev Calendar' }, SAVE_WAIT))
     await user.click(screen.getByRole('button', { name: 'Publish' }))
     await user.click(screen.getByRole('button', { name: 'New Puzzle' }))
@@ -394,7 +425,7 @@ describe('restored publications', () => {
 
   async function openFinal(user: ReturnType<typeof userEvent.setup>) {
     await ready()
-    await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
+    await goTo(user, 'Final Puzzle')
     await screen.findByRole('heading', { name: /^Final Puzzle/ })
   }
 
@@ -403,8 +434,9 @@ describe('restored publications', () => {
     const { user } = renderApp({ initial: restoredPublished(), publisher })
     await openFinal(user)
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).readOnly).toBe(true)
-    expect(screen.getByText(/Already scheduled for|Scheduled for/)).toBeTruthy()
     await screen.findByText(/The dev calendar still has this puzzle/)
+    await goTo(user, 'Publish')
+    expect(screen.getByText(/Already scheduled for|Scheduled for/)).toBeTruthy()
     expect(publisher.preview).toHaveBeenCalledWith(expect.objectContaining({ id: 'dogs7', clue: 'Good dogs' }))
     expect(publisher.publish).not.toHaveBeenCalled()
   })

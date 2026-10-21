@@ -1,15 +1,8 @@
-import { useEffect, useMemo, useRef } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { CandidateBoard } from './CandidateBoard'
-import { layoutModuleFile, puzzleModuleFile } from './finalPuzzle/exportSource'
-import type { ExportFile } from './finalPuzzle/exportSource'
-import { prepareFinalPuzzle } from './finalPuzzle/finalPuzzle'
-import type { FinalPuzzleInputs, MetadataIssue } from './finalPuzzle/finalPuzzle'
-import type { PublishingClient } from './publishing/publishingClient'
-import type { ProductionClient } from './production/productionClient'
-import { ProductionPublishSection } from './ProductionPublishSection'
-import { PublishSection } from './PublishSection'
-import type { PublishedState } from './PublishSection'
+import type { FinalPuzzleInputs, FinalPuzzleValidation, MetadataIssue } from './finalPuzzle/finalPuzzle'
+import type { PublishedState } from './publishing/contract'
+import { WORKSPACE_HASH } from './shell/useWorkspaceRoute'
 
 interface FinalPuzzleProps {
   candidate: PoolCandidate
@@ -17,60 +10,31 @@ interface FinalPuzzleProps {
   inputs: FinalPuzzleInputs
   onInputsChange: (inputs: FinalPuzzleInputs) => void
   onBack: () => void
-  publisher: PublishingClient
-  /** Present only in Production-operations mode. */
-  production?: ProductionClient | null
+  /** prepareFinalPuzzle's result for this candidate and these inputs (shared with Publish). */
+  validation: FinalPuzzleValidation
   /** Set once the server confirms a durable publication; locks the ID and clue. */
   published: PublishedState | null
-  onPublished: (state: PublishedState) => void
   /** Context for a Final Puzzle restored from the working draft, such as its publication re-check. */
   notice?: string | null
-}
-
-// Browser download of one generated module; nothing is written anywhere else.
-function downloadFile(file: ExportFile) {
-  const url = URL.createObjectURL(new Blob([file.source], { type: 'text/plain;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = file.filename
-  link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 function fieldErrors(issues: MetadataIssue[], field: MetadataIssue['field']): string[] {
   return issues.filter((issue) => issue.field === field).map((issue) => issue.message)
 }
 
-// The approved candidate being prepared for publishing: author id + clue,
-// the final board, two-layer validation, Publish, and the developer export
-// fallback. Read-only geometry — v1 is not an editor; a different board
-// means returning to Candidate Review. Once published, the ID and clue lock.
-export function FinalPuzzle({
-  candidate,
-  number,
-  inputs,
-  onInputsChange,
-  onBack,
-  publisher,
-  production = null,
-  published,
-  onPublished,
-  notice = null,
-}: FinalPuzzleProps) {
-  const headingRef = useRef<HTMLHeadingElement>(null)
-  const validation = useMemo(() => prepareFinalPuzzle(candidate.construction, inputs), [candidate, inputs])
-  const { puzzle, layout, ready } = validation
-  const files = ready && puzzle && layout ? [puzzleModuleFile(puzzle, layout), layoutModuleFile(layout)] : []
+// The approved candidate being finalized: author ID + clue, the final
+// board, and two-layer validation. Publishing and the developer export live
+// in the Publish workspace. Read-only geometry for now (the word-based
+// editor comes later); a different board means approving another
+// candidate. Once published, the ID and clue lock.
+export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack, validation, published, notice = null }: FinalPuzzleProps) {
+  const { ready } = validation
   const { construction } = candidate
   const idErrors = fieldErrors(validation.metadataErrors, 'id')
   const clueErrors = fieldErrors(validation.metadataErrors, 'clue')
   const errorCount =
     validation.metadataErrors.length + validation.productionErrors.length + validation.exportErrors.length
   const answers = [...construction.placedAnswers].sort((a, b) => a.word.localeCompare(b.word))
-
-  useEffect(() => {
-    headingRef.current?.focus()
-  }, [])
 
   function update(field: keyof FinalPuzzleInputs, value: string) {
     onInputsChange({ ...inputs, [field]: value })
@@ -85,7 +49,7 @@ export function FinalPuzzle({
   return (
     <section className="ws-panel ws-final" aria-labelledby="ws-final-heading">
       <div className="ws-final__header">
-        <h2 id="ws-final-heading" className="ws-panel__heading" ref={headingRef} tabIndex={-1}>
+        <h2 id="ws-final-heading" className="ws-panel__heading" tabIndex={-1} data-workspace-heading>
           Final Puzzle
           <span className="ws-badge">Approved Candidate {number}</span>
         </h2>
@@ -93,9 +57,14 @@ export function FinalPuzzle({
           Preparing the approved candidate for publishing. Nothing is published until you confirm Publish, and the
           Workshop never changes production files.
         </p>
-        <button type="button" className="ws-button ws-button--secondary" onClick={onBack}>
-          Back to Candidate Review
-        </button>
+        <div className="ws-publish__actions">
+          <button type="button" className="ws-button ws-button--secondary" onClick={onBack}>
+            Back to Candidate Review
+          </button>
+          <a className="ws-button ws-button--secondary" href={WORKSPACE_HASH.publish}>
+            Go to Publish
+          </a>
+        </div>
         {notice && (
           <p className="ws-final__notice" aria-live="polite">
             {notice}
@@ -183,68 +152,6 @@ export function FinalPuzzle({
               </div>
             )}
           </div>
-
-          {ready && (
-            <>
-              <h3 className="ws-detail__subheading">Publish to dev calendar (testing)</h3>
-              <p className="ws-muted">
-                Publishes to this Workshop’s dev database for testing. It never reaches players.
-              </p>
-              <PublishSection
-                request={{ construction, id: inputs.id, clue: inputs.clue }}
-                publisher={publisher}
-                published={published}
-                onPublished={onPublished}
-              />
-              {production && (
-                <>
-                  <h3 className="ws-detail__subheading">Publish to Production</h3>
-                  <ProductionPublishSection request={{ construction, id: inputs.id, clue: inputs.clue }} client={production} />
-                </>
-              )}
-            </>
-          )}
-
-          <h3 className="ws-detail__subheading">Developer export</h3>
-          <p className="ws-muted">
-            For inspection, debugging, test fixtures, or emergency manual work only. Publishing is how a puzzle
-            reaches players: the server assigns its permanent date and the player loads it from the puzzle API at
-            release — no code change or redeploy.
-          </p>
-          {ready ? (
-            <>
-              <ul className="ws-final__downloads">
-                {files.map((file) => (
-                  <li key={file.path}>
-                    <button type="button" className="ws-button" onClick={() => downloadFile(file)}>
-                      Download {file.filename}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-              {files.map((file) => (
-                <details key={file.path} className="ws-final__source">
-                  <summary>Preview {file.filename}</summary>
-                  <pre>{file.source}</pre>
-                </details>
-              ))}
-
-            </>
-          ) : (
-            <>
-              {/* aria-disabled keeps the controls focusable and explained, matching Generate. */}
-              <ul className="ws-final__downloads">
-                <li>
-                  <button type="button" className="ws-button" aria-disabled="true" aria-describedby="ws-final-export-blocked">
-                    Download Puzzle Modules
-                  </button>
-                </li>
-              </ul>
-              <p id="ws-final-export-blocked" className="ws-muted">
-                Fix the validation errors above to export.
-              </p>
-            </>
-          )}
         </div>
 
         <div className="ws-final__preview">
