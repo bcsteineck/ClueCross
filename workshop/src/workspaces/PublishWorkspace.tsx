@@ -31,8 +31,9 @@ function downloadFile(file: ExportFile) {
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
-// Publish: the dev calendar, Production (in Production-operations mode
-// only), and the developer export under Advanced. Every action is the same
+// Publish: one column read in order — readiness, then the publishing
+// actions (the dev calendar, and Production in Production-operations mode
+// only), then the developer export under Advanced. Every action is the same
 // component with the same request as before; this workspace only arranges
 // them. Publishing is offered only for a valid Final Puzzle — reaching
 // #/publish directly changes nothing about that.
@@ -45,9 +46,12 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
 
   if (!finalPuzzle || !validation) {
     return (
-      <section className="ws-panel ws-workspace" aria-label="Publish">
+      <section className="ws-panel ws-workspace ws-publish-workspace" aria-label="Publish">
         {heading}
-        <div className="ws-empty">
+        <section className="ws-empty" aria-labelledby="ws-publish-readiness-heading">
+          <h3 id="ws-publish-readiness-heading" className="ws-detail__subheading">
+            Readiness
+          </h3>
           <p>
             <strong>Nothing to publish yet.</strong> Publishing needs an approved Final Puzzle.
           </p>
@@ -60,7 +64,7 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
               Go to Author
             </a>
           </div>
-        </div>
+        </section>
       </section>
     )
   }
@@ -76,7 +80,10 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
     <section className="ws-panel ws-workspace ws-publish-workspace" aria-label="Publish">
       {heading}
 
-      <div className="ws-publish-workspace__summary">
+      <section className="ws-publish-workspace__step" aria-labelledby="ws-publish-readiness-heading">
+        <h3 id="ws-publish-readiness-heading" className="ws-detail__subheading">
+          Readiness
+        </h3>
         <p>
           Approved Candidate {finalPuzzle.number}
           {inputs.id.trim() && ` · ${inputs.id.trim()}`}
@@ -94,20 +101,25 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
           </p>
         )}
         {notice && <p className="ws-final__notice">{notice}</p>}
-      </div>
+      </section>
 
       {ready && (
-        <>
-          <h3 className="ws-detail__subheading">Publish to dev calendar (testing)</h3>
-          <p className="ws-muted">Publishes to this Workshop’s dev database for testing. It never reaches players.</p>
-          <PublishSection request={request} publisher={publisher} published={published} onPublished={onPublished} />
+        <section className="ws-publish-workspace__step" aria-labelledby="ws-publish-actions-heading">
+          <h3 id="ws-publish-actions-heading" className="ws-detail__subheading">
+            Publishing actions
+          </h3>
+          <div className="ws-publish-target">
+            <h4 className="ws-detail__subheading">Publish to dev calendar (testing)</h4>
+            <p className="ws-muted">Publishes to this Workshop’s dev database for testing. It never reaches players.</p>
+            <PublishSection request={request} publisher={publisher} published={published} onPublished={onPublished} />
+          </div>
           {production && (
-            <>
-              <h3 className="ws-detail__subheading">Publish to Production</h3>
+            <div className="ws-publish-target ws-publish-target--production">
+              <h4 className="ws-detail__subheading">Publish to Production</h4>
               <ProductionPublishSection request={request} client={production} />
-            </>
+            </div>
           )}
-        </>
+        </section>
       )}
 
       <details className="ws-advanced">

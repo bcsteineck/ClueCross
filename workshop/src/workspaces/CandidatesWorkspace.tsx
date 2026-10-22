@@ -52,7 +52,7 @@ export function CandidatesWorkspace({
         <h2 className="ws-workspace__title" tabIndex={-1} data-workspace-heading>
           Candidates
         </h2>
-        <GenerateControl type="button" {...generate} />
+        <GenerateControl type="button" secondary {...generate} />
       </div>
 
       {generationErrors.length > 0 && (

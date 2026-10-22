@@ -38,7 +38,7 @@ export function PoolReview({ pool, onToggleIncluded }: PoolReviewProps) {
 
   return (
     <section className="ws-review" aria-labelledby="ws-review-heading">
-      <h3 id="ws-review-heading">Pool Review</h3>
+      <h4 id="ws-review-heading">Pool Review</h4>
       <p className="ws-muted">
         Sourced for “{pool.request.clue}” · {candidates.length} candidates · {included} included · {flagged} flagged ·{' '}
         {duplicates} duplicate · {invalid} invalid
