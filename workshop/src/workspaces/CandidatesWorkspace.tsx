@@ -1,13 +1,17 @@
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { RefObject } from 'react'
 import type { PoolCandidate } from '../../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { CandidateCard } from '../CandidateCard'
 import { CandidateDetail } from '../CandidateDetail'
 import { MAX_DISPLAYED_CANDIDATES, WORKSHOP_GENERATION_CONFIG } from '../generateBatch'
 import type { WorkshopBatch } from '../generateBatch'
-import { WORKSPACE_HASH } from '../shell/useWorkspaceRoute'
+import { WORKSPACE_HASH, candidateKey } from '../shell/useWorkspaceRoute'
+import type { CandidateDetailNavigation } from '../shell/useWorkspaceRoute'
 import type { FinalPuzzleDraft } from '../state/workshopReducer'
+import { CandidateScreen } from './CandidateScreen'
 import { GenerateControl } from './GenerateControl'
 import type { GenerateProps } from './generateProps'
+import { useCandidatesLayout } from './useCandidatesLayout'
 
 interface CandidatesWorkspaceProps {
   batch: WorkshopBatch | null
@@ -23,12 +27,36 @@ interface CandidatesWorkspaceProps {
   /** The control that approved (or reopens) the Final Puzzle; focus returns here from it. */
   approveButtonRef: RefObject<HTMLButtonElement | null>
   generate: GenerateProps
+  /** The key in #/candidates/<key>, if the route names a candidate's detail screen. */
+  candidateDetail: string | null
+  detailNavigation: CandidateDetailNavigation
+}
+
+// The gallery's scroll position, kept in its own history entry (view state,
+// never the draft) so returning by Back or All Candidates can restore it.
+interface GalleryScrollState {
+  wsGalleryScroll: { batchSeed: string; y: number }
+}
+
+function savedGalleryScroll(batchSeed: string): number | null {
+  const state: unknown = window.history.state
+  if (typeof state !== 'object' || state === null || !('wsGalleryScroll' in state)) return null
+  const saved = (state as GalleryScrollState).wsGalleryScroll
+  return saved.batchSeed === batchSeed ? saved.y : null
 }
 
 // Candidates: the current, session-only batch — gallery, inspector, and
 // Approve — plus Generate (the same control and handler as Author). Saved
 // Candidates is shown as a tab that isn't available yet, never as a
 // working one.
+//
+// Wide workspaces show the gallery beside the inspector. Narrow ones (the
+// stylesheet decides; see useCandidatesLayout) show one screen at a time:
+// a compact gallery, and a candidate's detail screen at
+// #/candidates/<key>. Both read the one selection in the session state: the
+// detail route selects its candidate, and a key that names no candidate in
+// this batch (a refresh, a replaced batch, a malformed URL) is replaced
+// with #/candidates rather than followed.
 export function CandidatesWorkspace({
   batch,
   selectedId,
@@ -40,14 +68,75 @@ export function CandidatesWorkspace({
   onOpenFinal,
   approveButtonRef,
   generate,
+  candidateDetail,
+  detailNavigation,
 }: CandidatesWorkspaceProps) {
-  const candidates = batch?.candidates ?? []
-  const selectedIndex = candidates.findIndex((candidate) => candidate.identitySignature === selectedId)
+  const viewRef = useRef<HTMLDivElement>(null)
+  const detailHeadingRef = useRef<HTMLHeadingElement>(null)
+  const layout = useCandidatesLayout(viewRef)
+  const candidates = useMemo(() => batch?.candidates ?? [], [batch])
+  const keys = useMemo(() => candidates.map((candidate) => candidateKey(candidate.identitySignature)), [candidates])
+  // A key must name exactly one candidate in this batch.
+  const detailIndex =
+    candidateDetail !== null && keys.filter((key) => key === candidateDetail).length === 1
+      ? keys.indexOf(candidateDetail)
+      : -1
+  const detailCandidate = detailIndex >= 0 ? candidates[detailIndex] : null
+  const selectedIndex =
+    detailIndex >= 0 ? detailIndex : candidates.findIndex((candidate) => candidate.identitySignature === selectedId)
   const selected = selectedIndex >= 0 ? candidates[selectedIndex] : null
   const approvedIndex = candidates.findIndex((candidate) => candidate.identitySignature === approvedId)
+  const screen = layout === 'screens' && detailCandidate ? 'detail' : 'gallery'
+
+  // The detail route is what's selected; a key naming nothing is dropped.
+  useEffect(() => {
+    if (candidateDetail === null) return
+    if (!detailCandidate) detailNavigation.discard()
+    else if (detailCandidate.identitySignature !== selectedId) onSelect(detailCandidate.identitySignature)
+  }, [candidateDetail, detailCandidate, selectedId, onSelect, detailNavigation])
+
+  // Moving between the gallery and the detail screen (not a resize across
+  // the breakpoint): the detail screen starts at its top with focus on its
+  // heading; the gallery comes back where it was scrolled to, with focus on
+  // the card that was open. Before paint, so neither visibly jumps.
+  const previousView = useRef({ screen, layout, detailIndex })
+  useLayoutEffect(() => {
+    const previous = previousView.current
+    previousView.current = { screen, layout, detailIndex }
+    if (previous.layout !== layout || !batch) return
+    if (screen === 'detail' && previous.screen === 'gallery') {
+      window.scrollTo(0, 0)
+      detailHeadingRef.current?.focus({ preventScroll: true })
+    } else if (screen === 'detail' && previous.detailIndex !== detailIndex) {
+      // Previous/Next or a swipe: show the new crossword if it's scrolled away.
+      if ((viewRef.current?.getBoundingClientRect().top ?? 0) < 0) window.scrollTo(0, 0)
+    } else if (screen === 'gallery' && previous.screen === 'detail') {
+      const y = savedGalleryScroll(batch.seed)
+      if (y !== null) window.scrollTo(0, y)
+      const key = selectedIndex >= 0 ? keys[selectedIndex] : null
+      const card = key ? viewRef.current?.querySelector<HTMLElement>(`[data-candidate-key="${key}"] button`) : null
+      if (card) {
+        if (y === null) card.scrollIntoView?.({ block: 'nearest' })
+        card.focus({ preventScroll: true })
+      }
+    }
+  }, [screen, layout, detailIndex, batch, keys, selectedIndex])
+
+  function openCandidate(index: number) {
+    const candidate = candidates[index]
+    onSelect(candidate.identitySignature)
+    if (layout === 'screens') {
+      const scroll: GalleryScrollState = { wsGalleryScroll: { batchSeed: batch!.seed, y: window.scrollY } }
+      window.history.replaceState({ ...window.history.state, ...scroll }, '')
+      detailNavigation.open(keys[index])
+    } else if (candidateDetail !== null) {
+      // Widened while a detail route was open: keep the URL naming the selection.
+      detailNavigation.show(keys[index])
+    }
+  }
 
   return (
-    <>
+    <div className="ws-candidates-workspace" ref={viewRef}>
       <div className="ws-workspace__header">
         <h2 className="ws-workspace__title" tabIndex={-1} data-workspace-heading>
           Candidates
@@ -113,6 +202,22 @@ export function CandidatesWorkspace({
               </div>
             )}
           </div>
+        ) : screen === 'detail' && detailCandidate ? (
+          <CandidateScreen
+            candidate={detailCandidate}
+            index={detailIndex}
+            total={candidates.length}
+            batchSeed={batch.seed}
+            isApproved={detailCandidate.identitySignature === approvedId}
+            onApprove={() => onApprove(detailCandidate, detailIndex + 1)}
+            approveButtonRef={approveButtonRef}
+            headingRef={detailHeadingRef}
+            onShow={(index) => {
+              onSelect(candidates[index].identitySignature)
+              detailNavigation.show(keys[index])
+            }}
+            onAllCandidates={detailNavigation.close}
+          />
         ) : (
           <div className="ws-results">
             <section className="ws-panel ws-candidates" aria-labelledby="ws-candidates-heading">
@@ -132,15 +237,18 @@ export function CandidatesWorkspace({
                 you close or refresh the Workshop.
               </p>
               {candidates.length > 0 ? (
-                <ul className="ws-card-grid">
+                <ul className={layout === 'screens' ? 'ws-card-grid ws-card-grid--compact' : 'ws-card-grid'}>
                   {candidates.map((candidate, index) => (
-                    <li key={candidate.identitySignature}>
+                    <li key={candidate.identitySignature} data-candidate-key={keys[index]}>
                       <CandidateCard
                         candidate={candidate}
                         number={index + 1}
-                        isSelected={candidate.identitySignature === selectedId}
+                        isSelected={index === selectedIndex}
                         isApproved={candidate.identitySignature === approvedId}
-                        onSelect={() => onSelect(candidate.identitySignature)}
+                        onSelect={() => openCandidate(index)}
+                        compact={layout === 'screens'}
+                        // Back from Final Puzzle returns focus to the card when there's no inspector.
+                        buttonRef={layout === 'screens' && index === selectedIndex ? approveButtonRef : undefined}
                       />
                     </li>
                   ))}
@@ -160,23 +268,25 @@ export function CandidatesWorkspace({
               )}
             </section>
 
-            <div className="ws-panel ws-detail-panel">
-              {selected ? (
-                <CandidateDetail
-                  candidate={selected}
-                  number={selectedIndex + 1}
-                  batchSeed={batch.seed}
-                  isApproved={selected.identitySignature === approvedId}
-                  onApprove={() => onApprove(selected, selectedIndex + 1)}
-                  approveButtonRef={approveButtonRef}
-                />
-              ) : (
-                <p className="ws-muted">Select a candidate to inspect it.</p>
-              )}
-            </div>
+            {layout === 'columns' && (
+              <div className="ws-panel ws-detail-panel">
+                {selected ? (
+                  <CandidateDetail
+                    candidate={selected}
+                    number={selectedIndex + 1}
+                    batchSeed={batch.seed}
+                    isApproved={selected.identitySignature === approvedId}
+                    onApprove={() => onApprove(selected, selectedIndex + 1)}
+                    approveButtonRef={approveButtonRef}
+                  />
+                ) : (
+                  <p className="ws-muted">Select a candidate to inspect it.</p>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
-    </>
+    </div>
   )
 }

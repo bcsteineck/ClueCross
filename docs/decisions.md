@@ -2,6 +2,16 @@
 
 ## 2026-10-21 (later)
 
+### Workshop Candidates on narrow screens
+
+Below the Candidates column breakpoint, reviewing a batch is a gallery and a separate detail screen instead of the gallery with the inspector stacked under every card. See `docs/architecture.md`, "Narrow Candidates".
+
+- **A screen, not an overlay.** The detail replaces the gallery inside the Candidates workspace; no modal, bottom sheet, or new sidebar destination.
+- **One breakpoint.** CSS decides (the existing container query) and publishes the result as a custom property that React reads, rather than a second JavaScript breakpoint that could drift.
+- **History: one entry per visit, not per candidate.** Opening adds an entry; Previous/Next replace it; All Candidates goes back. Keys are hashes of the layout's identity, so a stale URL never selects a different candidate.
+- **Boundary buttons use `aria-disabled`,** so reaching the first or last candidate doesn't drop keyboard focus.
+- **Room for Save Candidate (Phase 2d)** beside Approve in the detail screen; nothing for it is added yet.
+
 ### Workshop workspace layouts
 
 Each workspace got a layout suited to its task instead of one long column. See `docs/architecture.md`, "Workshop navigation".

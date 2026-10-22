@@ -409,9 +409,23 @@ $ws-final-columns: 720px;
   }
 }
 
-// Results: the candidate gallery (wider) beside the inspector, stacked on
-// narrow workspaces. Neither is sticky or scrolls on its own: both stay in
-// the normal page flow.
+// Candidates: on wide workspaces the gallery (wider) sits beside the
+// inspector. Neither is sticky or scrolls on its own: both stay in the
+// normal page flow. Narrower than $ws-candidates-columns, the gallery and a
+// candidate's detail are separate screens instead. This container query is
+// the only breakpoint: React reads --ws-candidates-layout
+// (useCandidatesLayout) to know which experience to render.
+
+.ws-candidates-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: $spacing-20;
+  --ws-candidates-layout: screens;
+
+  @container ws-workspace (min-width: #{$ws-candidates-columns}) {
+    --ws-candidates-layout: columns;
+  }
+}
 
 .ws-results {
   display: grid;
@@ -438,6 +452,13 @@ $ws-final-columns: 720px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: $spacing-12;
+
+  // Narrow gallery: two columns on phones, more as room allows; a single
+  // column only where two would make the previews too small to scan.
+  &--compact {
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: $spacing-8;
+  }
 }
 
 .ws-card {
@@ -467,6 +488,23 @@ $ws-final-columns: 720px;
     box-shadow: 0 0 0 $border-1 $ws-accent;
     background: $color-brand-primary-wash;
   }
+
+  // The board is the point of a compact card; the rest is one line.
+  &--compact {
+    gap: $spacing-4;
+    padding: $spacing-8;
+  }
+
+  &--compact .ws-card__facts {
+    justify-content: space-between;
+    font-size: 12px;
+    color: $color-gray-70;
+  }
+}
+
+.ws-card__selected {
+  font-weight: 700;
+  color: $color-gray-90;
 }
 
 .ws-card__header {
@@ -642,6 +680,44 @@ $ws-final-columns: 720px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 12px;
   }
+}
+
+// Narrow workspaces: a candidate's detail screen, in place of the gallery.
+.ws-candidate-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: $spacing-16;
+
+  .ws-detail {
+    align-self: stretch;
+  }
+
+  // As large as the workspace allows, capped like the Final Puzzle board.
+  .ws-detail__board {
+    max-width: 640px;
+  }
+}
+
+.ws-detail__position {
+  font-weight: 400;
+  color: $color-gray-70;
+}
+
+.ws-candidate-nav {
+  display: flex;
+  gap: $spacing-8;
+  max-width: 640px;
+
+  .ws-button {
+    flex: 1;
+  }
+}
+
+// Vertical panning and pinch-zoom stay with the browser; horizontal
+// movement is left to the swipe gesture (useSwipeNavigation).
+.ws-detail__board--swipe {
+  touch-action: pan-y pinch-zoom;
 }
 
 // Right under the board and summary, so it's found without scrolling the inspector.
