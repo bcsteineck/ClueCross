@@ -78,180 +78,193 @@ export function AuthorWorkspace({
       <h2 className="ws-workspace__title" tabIndex={-1} data-workspace-heading>
         Author
       </h2>
-      <form className="ws-panel ws-inputs" onSubmit={handleSubmit} noValidate>
-        <h3 className="ws-panel__heading">Authoring inputs</h3>
+      {/* One form (Enter in a field still generates), laid out as two
+          panels: the authoring inputs, then what decides and runs the batch.
+          DOM order is the stacked order on narrow widths. */}
+      <form className="ws-author" onSubmit={handleSubmit} noValidate>
+        <section className="ws-panel ws-author__inputs" aria-labelledby="ws-author-inputs-heading">
+          <h3 id="ws-author-inputs-heading" className="ws-panel__heading">
+            Authoring inputs
+          </h3>
 
-        <div className="ws-field">
-          <label htmlFor="ws-clue">Clue</label>
-          <input
-            id="ws-clue"
-            type="text"
-            ref={clueInputRef}
-            value={clue}
-            onChange={(event) => dispatch({ type: 'SET_CLUE', clue: event.target.value })}
-          />
-        </div>
-
-        <fieldset className="ws-field ws-source">
-          <legend>Candidate pool</legend>
-          <label>
-            <input type="radio" name="ws-pool-source" checked={poolSource === 'manual'} onChange={() => selectPoolSource('manual')} />{' '}
-            Enter manually
-          </label>
-          <label>
-            <input type="radio" name="ws-pool-source" checked={poolSource === 'sourced'} onChange={() => selectPoolSource('sourced')} />{' '}
-            Source from clue
-          </label>
-        </fieldset>
-
-        {poolSource === 'manual' ? (
           <div className="ws-field">
-            <label htmlFor="ws-pool">Candidate words</label>
-            <textarea
-              id="ws-pool"
-              rows={10}
-              value={poolText}
-              onChange={(event) => dispatch({ type: 'SET_POOL_TEXT', poolText: event.target.value })}
-              aria-describedby="ws-pool-guidance ws-pool-summary"
-              placeholder={'BEAGLE\nPOODLE\nCOLLIE\n…'}
-              spellCheck={false}
-            />
-            <ul id="ws-pool-guidance" className="ws-guidance">
-              <li>
-                {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers} answers will be
-                selected for a generated puzzle (never more than the number of candidate words).
-              </li>
-              <li>
-                At least {MIN_USABLE_ANSWERS} unique valid words are required; {RECOMMENDED_POOL_SIZE}+ are recommended.
-              </li>
-              <li>All candidate words should already be considered valid answers to the clue.</li>
-              <li>Separate words with new lines or commas. Multi-word answers are fine.</li>
-              <li>Each answer must be 3–12 letters (spaces, hyphens, and apostrophes don’t count) to fit the 12×12 board.</li>
-            </ul>
-          </div>
-        ) : (
-          <div className="ws-field ws-sourcing">
-            <label htmlFor="ws-context">Author context (optional)</label>
+            <label htmlFor="ws-clue">Clue</label>
             <input
-              id="ws-context"
+              id="ws-clue"
               type="text"
-              value={context}
-              onChange={(event) => dispatch({ type: 'SET_SOURCING_CONTEXT', context: event.target.value })}
-              aria-describedby="ws-context-hint"
+              ref={clueInputRef}
+              value={clue}
+              onChange={(event) => dispatch({ type: 'SET_CLUE', clue: event.target.value })}
             />
-            <p id="ws-context-hint" className="ws-muted">
-              Author-only clarification for sourcing. Never shown to players.
-            </p>
-            <div className="ws-sourcing__options">
-              <label htmlFor="ws-proper-nouns">Proper nouns</label>
-              <select
-                id="ws-proper-nouns"
-                value={properNouns}
-                onChange={(event) => dispatch({ type: 'SET_PROPER_NOUNS', properNouns: event.target.value as ProperNounSetting })}
-              >
-                <option value="exclude">Exclude</option>
-                <option value="allow">Allow</option>
-              </select>
-              <label htmlFor="ws-abbreviations">Abbreviations</label>
-              <select
-                id="ws-abbreviations"
-                value={abbreviations}
-                onChange={(event) =>
-                  dispatch({ type: 'SET_ABBREVIATIONS', abbreviations: event.target.value as AbbreviationSetting })
-                }
-              >
-                <option value="exclude">Exclude</option>
-                <option value="allow">Allow</option>
-              </select>
-              <label htmlFor="ws-source-kind">Candidate source</label>
-              <select
-                id="ws-source-kind"
-                value={sourceKind}
-                onChange={(event) => dispatch({ type: 'SET_SOURCE_KIND', sourceKind: event.target.value as SourceKind })}
-                disabled={sourcing}
-                aria-describedby="ws-source-kind-hint"
-              >
-                <option value="live">Live AI</option>
-                <option value="fixture">Development fixture</option>
-              </select>
-            </div>
-            <p id="ws-source-kind-hint" className="ws-muted">
-              {SOURCE_DESCRIPTION[sourceKind]}
-            </p>
-            <button type="button" className="ws-button ws-button--secondary" onClick={onSource} disabled={sourcing}>
-              {sourcing ? 'Sourcing…' : 'Source Candidates'}
-            </button>
-            <p className="ws-muted" role="status">
-              {sourcing ? 'Sourcing candidates… a live request can take a minute or more.' : ''}
-            </p>
-            {sourcingError && (
-              <div className="ws-errors" role="alert">
-                <strong>{sourcingError.label}:</strong> {sourcingError.message}
-                {sourcedPool && ' The previous Pool Review below is unchanged.'}
-              </div>
-            )}
-            {sourcedPool && (
-              <PoolReview
-                pool={sourcedPool}
-                onToggleIncluded={(id, included) => dispatch({ type: 'SET_CANDIDATE_INCLUDED', id, included })}
+          </div>
+
+          <fieldset className="ws-field ws-source">
+            <legend>Candidate pool</legend>
+            <label>
+              <input type="radio" name="ws-pool-source" checked={poolSource === 'manual'} onChange={() => selectPoolSource('manual')} />{' '}
+              Enter manually
+            </label>
+            <label>
+              <input type="radio" name="ws-pool-source" checked={poolSource === 'sourced'} onChange={() => selectPoolSource('sourced')} />{' '}
+              Source from clue
+            </label>
+          </fieldset>
+
+          {poolSource === 'manual' ? (
+            <div className="ws-field">
+              <label htmlFor="ws-pool">Candidate words</label>
+              <textarea
+                id="ws-pool"
+                rows={10}
+                value={poolText}
+                onChange={(event) => dispatch({ type: 'SET_POOL_TEXT', poolText: event.target.value })}
+                aria-describedby="ws-pool-guidance ws-pool-summary"
+                placeholder={'BEAGLE\nPOODLE\nCOLLIE\n…'}
+                spellCheck={false}
               />
-            )}
-          </div>
-        )}
-
-        <PriorityWordsPicker
-          words={pool.usableAnswers}
-          selected={activePriorityWords}
-          limitReached={priorityLimitReached}
-          onToggle={(word) => dispatch({ type: 'TOGGLE_PRIORITY_WORD', word })}
-          onRemove={(word) => dispatch({ type: 'REMOVE_PRIORITY_WORD', word })}
-        />
-
-        <div id="ws-pool-summary" className="ws-pool-summary">
-          <p className="ws-pool-summary__headline">{summary.headline}</p>
-          <ul className="ws-pool-summary__bands">
-            <li>{summary.short}</li>
-            <li>{summary.medium}</li>
-            <li>{summary.long}</li>
-            <li>{summary.average}</li>
-          </ul>
-        </div>
-
-        {SEVERITY_ORDER.map((severity) => {
-          const ofSeverity = diagnostics.filter((diagnostic) => diagnostic.severity === severity)
-          if (ofSeverity.length === 0) return null
-          return (
-            <ul key={severity} className={`ws-diagnostics ws-diagnostics--${severity}`}>
-              {ofSeverity.map((diagnostic) => (
-                <li key={diagnostic.code} id={`ws-diagnostic-${diagnostic.code}`}>
-                  <strong>{SEVERITY_LABEL[severity]}:</strong> {diagnostic.message}
-                  {diagnostic.entries && (
-                    <details>
-                      <summary>Show entries</summary>
-                      <ul>
-                        {diagnostic.entries.map((entry, index) => (
-                          <li key={`${entry}-${index}`}>{entry}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
+              <ul id="ws-pool-guidance" className="ws-guidance">
+                <li>
+                  {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers} answers will be
+                  selected for a generated puzzle (never more than the number of candidate words).
                 </li>
-              ))}
-            </ul>
-          )
-        })}
+                <li>
+                  At least {MIN_USABLE_ANSWERS} unique valid words are required; {RECOMMENDED_POOL_SIZE}+ are recommended.
+                </li>
+                <li>All candidate words should already be considered valid answers to the clue.</li>
+                <li>Separate words with new lines or commas. Multi-word answers are fine.</li>
+                <li>Each answer must be 3–12 letters (spaces, hyphens, and apostrophes don’t count) to fit the 12×12 board.</li>
+              </ul>
+            </div>
+          ) : (
+            <div className="ws-field ws-sourcing">
+              <label htmlFor="ws-context">Author context (optional)</label>
+              <input
+                id="ws-context"
+                type="text"
+                value={context}
+                onChange={(event) => dispatch({ type: 'SET_SOURCING_CONTEXT', context: event.target.value })}
+                aria-describedby="ws-context-hint"
+              />
+              <p id="ws-context-hint" className="ws-muted">
+                Author-only clarification for sourcing. Never shown to players.
+              </p>
+              <div className="ws-sourcing__options">
+                <label htmlFor="ws-proper-nouns">Proper nouns</label>
+                <select
+                  id="ws-proper-nouns"
+                  value={properNouns}
+                  onChange={(event) => dispatch({ type: 'SET_PROPER_NOUNS', properNouns: event.target.value as ProperNounSetting })}
+                >
+                  <option value="exclude">Exclude</option>
+                  <option value="allow">Allow</option>
+                </select>
+                <label htmlFor="ws-abbreviations">Abbreviations</label>
+                <select
+                  id="ws-abbreviations"
+                  value={abbreviations}
+                  onChange={(event) =>
+                    dispatch({ type: 'SET_ABBREVIATIONS', abbreviations: event.target.value as AbbreviationSetting })
+                  }
+                >
+                  <option value="exclude">Exclude</option>
+                  <option value="allow">Allow</option>
+                </select>
+                <label htmlFor="ws-source-kind">Candidate source</label>
+                <select
+                  id="ws-source-kind"
+                  value={sourceKind}
+                  onChange={(event) => dispatch({ type: 'SET_SOURCE_KIND', sourceKind: event.target.value as SourceKind })}
+                  disabled={sourcing}
+                  aria-describedby="ws-source-kind-hint"
+                >
+                  <option value="live">Live AI</option>
+                  <option value="fixture">Development fixture</option>
+                </select>
+              </div>
+              <p id="ws-source-kind-hint" className="ws-muted">
+                {SOURCE_DESCRIPTION[sourceKind]}
+              </p>
+              <button type="button" className="ws-button ws-button--secondary" onClick={onSource} disabled={sourcing}>
+                {sourcing ? 'Sourcing…' : 'Source Candidates'}
+              </button>
+              <p className="ws-muted" role="status">
+                {sourcing ? 'Sourcing candidates… a live request can take a minute or more.' : ''}
+              </p>
+              {sourcingError && (
+                <div className="ws-errors" role="alert">
+                  <strong>{sourcingError.label}:</strong> {sourcingError.message}
+                  {sourcedPool && ' The previous Pool Review below is unchanged.'}
+                </div>
+              )}
+              {sourcedPool && (
+                <PoolReview
+                  pool={sourcedPool}
+                  onToggleIncluded={(id, included) => dispatch({ type: 'SET_CANDIDATE_INCLUDED', id, included })}
+                />
+              )}
+            </div>
+          )}
+        </section>
 
-        {generationErrors.length > 0 && (
-          <div className="ws-errors" role="alert">
-            <ul>
-              {generationErrors.map((error) => (
-                <li key={error}>{error}</li>
-              ))}
+        <section className="ws-panel ws-author__generate" aria-labelledby="ws-author-generate-heading">
+          <h3 id="ws-author-generate-heading" className="ws-panel__heading">
+            Generation
+          </h3>
+
+          <PriorityWordsPicker
+            words={pool.usableAnswers}
+            selected={activePriorityWords}
+            limitReached={priorityLimitReached}
+            onToggle={(word) => dispatch({ type: 'TOGGLE_PRIORITY_WORD', word })}
+            onRemove={(word) => dispatch({ type: 'REMOVE_PRIORITY_WORD', word })}
+          />
+
+          <div id="ws-pool-summary" className="ws-pool-summary">
+            <p className="ws-pool-summary__headline">{summary.headline}</p>
+            <ul className="ws-pool-summary__bands">
+              <li>{summary.short}</li>
+              <li>{summary.medium}</li>
+              <li>{summary.long}</li>
+              <li>{summary.average}</li>
             </ul>
           </div>
-        )}
 
-        <GenerateControl type="submit" describedBy={blockingIds} {...generate} />
+          {SEVERITY_ORDER.map((severity) => {
+            const ofSeverity = diagnostics.filter((diagnostic) => diagnostic.severity === severity)
+            if (ofSeverity.length === 0) return null
+            return (
+              <ul key={severity} className={`ws-diagnostics ws-diagnostics--${severity}`}>
+                {ofSeverity.map((diagnostic) => (
+                  <li key={diagnostic.code} id={`ws-diagnostic-${diagnostic.code}`}>
+                    <strong>{SEVERITY_LABEL[severity]}:</strong> {diagnostic.message}
+                    {diagnostic.entries && (
+                      <details>
+                        <summary>Show entries</summary>
+                        <ul>
+                          {diagnostic.entries.map((entry, index) => (
+                            <li key={`${entry}-${index}`}>{entry}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )
+          })}
+
+          {generationErrors.length > 0 && (
+            <div className="ws-errors" role="alert">
+              <ul>
+                {generationErrors.map((error) => (
+                  <li key={error}>{error}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <GenerateControl type="submit" describedBy={blockingIds} {...generate} />
+        </section>
       </form>
     </>
   )

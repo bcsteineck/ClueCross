@@ -4,6 +4,8 @@ import type { KeyboardEvent } from 'react'
 interface GenerateControlProps {
   /** "submit" inside the Author form (Enter in a field generates, as before); "button" elsewhere. */
   type: 'submit' | 'button'
+  /** Secondary styling where another action (Approve) is the primary one. */
+  secondary?: boolean
   canGenerate: boolean
   /** ids of the blocking diagnostics, announced with the button. */
   describedBy?: string
@@ -19,7 +21,7 @@ interface GenerateControlProps {
 // same WorkshopApp handler, so validation, Priority Words, and generation
 // are shared. A new batch still clears the approved Final Puzzle (saved
 // candidates change that later), so that is confirmed first, never silent.
-export function GenerateControl({ type, canGenerate, describedBy, onGenerate, confirm, onConfirm, onCancel }: GenerateControlProps) {
+export function GenerateControl({ type, secondary = false, canGenerate, describedBy, onGenerate, confirm, onConfirm, onCancel }: GenerateControlProps) {
   const buttonRef = useRef<HTMLButtonElement>(null)
   const cancelRef = useRef<HTMLButtonElement>(null)
   const open = confirm !== null
@@ -46,7 +48,7 @@ export function GenerateControl({ type, canGenerate, describedBy, onGenerate, co
           its reason (the blocking error) is announced with it. */}
       <button
         type={type}
-        className="ws-button"
+        className={secondary ? 'ws-button ws-button--secondary' : 'ws-button'}
         ref={buttonRef}
         aria-disabled={!canGenerate}
         aria-describedby={describedBy || undefined}

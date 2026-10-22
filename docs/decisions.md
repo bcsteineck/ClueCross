@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-10-21 (later)
+
+### Workshop workspace layouts
+
+Each workspace got a layout suited to its task instead of one long column. See `docs/architecture.md`, "Workshop navigation".
+
+- **Author: inputs beside generation.** The authoring inputs (including Pool Review, which needs the width) are on the left; Priority Words, the pool checks, and Generate are on the right, so Generate is no longer at the end of a long form. It's still one form.
+- **Candidates: the inspector scrolls with the page.** It was sticky with its own scroll area; it's now in the normal page flow, as decided. Approve sits right under the inspector's board, and Generate is styled as secondary here so it doesn't compete with Approve.
+- **Final Puzzle: the board first.** A large, capped board on the left (and first when stacked), with the ID, clue, validation, and answers beside it — room for the word editor later.
+- **Publish: one ordered column.** Readiness, then Publishing actions, then Advanced. Dev and Production are separate groups; the Production group carries the banner's marker.
+- **Columns follow the content width, not the viewport,** via a container query, because the 200px sidebar takes a different share of each window size.
+
+---
+
 ## 2026-10-21
 
 ### Workshop application shell and workspaces

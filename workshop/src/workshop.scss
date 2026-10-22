@@ -44,7 +44,17 @@ h4 {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   row-gap: $spacing-20;
+  // Workspace layouts respond to the width left beside the sidebar, not
+  // to the viewport (see $ws-*-columns below).
+  container: ws-workspace / inline-size;
 }
+
+// Workspace-width thresholds for the two-column layouts: below each, the
+// columns stack in DOM order. Chosen so neither column gets cramped (the
+// desktop sidebar already takes 200px of a 1024–1280px window).
+$ws-author-columns: 860px;
+$ws-candidates-columns: 760px;
+$ws-final-columns: 720px;
 
 .ws-muted {
   color: $color-gray-70;
@@ -65,13 +75,29 @@ h4 {
   margin-bottom: $spacing-12;
 }
 
-// Inputs
+// Author: the authoring inputs (wider) beside Priority Words, pool
+// diagnostics, and Generate. Both panels scroll with the page.
 
-.ws-inputs {
+.ws-author {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $spacing-20;
+  align-items: start;
+
+  @container ws-workspace (min-width: #{$ws-author-columns}) {
+    grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr);
+  }
+}
+
+.ws-author__inputs,
+.ws-author__generate {
   display: flex;
   flex-direction: column;
   gap: $spacing-16;
-  max-width: 720px;
+
+  > .ws-panel__heading {
+    margin-bottom: 0;
+  }
 }
 
 .ws-field {
@@ -125,7 +151,7 @@ h4 {
 
 .ws-sourcing__options {
   display: grid;
-  grid-template-columns: max-content minmax(0, 160px);
+  grid-template-columns: max-content minmax(0, 220px);
   gap: $spacing-8 $spacing-12;
   align-items: center;
   margin: $spacing-8 0;
@@ -227,7 +253,7 @@ h4 {
   gap: $spacing-8;
   margin-top: $spacing-12;
 
-  h3 {
+  h4 {
     font-size: 16px;
   }
 }
@@ -383,29 +409,18 @@ h4 {
   }
 }
 
-// Results: candidate grid beside a sticky detail panel on wide screens,
-// stacked on narrow ones.
+// Results: the candidate gallery (wider) beside the inspector, stacked on
+// narrow workspaces. Neither is sticky or scrolls on its own: both stay in
+// the normal page flow.
 
 .ws-results {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  grid-template-columns: minmax(0, 1fr);
   gap: $spacing-20;
   align-items: start;
 
-  @media (max-width: 1000px) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.ws-detail-panel {
-  position: sticky;
-  top: $spacing-16;
-  max-height: calc(100vh - #{$spacing-32});
-  overflow-y: auto;
-
-  @media (max-width: 1000px) {
-    position: static;
-    max-height: none;
+  @container ws-workspace (min-width: #{$ws-candidates-columns}) {
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
   }
 }
 
@@ -421,7 +436,7 @@ h4 {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: $spacing-12;
 }
 
@@ -629,12 +644,18 @@ h4 {
   }
 }
 
+// Right under the board and summary, so it's found without scrolling the inspector.
 .ws-detail__approve {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
   border-top: $border-1 solid $color-gray-20;
-  padding-top: $spacing-12;
+  border-bottom: $border-1 solid $color-gray-20;
+  padding: $spacing-12 0;
 }
 
-// Final Puzzle: inputs, validation, and export beside the read-only board.
+// Final Puzzle: the read-only board (the focus) beside the ID, clue,
+// validation, and answers; the board stacks first on narrow workspaces.
 
 .ws-final__header {
   display: flex;
@@ -649,21 +670,29 @@ h4 {
 
 .ws-final__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 440px);
-  gap: $spacing-20;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $spacing-24;
   align-items: start;
 
-  @media (max-width: 1000px) {
-    grid-template-columns: minmax(0, 1fr);
+  @container ws-workspace (min-width: #{$ws-final-columns}) {
+    // The board's track stops at its cap, so the details sit beside it
+    // rather than across a gap on very wide screens.
+    grid-template-columns: minmax(0, 640px) minmax(280px, 1fr);
   }
 }
 
-.ws-final__main,
-.ws-final__preview {
+// Large, but capped (stacked too) so it doesn't keep growing on wide screens.
+.ws-final__board {
+  max-width: 640px;
+  min-width: 0;
+}
+
+.ws-final__details {
   display: flex;
   flex-direction: column;
   gap: $spacing-12;
   min-width: 0;
+  max-width: 560px;
 }
 
 .ws-field__error {
@@ -1195,6 +1224,8 @@ $ws-sidebar-width: 200px;
 
 .ws-workspace,
 .ws-publish-workspace,
+.ws-publish-workspace__step,
+.ws-publish-target,
 .ws-empty {
   display: flex;
   flex-direction: column;
@@ -1276,5 +1307,25 @@ $ws-sidebar-width: 200px;
     p {
       margin: 0;
     }
+  }
+}
+
+// Publish: one comfortable column, read in order — Readiness, Publishing
+// actions, Advanced. Dev and Production are separate groups, and the
+// Production one carries the same marker as the Production banner.
+
+.ws-publish-workspace {
+  width: 100%;
+  max-width: 800px;
+  gap: $spacing-20;
+}
+
+.ws-publish-target {
+  padding: $spacing-16;
+  border: $border-1 solid $color-gray-20;
+  border-radius: $radius-8;
+
+  &--production {
+    border-left: 4px solid $color-brand-secondary;
   }
 }

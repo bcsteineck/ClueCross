@@ -70,6 +70,16 @@ export function CandidateDetail({
         </div>
       </dl>
 
+      <div className="ws-detail__approve">
+        <button type="button" className="ws-button" onClick={onApprove} ref={approveButtonRef}>
+          {isApproved ? 'Open Final Puzzle' : 'Approve Candidate'}
+        </button>
+        <p className="ws-muted">
+          Approving saves this candidate as your Final Puzzle in the local working draft. It isn’t published.
+          Unapproved candidates aren’t saved and will be lost when you refresh.
+        </p>
+      </div>
+
       <h4 className="ws-detail__subheading">Selected answers ({candidate.selectedAnswers.length})</h4>
       <ul className="ws-word-list">
         {candidate.selectedAnswers.map((word) => (
@@ -117,16 +127,6 @@ export function CandidateDetail({
         <dt>Duplicate trials</dt>
         <dd>{candidate.duplicateCount}</dd>
       </dl>
-
-      <div className="ws-detail__approve">
-        <button type="button" className="ws-button" onClick={onApprove} ref={approveButtonRef}>
-          {isApproved ? 'Open Final Puzzle' : 'Approve Candidate'}
-        </button>
-        <p className="ws-muted">
-          Approving saves this candidate as your Final Puzzle in the local working draft. It isn’t published.
-          Unapproved candidates aren’t saved and will be lost when you refresh.
-        </p>
-      </div>
     </section>
   )
 }

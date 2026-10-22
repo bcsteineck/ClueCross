@@ -22,11 +22,11 @@ function fieldErrors(issues: MetadataIssue[], field: MetadataIssue['field']): st
   return issues.filter((issue) => issue.field === field).map((issue) => issue.message)
 }
 
-// The approved candidate being finalized: author ID + clue, the final
-// board, and two-layer validation. Publishing and the developer export live
-// in the Publish workspace. Read-only geometry for now (the word-based
-// editor comes later); a different board means approving another
-// candidate. Once published, the ID and clue lock.
+// The approved candidate being finalized: the final board (the focus, on
+// the left), then author ID + clue and two-layer validation. Publishing and
+// the developer export live in the Publish workspace. Read-only geometry for
+// now (the word-based editor comes later); a different board means
+// approving another candidate. Once published, the ID and clue lock.
 export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack, validation, published, notice = null }: FinalPuzzleProps) {
   const { ready } = validation
   const { construction } = candidate
@@ -72,8 +72,17 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack,
         )}
       </div>
 
+      {/* The board is the focus: first in reading order (so it stacks first),
+          beside the details on wider workspaces. */}
       <div className="ws-final__body">
-        <div className="ws-final__main">
+        <div className="ws-final__board">
+          <CandidateBoard
+            construction={construction}
+            label={`Final puzzle board, ${construction.width} by ${construction.height} grid.`}
+          />
+        </div>
+
+        <div className="ws-final__details">
           <div className="ws-field">
             <label htmlFor="ws-final-id">Puzzle ID</label>
             <input
@@ -152,15 +161,7 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack,
               </div>
             )}
           </div>
-        </div>
 
-        <div className="ws-final__preview">
-          <div className="ws-detail__board">
-            <CandidateBoard
-              construction={construction}
-              label={`Final puzzle board, ${construction.width} by ${construction.height} grid.`}
-            />
-          </div>
           <dl className="ws-detail__summary">
             <div>
               <dt>Size</dt>
