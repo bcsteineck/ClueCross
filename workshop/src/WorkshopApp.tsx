@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { createDraftClient } from './draft/draftClient'
 import type { DraftClient } from './draft/draftClient'
@@ -123,7 +123,7 @@ export function WorkshopApp({
   const { clue, poolSource, poolText, finalPuzzle } = draft
   const { context, properNouns, abbreviations, sourceKind, pool: sourcedPool } = draft.sourcing
   const { batch, selectedId, generationErrors, priorityLimitReached } = session
-  const { workspace, navigate } = useWorkspaceRoute(production !== null)
+  const { workspace, candidateDetail, candidateDetailNavigation, navigate } = useWorkspaceRoute(production !== null)
   const [sourcing, setSourcing] = useState(false)
   // Guards against a second submission before the `sourcing` state re-renders.
   const sourcingInFlight = useRef(false)
@@ -249,6 +249,9 @@ export function WorkshopApp({
     else runGenerate()
   }
 
+  // Stable, so the Candidates detail route can select its candidate in an effect.
+  const handleSelect = useCallback((id: string) => dispatch({ type: 'SELECT_CANDIDATE', id }), [dispatch])
+
   function handleApprove(candidate: PoolCandidate, number: number) {
     dispatch({ type: 'APPROVE_CANDIDATE', candidate, number })
     navigate('final')
@@ -305,11 +308,13 @@ export function WorkshopApp({
         approvedId={approvedId}
         finalPuzzle={finalPuzzle}
         generationErrors={generationErrors}
-        onSelect={(id) => dispatch({ type: 'SELECT_CANDIDATE', id })}
+        onSelect={handleSelect}
         onApprove={handleApprove}
         onOpenFinal={() => navigate('final')}
         approveButtonRef={approveButtonRef}
         generate={generate}
+        candidateDetail={candidateDetail}
+        detailNavigation={candidateDetailNavigation}
       />
     )
   } else if (workspace === 'final') {

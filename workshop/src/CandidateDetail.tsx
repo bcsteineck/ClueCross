@@ -1,8 +1,9 @@
-import type { Ref } from 'react'
+import type { ReactNode, Ref } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import type { ConstructionSuccess } from '../../tools/generator/src/types.js'
 import { CandidateBoard } from './CandidateBoard'
 import { formatMobileCellSize } from './generateBatch'
+import type { SwipeHandlers } from './workspaces/useSwipeNavigation'
 
 interface CandidateDetailProps {
   candidate: PoolCandidate
@@ -11,6 +12,13 @@ interface CandidateDetailProps {
   isApproved: boolean
   onApprove: () => void
   approveButtonRef?: Ref<HTMLButtonElement>
+  /** The detail screen's heading and position; defaults to the inspector's "Selected Candidate N". */
+  heading?: ReactNode
+  headingRef?: Ref<HTMLHeadingElement>
+  /** Shown between the heading and the board (the detail screen's Previous/Next). */
+  navigation?: ReactNode
+  /** Swipe gestures on the board (the detail screen). */
+  swipe?: SwipeHandlers
 }
 
 function describeBoard(construction: ConstructionSuccess): string {
@@ -34,18 +42,24 @@ export function CandidateDetail({
   isApproved,
   onApprove,
   approveButtonRef,
+  heading,
+  headingRef,
+  navigation,
+  swipe,
 }: CandidateDetailProps) {
   const { geometry, authoredIntersections, derivedEntries, letters } = candidate.metrics
   const mobileCellSize = formatMobileCellSize(geometry.boundingWidth, geometry.boundingHeight)
 
   return (
     <section className="ws-detail" aria-labelledby="ws-detail-heading">
-      <h3 id="ws-detail-heading" className="ws-detail__heading">
-        Selected Candidate {number}
+      <h3 id="ws-detail-heading" className="ws-detail__heading" ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+        {heading ?? `Selected Candidate ${number}`}
         {isApproved && <span className="ws-badge">Approved</span>}
       </h3>
 
-      <div className="ws-detail__board">
+      {navigation}
+
+      <div className={swipe ? 'ws-detail__board ws-detail__board--swipe' : 'ws-detail__board'} {...swipe}>
         <CandidateBoard construction={candidate.construction} label={describeBoard(candidate.construction)} />
       </div>
 
