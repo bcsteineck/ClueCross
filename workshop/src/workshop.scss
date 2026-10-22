@@ -6,6 +6,57 @@
 $ws-accent: $color-brand-primary;
 $ws-approved: $color-brand-secondary;
 
+// A small Workshop-only vocabulary on top of the shared tokens: a white
+// canvas, thin low-contrast lines, quiet secondary text, and color kept
+// for meaning (selection and primary actions use the accent; status uses
+// the semantic tones below, always alongside a text label).
+$ws-canvas: $color-gray-00;
+$ws-border: $color-gray-20; // panels, dividers
+$ws-border-strong: $color-gray-30; // cards, confirmations, quiet buttons
+$ws-control-border: $color-gray-50; // text fields (3:1 against white)
+$ws-text-muted: $color-gray-70;
+$ws-text-disabled: $color-gray-60;
+
+$ws-success: $color-brand-secondary;
+$ws-success-wash: $color-brand-secondary-wash;
+$ws-warning: #8a5a00;
+$ws-warning-wash: #fff6e3;
+$ws-error: #b3261e;
+$ws-error-hover: #8f1d17;
+$ws-error-wash: #fdf1f0;
+$ws-info: $color-gray-50;
+$ws-info-wash: $color-gray-10;
+
+// Spacing: page gutters, panel padding, and the gap between workflow areas
+// shrink on narrow workspaces; spacing inside a group stays 4–12px.
+$ws-gutter: $spacing-16;
+$ws-gutter-wide: $spacing-24;
+$ws-panel-padding: $spacing-20;
+$ws-panel-padding-narrow: $spacing-16;
+$ws-narrow-workspace: 600px;
+
+// Type: one moderate workspace title, quieter section headings, and
+// smaller metadata; body text stays at a readable 15px.
+$ws-font-title: 22px;
+$ws-font-section: 16px;
+$ws-font-subsection: 14px;
+$ws-font-label: 14px;
+$ws-font-meta: 13px;
+$ws-font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+$ws-control-height: 40px;
+$ws-touch-height: 44px;
+
+// A status message: a tone bar plus a faint wash. The message's own text
+// ("Error:", "Ready to publish.") carries the meaning; the tone reinforces it.
+@mixin ws-callout($tone, $wash) {
+  border-left: 4px solid $tone;
+  border-radius: 0 $radius-4 $radius-4 0;
+  background: $wash;
+  padding: $spacing-8 $spacing-12;
+  font-size: 14px;
+}
+
 *,
 *::before,
 *::after {
@@ -14,7 +65,7 @@ $ws-approved: $color-brand-secondary;
 
 body {
   margin: 0;
-  background: $color-gray-10;
+  background: $ws-canvas;
   color: $color-gray-90;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 15px;
@@ -26,7 +77,8 @@ h2,
 h3,
 h4 {
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.25;
+  font-weight: $font-weight-semibold;
 }
 
 :focus-visible {
@@ -37,13 +89,13 @@ h4 {
 .ws-app {
   max-width: 1440px;
   margin: 0 auto;
-  padding: $spacing-24 $spacing-16 $spacing-32;
+  padding: $spacing-24 $ws-gutter $spacing-32;
   // One full-width column: the header, inputs, and results stack in order.
   // minmax(0, 1fr) lets a section shrink to the viewport instead of growing
   // to fit its widest content, so nothing reflows into side-by-side columns.
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  row-gap: $spacing-20;
+  row-gap: $spacing-16;
   // Workspace layouts respond to the width left beside the sidebar, not
   // to the viewport (see $ws-*-columns below).
   container: ws-workspace / inline-size;
@@ -57,35 +109,43 @@ $ws-candidates-columns: 760px;
 $ws-final-columns: 720px;
 
 .ws-muted {
-  color: $color-gray-70;
+  color: $ws-text-muted;
   margin: 0;
-  font-size: 13px;
+  font-size: $ws-font-meta;
 }
 
+// Bordered panels are for clearly bounded groups (Generation, the
+// inspector, Readiness, empty states); ordinary sections stay open.
 .ws-panel {
   background: $color-gray-00;
-  border: $border-1 solid $color-gray-20;
+  border: $border-1 solid $ws-border;
   border-radius: $radius-8;
-  padding: $spacing-20;
+  padding: $ws-panel-padding;
   min-width: 0;
+
+  @container ws-workspace (max-width: #{$ws-narrow-workspace - 1px}) {
+    padding: $ws-panel-padding-narrow;
+  }
 }
 
+// A section heading inside a workspace (below the workspace title).
 .ws-panel__heading {
-  font-size: 18px;
+  font-size: $ws-font-section;
   margin-bottom: $spacing-12;
 }
 
-// Author: the authoring inputs (wider) beside Priority Words, pool
-// diagnostics, and Generate. Both panels scroll with the page.
+// Author: the authoring inputs (wider, open) beside the Generation panel —
+// Priority Words, pool diagnostics, and Generate. Both scroll with the page.
 
 .ws-author {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: $spacing-20;
+  gap: $spacing-24;
   align-items: start;
 
   @container ws-workspace (min-width: #{$ws-author-columns}) {
     grid-template-columns: minmax(0, 1.85fr) minmax(300px, 1fr);
+    gap: $spacing-32;
   }
 }
 
@@ -93,7 +153,8 @@ $ws-final-columns: 720px;
 .ws-author__generate {
   display: flex;
   flex-direction: column;
-  gap: $spacing-16;
+  gap: $spacing-20;
+  min-width: 0;
 
   > .ws-panel__heading {
     margin-bottom: 0;
@@ -106,23 +167,25 @@ $ws-final-columns: 720px;
   gap: $spacing-4;
 
   label {
-    font-weight: 600;
+    font-size: $ws-font-label;
+    font-weight: $font-weight-semibold;
   }
 
   // Text fields only: radios and checkboxes keep their natural size.
   input:not([type='radio']):not([type='checkbox']),
   textarea {
     width: 100%;
+    min-height: $ws-control-height;
     font: inherit;
     padding: $spacing-8;
-    border: $border-1 solid $color-gray-50;
+    border: $border-1 solid $ws-control-border;
     border-radius: $radius-4;
     background: $color-gray-00;
     color: inherit;
   }
 
   textarea {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: $ws-font-mono;
     resize: vertical;
   }
 }
@@ -138,14 +201,25 @@ $ws-final-columns: 720px;
   gap: $spacing-4 $spacing-16;
 
   legend {
-    font-weight: 600;
+    font-size: $ws-font-label;
+    font-weight: $font-weight-semibold;
     padding: 0;
     margin-bottom: $spacing-4;
     width: 100%;
   }
 
   label {
+    font-size: inherit;
     font-weight: 400;
+  }
+}
+
+// Sourcing: the settings, then Source Candidates and its status, then Pool Review.
+.ws-sourcing {
+  gap: $spacing-8;
+
+  > .ws-button {
+    margin-top: $spacing-4;
   }
 }
 
@@ -158,8 +232,9 @@ $ws-final-columns: 720px;
 
   select {
     font: inherit;
+    min-height: $ws-control-height;
     padding: $spacing-4 $spacing-8;
-    border: $border-1 solid $color-gray-50;
+    border: $border-1 solid $ws-control-border;
     border-radius: $radius-4;
     background: $color-gray-00;
     color: inherit;
@@ -176,8 +251,13 @@ $ws-final-columns: 720px;
   padding: 0;
   min-width: 0;
 
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+
   legend {
-    font-weight: 600;
+    font-size: $ws-font-section;
+    font-weight: $font-weight-semibold;
     padding: 0;
     margin-bottom: $spacing-4;
   }
@@ -188,8 +268,9 @@ $ws-final-columns: 720px;
 }
 
 .ws-priority__count {
+  font-size: $ws-font-meta;
   font-weight: 400;
-  color: $color-gray-70;
+  color: $ws-text-muted;
 }
 
 .ws-priority__options {
@@ -203,13 +284,18 @@ $ws-final-columns: 720px;
   overflow-y: auto;
 
   label {
+    display: flex;
+    align-items: center;
+    gap: $spacing-4;
+    min-height: 28px;
+    font-size: 14px;
     font-weight: 400;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: $ws-font-mono;
     overflow-wrap: anywhere;
   }
 
   label:has(input[aria-disabled='true']) {
-    color: $color-gray-70;
+    color: $ws-text-muted;
   }
 }
 
@@ -218,10 +304,7 @@ $ws-final-columns: 720px;
 }
 
 .ws-priority__missing {
-  border-left: 4px solid $color-gray-90;
-  background: $color-gray-10;
-  padding: $spacing-8 $spacing-12;
-  font-size: 14px;
+  @include ws-callout($ws-warning, $ws-warning-wash);
 
   ul {
     list-style: none;
@@ -236,11 +319,10 @@ $ws-final-columns: 720px;
     display: flex;
     align-items: center;
     gap: $spacing-8;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: $ws-font-mono;
   }
 
   .ws-button {
-    padding: $spacing-2 $spacing-8;
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   }
 }
@@ -254,7 +336,7 @@ $ws-final-columns: 720px;
   margin-top: $spacing-12;
 
   h4 {
-    font-size: 16px;
+    font-size: $ws-font-section;
   }
 }
 
@@ -262,7 +344,7 @@ $ws-final-columns: 720px;
   overflow-x: auto;
   max-height: 480px;
   overflow-y: auto;
-  border: $border-1 solid $color-gray-20;
+  border: $border-1 solid $ws-border;
   border-radius: $radius-4;
 }
 
@@ -304,8 +386,10 @@ $ws-final-columns: 720px;
   font-size: 13px;
 }
 
+// Divided from Priority Words above: these are the checks Generate runs on.
 .ws-pool-summary {
-  margin-top: $spacing-4;
+  padding-top: $spacing-16;
+  border-top: $border-1 solid $ws-border;
 }
 
 .ws-pool-summary__headline {
@@ -334,12 +418,12 @@ $ws-final-columns: 720px;
   list-style: none;
 }
 
-.ws-diagnostics > li,
+.ws-diagnostics > li {
+  @include ws-callout($ws-info, $ws-info-wash);
+}
+
 .ws-errors {
-  border-left: 4px solid $color-gray-50;
-  background: $color-gray-10;
-  padding: $spacing-8 $spacing-12;
-  font-size: 14px;
+  @include ws-callout($ws-error, $ws-error-wash);
 }
 
 .ws-diagnostics {
@@ -359,53 +443,118 @@ $ws-final-columns: 720px;
   }
 }
 
-.ws-diagnostics--error > li,
-.ws-errors {
-  border-left-color: $color-gray-90;
+.ws-diagnostics--error > li {
+  border-left-color: $ws-error;
+  background: $ws-error-wash;
 }
 
 .ws-diagnostics--warning > li {
-  border-left-color: $color-gray-70;
+  border-left-color: $ws-warning;
+  background: $ws-warning-wash;
 }
 
+// Buttons: three levels of emphasis, one shape. Primary (filled accent)
+// is the dominant action in an area; secondary (quiet outline) supports
+// it; tertiary (text) is for utilities. Destructive confirmations get
+// their own filled red, never the primary style. Every level shares the
+// height, focus ring, and disabled treatment; disabled (or aria-disabled,
+// which stays focusable) is flat gray with no hover response.
 .ws-button {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-4;
+  min-height: $ws-control-height;
   font: inherit;
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
+  line-height: 1.25;
+  text-align: center;
+  text-decoration: none;
   padding: $spacing-8 $spacing-16;
-  border: 0;
+  border: $border-1 solid transparent;
   border-radius: $radius-4;
   background: $ws-accent;
   color: $color-gray-00;
   cursor: pointer;
 
-  &:hover:not(:disabled):not([aria-disabled='true']) {
-    background: $color-brand-primary-hover;
+  @media (pointer: coarse) {
+    min-height: $ws-touch-height;
+  }
+
+  @include hoverable {
+    &:hover:not(:disabled):not([aria-disabled='true']) {
+      background: $color-brand-primary-hover;
+    }
+  }
+
+  &:active:not(:disabled):not([aria-disabled='true']) {
+    background: $color-brand-primary-shadow;
   }
 
   &:disabled,
   &[aria-disabled='true'] {
-    background: $color-gray-20;
-    color: $color-gray-80;
-    cursor: default;
+    background: $color-gray-10;
+    border-color: $ws-border;
+    color: $ws-text-disabled;
+    cursor: not-allowed;
   }
 }
 
 // Variants follow the base rule: same specificity, so order decides. The
-// base disabled state (higher specificity) still applies to a variant; only
-// the outline is muted to match it.
+// base disabled state (higher specificity) still applies to every variant.
 .ws-button--secondary {
   background: $color-gray-00;
-  color: $ws-accent;
-  box-shadow: inset 0 0 0 $border-2 $ws-accent;
+  border-color: $color-gray-40;
+  color: $color-gray-90;
 
-  &:hover:not(:disabled):not([aria-disabled='true']) {
+  @include hoverable {
+    &:hover:not(:disabled):not([aria-disabled='true']) {
+      background: $color-gray-10;
+      border-color: $color-gray-50;
+    }
+  }
+
+  &:active:not(:disabled):not([aria-disabled='true']) {
+    background: $color-gray-20;
+  }
+}
+
+.ws-button--tertiary {
+  padding-inline: $spacing-8;
+  background: transparent;
+  color: $ws-accent;
+
+  @include hoverable {
+    &:hover:not(:disabled):not([aria-disabled='true']) {
+      background: $color-brand-primary-wash;
+      text-decoration: underline;
+    }
+  }
+
+  &:active:not(:disabled):not([aria-disabled='true']) {
     background: $color-brand-primary-wash;
   }
 
   &:disabled,
   &[aria-disabled='true'] {
-    box-shadow: inset 0 0 0 $border-2 $color-gray-30;
+    background: transparent;
+    border-color: transparent;
+  }
+}
+
+.ws-button--danger {
+  background: $ws-error;
+  color: $color-gray-00;
+
+  @include hoverable {
+    &:hover:not(:disabled):not([aria-disabled='true']) {
+      background: $ws-error-hover;
+    }
+  }
+
+  &:active:not(:disabled):not([aria-disabled='true']) {
+    background: $ws-error-hover;
   }
 }
 
@@ -430,7 +579,7 @@ $ws-final-columns: 720px;
 .ws-results {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: $spacing-20;
+  gap: $spacing-24;
   align-items: start;
 
   @container ws-workspace (min-width: #{$ws-candidates-columns}) {
@@ -438,10 +587,27 @@ $ws-final-columns: 720px;
   }
 }
 
+// The gallery is open (the cards are the bounded things); the inspector
+// beside it is a panel.
+.ws-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+  min-width: 0;
+
+  > .ws-panel__heading {
+    margin-bottom: 0;
+  }
+
+  > .ws-card-grid {
+    margin-top: $spacing-4;
+  }
+}
+
 .ws-meta {
-  margin: 0 0 $spacing-16;
-  color: $color-gray-70;
-  font-size: 13px;
+  margin: 0;
+  color: $ws-text-muted;
+  font-size: $ws-font-meta;
   overflow-wrap: anywhere;
 }
 
@@ -472,16 +638,18 @@ $ws-final-columns: 720px;
   text-align: left;
   color: inherit;
   background: $color-gray-00;
-  border: $border-1 solid $color-gray-40;
+  border: $border-1 solid $ws-border-strong;
   border-radius: $radius-8;
   cursor: pointer;
 
-  &:hover {
-    border-color: $color-gray-50;
+  @include hoverable {
+    &:hover {
+      border-color: $color-gray-50;
+    }
   }
 
-  // Selected: strong accent border plus a wash — and aria-pressed, so the
-  // state is never color-only.
+  // Selected: a 2px accent border plus a faint wash — and aria-pressed (or
+  // the "Selected" label on a compact card), so it's never color-only.
   &--selected,
   &--selected:hover {
     border-color: $ws-accent;
@@ -498,13 +666,13 @@ $ws-final-columns: 720px;
   &--compact .ws-card__facts {
     justify-content: space-between;
     font-size: 12px;
-    color: $color-gray-70;
+    color: $ws-text-muted;
   }
 }
 
 .ws-card__selected {
-  font-weight: 700;
-  color: $color-gray-90;
+  font-weight: $font-weight-bold;
+  color: $ws-accent;
 }
 
 .ws-card__header {
@@ -512,26 +680,33 @@ $ws-final-columns: 720px;
   justify-content: space-between;
   align-items: center;
   gap: $spacing-8;
-  font-size: 13px;
-  color: $color-gray-70;
+  min-height: 22px;
+  font-size: $ws-font-meta;
+}
+
+.ws-card__number {
+  font-weight: $font-weight-semibold;
+  color: $color-gray-90;
 }
 
 .ws-card__facts {
   display: flex;
   flex-wrap: wrap;
   gap: $spacing-2 $spacing-12;
-  font-size: 13px;
+  font-size: $ws-font-meta;
+  color: $ws-text-muted;
 }
 
 .ws-card__headline {
   flex-basis: 100%;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: $font-weight-semibold;
+  color: $color-gray-90;
 }
 
 .ws-card__words {
   font-size: 12px;
-  color: $color-gray-70;
+  color: $ws-text-muted;
   overflow-wrap: anywhere;
 }
 
@@ -544,7 +719,8 @@ $ws-final-columns: 720px;
   background: $ws-approved;
   color: $color-gray-00;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: $font-weight-semibold;
+  line-height: 1.4;
   vertical-align: middle;
 }
 
@@ -604,6 +780,11 @@ $ws-final-columns: 720px;
   font-size: 18px;
 }
 
+// Each word list and metric group gets a little room above its heading.
+.ws-detail > .ws-detail__subheading {
+  margin-top: $spacing-8;
+}
+
 .ws-detail__board {
   max-width: 440px;
 }
@@ -611,30 +792,24 @@ $ws-final-columns: 720px;
 .ws-detail__summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: $spacing-8;
+  gap: $spacing-12 $spacing-16;
   margin: 0;
-
-  div {
-    padding: $spacing-8;
-    background: $color-gray-10;
-    border-radius: $radius-4;
-  }
 
   dt {
     font-size: 12px;
-    color: $color-gray-70;
+    color: $ws-text-muted;
   }
 
   dd {
     margin: 0;
-    font-size: 16px;
-    font-weight: 700;
+    font-size: $ws-font-section;
+    font-weight: $font-weight-semibold;
+    font-variant-numeric: tabular-nums;
   }
 }
 
 .ws-detail__subheading {
-  font-size: 14px;
-  margin-top: $spacing-4;
+  font-size: $ws-font-subsection;
 }
 
 .ws-word-list {
@@ -647,15 +822,15 @@ $ws-final-columns: 720px;
 
   li {
     padding: $spacing-2 $spacing-8;
-    border: $border-1 solid $color-gray-40;
+    border: $border-1 solid $ws-border-strong;
     border-radius: $radius-4;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 13px;
+    font-family: $ws-font-mono;
+    font-size: $ws-font-meta;
   }
 
   &--muted li {
     border-style: dashed;
-    color: $color-gray-70;
+    color: $ws-text-muted;
   }
 }
 
@@ -664,10 +839,10 @@ $ws-final-columns: 720px;
   grid-template-columns: auto 1fr;
   gap: $spacing-2 $spacing-16;
   margin: 0;
-  font-size: 13px;
+  font-size: $ws-font-meta;
 
   dt {
-    color: $color-gray-70;
+    color: $ws-text-muted;
   }
 
   dd {
@@ -677,12 +852,13 @@ $ws-final-columns: 720px;
   }
 
   &--debug dd {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: $ws-font-mono;
     font-size: 12px;
   }
 }
 
 // Narrow workspaces: a candidate's detail screen, in place of the gallery.
+// It's open, not a panel, so the board lines up with the page gutter.
 .ws-candidate-screen {
   display: flex;
   flex-direction: column;
@@ -701,7 +877,7 @@ $ws-final-columns: 720px;
 
 .ws-detail__position {
   font-weight: 400;
-  color: $color-gray-70;
+  color: $ws-text-muted;
 }
 
 .ws-candidate-nav {
@@ -725,29 +901,31 @@ $ws-final-columns: 720px;
   display: flex;
   flex-direction: column;
   gap: $spacing-8;
-  border-top: $border-1 solid $color-gray-20;
-  border-bottom: $border-1 solid $color-gray-20;
-  padding: $spacing-12 0;
+  border-top: $border-1 solid $ws-border;
+  border-bottom: $border-1 solid $ws-border;
+  padding: $spacing-16 0;
 }
 
 // Final Puzzle: the read-only board (the focus) beside the ID, clue,
 // validation, and answers; the board stacks first on narrow workspaces.
 
+.ws-final {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-20;
+  min-width: 0;
+}
+
 .ws-final__header {
   display: flex;
   flex-direction: column;
-  gap: $spacing-8;
-  margin-bottom: $spacing-16;
-
-  .ws-panel__heading {
-    margin-bottom: 0;
-  }
+  gap: $spacing-12;
 }
 
 .ws-final__body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: $spacing-24;
+  gap: $spacing-24 $spacing-32;
   align-items: start;
 
   @container ws-workspace (min-width: #{$ws-final-columns}) {
@@ -766,19 +944,20 @@ $ws-final-columns: 720px;
 .ws-final__details {
   display: flex;
   flex-direction: column;
-  gap: $spacing-12;
+  gap: $spacing-16;
   min-width: 0;
   max-width: 560px;
 }
 
 .ws-field__error {
   margin: 0;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: $ws-font-meta;
+  font-weight: $font-weight-semibold;
+  color: $ws-error;
 }
 
 .ws-field input[aria-invalid='true'] {
-  border-color: $color-gray-90;
+  border-color: $ws-error;
   border-width: $border-2;
 }
 
@@ -787,10 +966,7 @@ $ws-final-columns: 720px;
 }
 
 .ws-final__status-ok {
-  border-left: 4px solid $ws-approved;
-  background: $color-gray-10;
-  padding: $spacing-8 $spacing-12;
-  font-size: 14px;
+  @include ws-callout($ws-success, $ws-success-wash);
 }
 
 .ws-final__error-group {
@@ -830,8 +1006,11 @@ $ws-final-columns: 720px;
 }
 
 .ws-final__source summary {
+  min-height: $ws-control-height;
+  padding-block: $spacing-8;
   cursor: pointer;
-  font-size: 13px;
+  font-size: $ws-font-meta;
+  color: $ws-accent;
 }
 
 .ws-final__source pre {
@@ -840,14 +1019,14 @@ $ws-final-columns: 720px;
   max-height: 320px;
   overflow: auto;
   background: $color-gray-10;
-  border: $border-1 solid $color-gray-20;
+  border: $border-1 solid $ws-border;
   border-radius: $radius-4;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: $ws-font-mono;
   font-size: 12px;
 }
 
 .ws-muted-inline {
-  color: $color-gray-70;
+  color: $ws-text-muted;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-size: 12px;
 }
@@ -874,15 +1053,11 @@ $ws-final-columns: 720px;
 }
 
 .ws-publish__outcome {
-  border-left: 4px solid $ws-approved;
-  background: $color-gray-10;
-  padding: $spacing-8 $spacing-12;
+  @include ws-callout($ws-success, $ws-success-wash);
 }
 
 .ws-publish__problem {
-  border-left: 4px solid $color-gray-90;
-  background: $color-gray-10;
-  padding: $spacing-8 $spacing-12;
+  @include ws-callout($ws-error, $ws-error-wash);
 
   ul {
     margin: $spacing-4 0 0;
@@ -890,13 +1065,16 @@ $ws-final-columns: 720px;
   }
 }
 
+// A confirmation step: bounded, and marked by the accent bar.
 .ws-publish__confirm {
   display: flex;
   flex-direction: column;
   gap: $spacing-8;
-  padding: $spacing-12;
-  border: $border-2 solid $ws-accent;
-  border-radius: $radius-4;
+  padding: $spacing-16;
+  border: $border-1 solid $ws-border-strong;
+  border-left: 4px solid $ws-accent;
+  border-radius: $radius-8;
+  background: $color-gray-00;
 }
 
 .ws-publish__actions {
@@ -907,6 +1085,7 @@ $ws-final-columns: 720px;
 
 .ws-field input[readonly] {
   background: $color-gray-10;
+  border-color: $ws-border-strong;
   color: $color-gray-80;
 }
 
@@ -931,9 +1110,12 @@ $ws-final-columns: 720px;
   flex-wrap: wrap;
   align-items: center;
   gap: $spacing-8 $spacing-16;
-  padding: $spacing-16;
+  padding: $spacing-12 $spacing-16;
+  border: $border-1 solid $ws-border;
   border-left: 4px solid $color-brand-secondary;
-  background: $color-gray-00;
+  border-radius: $radius-8;
+  background: $color-gray-10;
+  font-size: 14px;
 
   p {
     margin: 0;
@@ -943,7 +1125,8 @@ $ws-final-columns: 720px;
 .ws-button--production {
   background: $color-gray-90;
 
-  &:hover:not(:disabled):not([aria-disabled='true']) {
+  &:hover:not(:disabled):not([aria-disabled='true']),
+  &:active:not(:disabled):not([aria-disabled='true']) {
     background: $color-gray-80;
   }
 }
@@ -966,12 +1149,12 @@ $ws-final-columns: 720px;
   }
 
   dt {
-    color: $color-gray-70;
+    color: $ws-text-muted;
   }
 
   dd {
     margin: 0;
-    font-weight: 600;
+    font-weight: $font-weight-semibold;
   }
 }
 
@@ -1006,13 +1189,14 @@ $ws-final-columns: 720px;
   td {
     text-align: left;
     padding: $spacing-8;
-    border-bottom: $border-1 solid $color-gray-20;
+    border-bottom: $border-1 solid $ws-border;
     vertical-align: middle;
   }
 
   th {
     font-size: 12px;
-    color: $color-gray-70;
+    font-weight: $font-weight-semibold;
+    color: $ws-text-muted;
   }
 }
 
@@ -1041,7 +1225,7 @@ $ws-final-columns: 720px;
 
 .ws-status--released {
   background: $color-gray-10;
-  color: $color-gray-70;
+  color: $ws-text-muted;
 }
 
 .ws-schedule__moves {
@@ -1105,14 +1289,7 @@ $ws-final-columns: 720px;
 
 .ws-final__notice {
   margin: 0;
-  padding: $spacing-8 $spacing-12;
-  border-left: 4px solid $color-gray-50;
-  background: $color-gray-10;
-  font-size: 14px;
-}
-
-.ws-candidates__note {
-  margin-bottom: $spacing-8;
+  @include ws-callout($ws-info, $ws-info-wash);
 }
 
 // Application shell (Phase 2c-1): a persistent labelled sidebar from the
@@ -1127,6 +1304,9 @@ $ws-sidebar-width: 200px;
   min-height: 100vh;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  // Rows keep their content height on a short page instead of stretching
+  // (which would stretch the top bar).
+  align-content: start;
 
   @media (min-width: $ws-shell-breakpoint) {
     grid-template-columns: $ws-sidebar-width minmax(0, 1fr);
@@ -1140,9 +1320,9 @@ $ws-sidebar-width: 200px;
   display: flex;
   align-items: center;
   gap: $spacing-12;
-  padding: $spacing-8 $spacing-16;
+  padding: $spacing-8 $ws-gutter;
   background: $color-gray-00;
-  border-bottom: $border-1 solid $color-gray-20;
+  border-bottom: $border-1 solid $ws-border;
 
   @media (min-width: $ws-shell-breakpoint) {
     display: none;
@@ -1155,7 +1335,7 @@ $ws-sidebar-width: 200px;
 
 .ws-topbar__current {
   margin-left: auto;
-  color: $color-gray-70;
+  color: $ws-text-muted;
   font-size: 14px;
 }
 
@@ -1169,24 +1349,31 @@ $ws-sidebar-width: 200px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: $spacing-12;
+    gap: $spacing-8;
     padding: $spacing-24 $spacing-12;
-    background: $color-gray-00;
-    border-right: $border-1 solid $color-gray-20;
+    background: $color-gray-10;
+    border-right: $border-1 solid $ws-border;
+
+    > .ws-sidebar__brand,
+    > .ws-muted {
+      padding-inline: $spacing-12;
+    }
   }
 }
 
 .ws-sidebar__brand {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: $ws-font-section;
+  font-weight: $font-weight-bold;
 }
 
 .ws-shell-nav {
   display: flex;
   flex-direction: column;
   gap: $spacing-4;
-  margin-top: $spacing-8;
+  margin-top: $spacing-12;
+  padding-top: $spacing-12;
+  border-top: $border-1 solid $ws-border;
 }
 
 .ws-shell-nav__list {
@@ -1204,17 +1391,19 @@ $ws-sidebar-width: 200px;
   border-left: 4px solid transparent;
   border-radius: $radius-4;
   color: $color-gray-90;
-  font-weight: 500;
+  font-weight: $font-weight-medium;
   text-decoration: none;
 
-  &:hover {
-    background: $color-gray-10;
+  @include hoverable {
+    &:hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
   }
 
   &[aria-current='page'] {
     border-left-color: $ws-accent;
     background: $color-brand-primary-wash;
-    font-weight: 700;
+    font-weight: $font-weight-semibold;
   }
 }
 
@@ -1225,32 +1414,39 @@ $ws-sidebar-width: 200px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: $color-gray-70;
+  color: $ws-text-muted;
 }
 
+// The banner, status bar, and workspace share one gutter (wider beside the
+// sidebar) and one 1440px measure, so their edges line up.
 .ws-shell__main {
+  --ws-gutter: #{$ws-gutter};
   min-width: 0;
 
-  > .ws-production-banner,
-  > .ws-statusbar {
-    max-width: 1440px;
-    margin: $spacing-16 auto 0;
+  @media (min-width: $ws-shell-breakpoint) {
+    --ws-gutter: #{$ws-gutter-wide};
   }
 
   > .ws-production-banner {
-    margin-left: $spacing-16;
-    margin-right: $spacing-16;
+    margin: $spacing-16 max(var(--ws-gutter), calc((100% - 1440px) / 2 + var(--ws-gutter))) 0;
+  }
+
+  > .ws-statusbar {
+    max-width: 1440px;
+    margin: $spacing-12 auto 0;
+    padding-inline: var(--ws-gutter);
   }
 
   > .ws-app {
     padding-top: $spacing-16;
+    padding-inline: var(--ws-gutter);
   }
 }
 
 .ws-statusbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: $spacing-8 $spacing-16;
   padding: 0 $spacing-16;
@@ -1274,7 +1470,7 @@ $ws-sidebar-width: 200px;
   gap: $spacing-12;
   padding: $spacing-16;
   background: $color-gray-00;
-  box-shadow: 0 0 24px rgba(0, 0, 0, 0.2);
+  box-shadow: $shadow-large;
 }
 
 .ws-drawer__header {
@@ -1286,8 +1482,9 @@ $ws-sidebar-width: 200px;
 
 // Workspaces
 
+// One workspace title per workspace: moderate, not a dashboard banner.
 .ws-workspace__title {
-  font-size: 20px;
+  font-size: $ws-font-title;
 }
 
 .ws-workspace__header {
@@ -1296,6 +1493,12 @@ $ws-sidebar-width: 200px;
   align-items: flex-start;
   justify-content: space-between;
   gap: $spacing-12 $spacing-16;
+
+  // Centered on the first row's 40px button, and stays put when a
+  // confirmation opens below that button.
+  > .ws-workspace__title {
+    padding-block: 6px;
+  }
 }
 
 .ws-workspace,
@@ -1337,12 +1540,14 @@ $ws-sidebar-width: 200px;
   display: flex;
   flex-wrap: wrap;
   gap: $spacing-4;
-  border-bottom: $border-1 solid $color-gray-20;
+  border-bottom: $border-1 solid $ws-border;
 }
 
 .ws-tabs__tab {
+  min-height: $ws-control-height;
+  margin-bottom: -$border-1;
   font: inherit;
-  font-weight: 600;
+  font-weight: $font-weight-semibold;
   padding: $spacing-8 $spacing-12;
   border: 0;
   border-bottom: 3px solid transparent;
@@ -1355,8 +1560,12 @@ $ws-sidebar-width: 200px;
   }
 
   &[aria-disabled='true'] {
-    color: $color-gray-70;
+    color: $ws-text-muted;
     cursor: default;
+  }
+
+  @container ws-workspace (max-width: #{$ws-narrow-workspace - 1px}) {
+    padding-inline: $spacing-8;
   }
 }
 
@@ -1365,14 +1574,19 @@ $ws-sidebar-width: 200px;
   font-weight: 400;
 }
 
+// Advanced: a quiet, collapsed utility below the publishing actions.
 .ws-advanced {
-  border: $border-1 solid $color-gray-20;
-  border-radius: $radius-8;
-  padding: $spacing-12;
+  padding-top: $spacing-16;
+  border-top: $border-1 solid $ws-border;
 
+  // A full-height target, though it reads as a text link.
   > summary {
+    min-height: $ws-control-height;
+    padding-block: $spacing-8;
     cursor: pointer;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: $font-weight-semibold;
+    color: $ws-accent;
   }
 
   &[open] {
@@ -1393,15 +1607,20 @@ $ws-sidebar-width: 200px;
 .ws-publish-workspace {
   width: 100%;
   max-width: 800px;
-  gap: $spacing-20;
+  gap: $spacing-24;
 }
 
+.ws-publish-workspace__step > .ws-panel__heading {
+  margin-bottom: 0;
+}
+
+// The two targets sit in the open, divided; Production keeps the banner's bar.
 .ws-publish-target {
-  padding: $spacing-16;
-  border: $border-1 solid $color-gray-20;
-  border-radius: $radius-8;
+  padding-top: $spacing-16;
+  border-top: $border-1 solid $ws-border;
 
   &--production {
+    padding-left: $spacing-16;
     border-left: 4px solid $color-brand-secondary;
   }
 }

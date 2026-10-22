@@ -46,10 +46,10 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
 
   if (!finalPuzzle || !validation) {
     return (
-      <section className="ws-panel ws-workspace ws-publish-workspace" aria-label="Publish">
+      <section className="ws-workspace ws-publish-workspace" aria-label="Publish">
         {heading}
-        <section className="ws-empty" aria-labelledby="ws-publish-readiness-heading">
-          <h3 id="ws-publish-readiness-heading" className="ws-detail__subheading">
+        <section className="ws-panel ws-empty" aria-labelledby="ws-publish-readiness-heading">
+          <h3 id="ws-publish-readiness-heading" className="ws-panel__heading">
             Readiness
           </h3>
           <p>
@@ -77,11 +77,12 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
   const request = { construction, id: inputs.id, clue: inputs.clue }
 
   return (
-    <section className="ws-panel ws-workspace ws-publish-workspace" aria-label="Publish">
+    <section className="ws-workspace ws-publish-workspace" aria-label="Publish">
       {heading}
 
-      <section className="ws-publish-workspace__step" aria-labelledby="ws-publish-readiness-heading">
-        <h3 id="ws-publish-readiness-heading" className="ws-detail__subheading">
+      {/* Readiness is the one bordered group; the actions below it are open. */}
+      <section className="ws-panel ws-publish-workspace__step" aria-labelledby="ws-publish-readiness-heading">
+        <h3 id="ws-publish-readiness-heading" className="ws-panel__heading">
           Readiness
         </h3>
         <p>
@@ -105,7 +106,7 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
 
       {ready && (
         <section className="ws-publish-workspace__step" aria-labelledby="ws-publish-actions-heading">
-          <h3 id="ws-publish-actions-heading" className="ws-detail__subheading">
+          <h3 id="ws-publish-actions-heading" className="ws-panel__heading">
             Publishing actions
           </h3>
           <div className="ws-publish-target">
@@ -124,7 +125,8 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
 
       <details className="ws-advanced">
         <summary>Advanced: developer export (download puzzle modules)</summary>
-        <h3 className="ws-detail__subheading">Developer export</h3>
+        {/* The summary already says this on screen; the heading still names the section. */}
+        <h3 className="ws-visually-hidden">Developer export</h3>
         <p className="ws-muted">
           For inspection, debugging, test fixtures, or emergency manual work only. Publishing is how a puzzle reaches
           players: the server assigns its permanent date and the player loads it from the puzzle API at release — no
@@ -135,7 +137,7 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
             <ul className="ws-final__downloads">
               {files.map((file) => (
                 <li key={file.path}>
-                  <button type="button" className="ws-button" onClick={() => downloadFile(file)}>
+                  <button type="button" className="ws-button ws-button--tertiary" onClick={() => downloadFile(file)}>
                     Download {file.filename}
                   </button>
                 </li>
@@ -153,7 +155,12 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
             {/* aria-disabled keeps the controls focusable and explained, matching Generate. */}
             <ul className="ws-final__downloads">
               <li>
-                <button type="button" className="ws-button" aria-disabled="true" aria-describedby="ws-final-export-blocked">
+                <button
+                  type="button"
+                  className="ws-button ws-button--tertiary"
+                  aria-disabled="true"
+                  aria-describedby="ws-final-export-blocked"
+                >
                   Download Puzzle Modules
                 </button>
               </li>

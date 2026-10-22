@@ -57,6 +57,9 @@ describe('Author layout', () => {
     const { user } = renderApp()
     await screen.findByRole('heading', { name: 'Author' })
 
+    // One visible title; the inputs are still a named region, without a second heading saying so.
+    expect(screen.queryByRole('heading', { name: 'Authoring inputs' })).toBeNull()
+    expect(within(generationPanel()).getByRole('heading', { name: 'Generation' })).toBeTruthy()
     expect(within(inputsPanel()).getByLabelText('Clue')).toBeTruthy()
     expect(within(inputsPanel()).getByRole('radio', { name: 'Enter manually' })).toBeTruthy()
     expect(within(inputsPanel()).getByLabelText('Candidate words')).toBeTruthy()

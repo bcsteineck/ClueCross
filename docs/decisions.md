@@ -2,6 +2,15 @@
 
 ## 2026-10-21 (later)
 
+### Workshop visual language
+
+Workshop is a light, open authoring tool rather than a dashboard. The vocabulary lives at the top of `workshop/src/workshop.scss`, layered on the shared tokens (which stay unchanged).
+
+- **Open by default, bordered when bounded.** A white canvas; bordered panels only for real groups (Generation, the candidate inspector, Readiness, cards, empty states, confirmations). Ordinary sections use spacing and thin dividers.
+- **Three button levels plus destructive.** Primary (filled accent) for the dominant action in an area, secondary (quiet outline) for supporting actions, tertiary (text) for utilities such as developer downloads, and a filled red for confirmations that discard work. All share a 40px minimum height (44px on touch pointers).
+- **Status color is semantic and never alone.** Success green, warning amber, error red, neutral notes, each as a tone bar and faint wash on a message that already says what it is in text.
+- **One title per workspace,** no generic introductions; on narrow screens the candidate detail screen drops the gallery's list tabs.
+
 ### Workshop Candidates on narrow screens
 
 Below the Candidates column breakpoint, reviewing a batch is a gallery and a separate detail screen instead of the gallery with the inspector stacked under every card. See `docs/architecture.md`, "Narrow Candidates".

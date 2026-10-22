@@ -43,7 +43,7 @@ export function CandidateScreen({
   const swipe = useSwipeNavigation((direction) => (direction === 'next' ? showNext() : showPrevious()))
 
   return (
-    <div className="ws-panel ws-candidate-screen">
+    <div className="ws-candidate-screen">
       <button type="button" className="ws-button ws-button--secondary ws-candidate-screen__back" onClick={onAllCandidates}>
         <span aria-hidden="true">‹ </span>All Candidates
       </button>

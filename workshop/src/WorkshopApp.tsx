@@ -331,11 +331,11 @@ export function WorkshopApp({
           notice={notice}
         />
       ) : (
-        <section className="ws-panel ws-workspace" aria-label="Final Puzzle">
+        <section className="ws-workspace" aria-label="Final Puzzle">
           <h2 className="ws-workspace__title" tabIndex={-1} data-workspace-heading>
             Final Puzzle
           </h2>
-          <div className="ws-empty">
+          <div className="ws-panel ws-empty">
             <p>
               <strong>No Final Puzzle has been approved.</strong> Select a candidate in Candidates and approve it to make
               it the Final Puzzle.

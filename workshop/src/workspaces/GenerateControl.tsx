@@ -75,7 +75,7 @@ export function GenerateControl({ type, secondary = false, canGenerate, describe
             It can’t be restored afterward.
           </p>
           <div className="ws-publish__actions">
-            <button type="button" className="ws-button" onClick={onConfirm}>
+            <button type="button" className="ws-button ws-button--danger" onClick={onConfirm}>
               Generate and Clear Final Puzzle
             </button>
             <button type="button" className="ws-button ws-button--secondary" ref={cancelRef} onClick={cancel}>

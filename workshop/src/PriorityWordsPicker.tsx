@@ -29,7 +29,7 @@ export function PriorityWordsPicker({ words, selected, limitReached, onToggle, o
       </legend>
       <p id="ws-priority-hint" className="ws-muted">
         Select up to {MAX_PRIORITY_WORDS} words that must appear in every generated puzzle. They come from the candidate
-        list in Authoring inputs; selecting one doesn’t add it again.
+        words; selecting one doesn’t add it again.
       </p>
 
       {words.length > 0 ? (
