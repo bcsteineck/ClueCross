@@ -47,16 +47,12 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack,
   ].filter((group) => group.errors.length > 0)
 
   return (
-    <section className="ws-panel ws-final" aria-labelledby="ws-final-heading">
+    <section className="ws-final" aria-labelledby="ws-final-heading">
       <div className="ws-final__header">
-        <h2 id="ws-final-heading" className="ws-panel__heading" tabIndex={-1} data-workspace-heading>
+        <h2 id="ws-final-heading" className="ws-workspace__title" tabIndex={-1} data-workspace-heading>
           Final Puzzle
           <span className="ws-badge">Approved Candidate {number}</span>
         </h2>
-        <p className="ws-muted">
-          Preparing the approved candidate for publishing. Nothing is published until you confirm Publish, and the
-          Workshop never changes production files.
-        </p>
         <div className="ws-publish__actions">
           <button type="button" className="ws-button ws-button--secondary" onClick={onBack}>
             Back to Candidate Review

@@ -105,6 +105,9 @@ describe('Narrow Candidates: gallery and detail screens', () => {
     expect(card(1).getAttribute('aria-pressed')).toBeNull()
     expect(card(1).textContent).not.toMatch(/·|@ 360/)
     expect(gallery).toBeTruthy()
+    // The gallery carries the list tabs, Saved Candidates still unavailable.
+    expect(screen.getByRole('tab', { name: 'Current Batch' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: /Saved Candidates/ }).getAttribute('aria-disabled')).toBe('true')
 
     const lengthBefore = window.history.length
     await user.click(card(3))
@@ -114,9 +117,30 @@ describe('Narrow Candidates: gallery and detail screens', () => {
     expect(document.activeElement).toBe(detailHeading())
     expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
     expect(screen.getAllByRole('status').some((status) => /^Candidate 3 of \d+$/.test(status.textContent ?? ''))).toBe(true)
-    // Still the Candidates workspace, with Saved Candidates unavailable.
+    // Still the Candidates workspace; the list tabs and their note belong to the gallery only.
     expect(screen.getByRole('link', { name: 'Candidates' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tab', { name: /Saved Candidates/ })).toBeNull()
+    expect(screen.queryByText(/Saving candidates across batches/)).toBeNull()
+  })
+
+  it('shows the list tabs again when returning to the gallery, and the detail starts with All Candidates', async () => {
+    const { user } = renderApp()
+    await generate(user)
+    await user.click(card(2))
+    const allCandidates = screen.getByRole('button', { name: 'All Candidates' })
+    // Nothing between the workspace header and the detail screen's own controls.
+    const screenRoot = allCandidates.parentElement!
+    expect(screenRoot.firstElementChild).toBe(allCandidates)
+    expect(screenRoot.previousElementSibling?.querySelector('h2')?.textContent).toBe('Candidates')
+
+    await user.click(allCandidates)
+    await screen.findByRole('region', { name: /Generated Candidates/ })
+    expect(screen.getByRole('tab', { name: 'Current Batch' }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByRole('tab', { name: /Saved Candidates/ }).getAttribute('aria-disabled')).toBe('true')
+    expect(screen.getByText(/Saving candidates across batches/)).toBeTruthy()
+    expect(screen.getByRole('tabpanel')).toBeTruthy()
+    expect(document.activeElement).toBe(card(2))
   })
 
   it('Previous and Next follow batch order, stop at the ends, and replace the history entry', async () => {
@@ -364,6 +388,9 @@ describe('Switching between narrow and wide', () => {
     expect(screen.getByRole('region', { name: /Selected Candidate 2/ })).toBeTruthy()
     expect(window.location.hash).toBe('#/candidates')
     expect(window.history.length).toBe(length)
+    // Beside the inspector, the list tabs stay.
+    expect(screen.getByRole('tab', { name: 'Current Batch' }).getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('tab', { name: /Saved Candidates/ }).getAttribute('aria-disabled')).toBe('true')
   })
 })
 

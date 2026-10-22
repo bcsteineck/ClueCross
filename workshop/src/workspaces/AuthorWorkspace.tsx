@@ -79,14 +79,12 @@ export function AuthorWorkspace({
         Author
       </h2>
       {/* One form (Enter in a field still generates), laid out as two
-          panels: the authoring inputs, then what decides and runs the batch.
-          DOM order is the stacked order on narrow widths. */}
+          columns: the authoring inputs (open, named for assistive tech
+          without repeating "Author" on screen), then the Generation panel
+          that decides and runs the batch. DOM order is the stacked order on
+          narrow widths. */}
       <form className="ws-author" onSubmit={handleSubmit} noValidate>
-        <section className="ws-panel ws-author__inputs" aria-labelledby="ws-author-inputs-heading">
-          <h3 id="ws-author-inputs-heading" className="ws-panel__heading">
-            Authoring inputs
-          </h3>
-
+        <section className="ws-author__inputs" aria-label="Authoring inputs">
           <div className="ws-field">
             <label htmlFor="ws-clue">Clue</label>
             <input

@@ -89,7 +89,7 @@ export function NewPuzzleControl({ onConfirm, onReset }: NewPuzzleControlProps) 
             </p>
           )}
           <div className="ws-publish__actions">
-            <button type="button" className="ws-button" onClick={() => void confirm()} disabled={busy}>
+            <button type="button" className="ws-button ws-button--danger" onClick={() => void confirm()} disabled={busy}>
               {busy ? 'Starting…' : 'Start New Puzzle'}
             </button>
             <button type="button" className="ws-button ws-button--secondary" onClick={cancel} disabled={busy} ref={cancelRef}>

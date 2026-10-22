@@ -157,136 +157,142 @@ export function CandidatesWorkspace({
         </div>
       )}
 
-      <div className="ws-tabs-group">
-      <div className="ws-tabs" role="tablist" aria-label="Candidate lists">
-        <button type="button" role="tab" id="ws-tab-current" className="ws-tabs__tab" aria-selected="true" aria-controls="ws-tabpanel-current">
-          Current Batch
-        </button>
-        <button
-          type="button"
-          role="tab"
-          id="ws-tab-saved"
-          className="ws-tabs__tab"
-          aria-selected="false"
-          aria-disabled="true"
-          aria-describedby="ws-tab-saved-note"
-          tabIndex={-1}
-        >
-          Saved Candidates <span className="ws-tabs__soon">(coming soon)</span>
-        </button>
-      </div>
-      <p id="ws-tab-saved-note" className="ws-muted">
-        Saving candidates across batches isn’t available yet. For now, the current batch lasts only for this browser
-        session.
-      </p>
-      </div>
-
-      <div role="tabpanel" id="ws-tabpanel-current" aria-labelledby="ws-tab-current" className="ws-tabpanel">
-        {!batch ? (
-          <div className="ws-panel ws-empty">
-            <p>
-              <strong>No current batch.</strong> Generated candidates are kept only until you close or refresh the
-              Workshop. Generate a new batch here, or adjust the inputs in <a href={WORKSPACE_HASH.author}>Author</a>.
+      {/* The detail screen replaces the whole gallery on narrow workspaces,
+          tabs and their note included: they describe the lists, not one
+          candidate. The tabs hold no state, so returning restores them. */}
+      {screen === 'detail' && batch && detailCandidate ? (
+        <CandidateScreen
+          candidate={detailCandidate}
+          index={detailIndex}
+          total={candidates.length}
+          batchSeed={batch.seed}
+          isApproved={detailCandidate.identitySignature === approvedId}
+          onApprove={() => onApprove(detailCandidate, detailIndex + 1)}
+          approveButtonRef={approveButtonRef}
+          headingRef={detailHeadingRef}
+          onShow={(index) => {
+            onSelect(candidates[index].identitySignature)
+            detailNavigation.show(keys[index])
+          }}
+          onAllCandidates={detailNavigation.close}
+        />
+      ) : (
+        <>
+          <div className="ws-tabs-group">
+            <div className="ws-tabs" role="tablist" aria-label="Candidate lists">
+              <button type="button" role="tab" id="ws-tab-current" className="ws-tabs__tab" aria-selected="true" aria-controls="ws-tabpanel-current">
+                Current Batch
+              </button>
+              <button
+                type="button"
+                role="tab"
+                id="ws-tab-saved"
+                className="ws-tabs__tab"
+                aria-selected="false"
+                aria-disabled="true"
+                aria-describedby="ws-tab-saved-note"
+                tabIndex={-1}
+              >
+                Saved Candidates <span className="ws-tabs__soon">(coming soon)</span>
+              </button>
+            </div>
+            <p id="ws-tab-saved-note" className="ws-muted">
+              Saving candidates across batches isn’t available yet. For now, the current batch lasts only for this browser
+              session.
             </p>
-            {finalPuzzle && (
-              <div className="ws-restored-final">
-                <p>
-                  Approved Candidate {finalPuzzle.number}
-                  {finalPuzzle.inputs.id.trim() && ` · ${finalPuzzle.inputs.id.trim()}`}
-                  {finalPuzzle.inputs.clue.trim() && ` · “${finalPuzzle.inputs.clue.trim()}”`} is saved in the working draft
-                  as the Final Puzzle, even though its original batch isn’t kept.
-                </p>
-                <button type="button" className="ws-button" ref={approveButtonRef} onClick={onOpenFinal}>
-                  Open Final Puzzle
-                </button>
-              </div>
-            )}
           </div>
-        ) : screen === 'detail' && detailCandidate ? (
-          <CandidateScreen
-            candidate={detailCandidate}
-            index={detailIndex}
-            total={candidates.length}
-            batchSeed={batch.seed}
-            isApproved={detailCandidate.identitySignature === approvedId}
-            onApprove={() => onApprove(detailCandidate, detailIndex + 1)}
-            approveButtonRef={approveButtonRef}
-            headingRef={detailHeadingRef}
-            onShow={(index) => {
-              onSelect(candidates[index].identitySignature)
-              detailNavigation.show(keys[index])
-            }}
-            onAllCandidates={detailNavigation.close}
-          />
-        ) : (
-          <div className="ws-results">
-            <section className="ws-panel ws-candidates" aria-labelledby="ws-candidates-heading">
-              <h3 id="ws-candidates-heading" className="ws-panel__heading">
-                Generated Candidates ({candidates.length})
-              </h3>
-              <p className="ws-meta" role="status">
-                Clue “{batch.clue}” · {batch.pool.length} words · seed {batch.seed} ·{' '}
-                {batch.diversity.subsetTrialsAttempted} trials, {batch.diversity.uniqueCandidateCount} unique
-                {batch.diversity.uniqueCandidateCount > MAX_DISPLAYED_CANDIDATES && ` (showing first ${MAX_DISPLAYED_CANDIDATES})`}{' '}
-                · {Math.round(batch.elapsedMs)} ms
-                {batch.priorityWords.length > 0 && ` · Priority Words: ${batch.priorityWords.join(', ')}`}
-                {approvedIndex >= 0 && ` · Candidate ${approvedIndex + 1} approved`}
-              </p>
-              <p className="ws-muted ws-candidates__note">
-                Generated candidates are temporary until approved as the Final Puzzle. Unsaved candidates will be lost when
-                you close or refresh the Workshop.
-              </p>
-              {candidates.length > 0 ? (
-                <ul className={layout === 'screens' ? 'ws-card-grid ws-card-grid--compact' : 'ws-card-grid'}>
-                  {candidates.map((candidate, index) => (
-                    <li key={candidate.identitySignature} data-candidate-key={keys[index]}>
-                      <CandidateCard
-                        candidate={candidate}
-                        number={index + 1}
-                        isSelected={index === selectedIndex}
-                        isApproved={candidate.identitySignature === approvedId}
-                        onSelect={() => openCandidate(index)}
-                        compact={layout === 'screens'}
-                        // Back from Final Puzzle returns focus to the card when there's no inspector.
-                        buttonRef={layout === 'screens' && index === selectedIndex ? approveButtonRef : undefined}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              ) : batch.priorityWords.length > 0 ? (
+          <div role="tabpanel" id="ws-tabpanel-current" aria-labelledby="ws-tab-current" className="ws-tabpanel">
+            {!batch ? (
+              <div className="ws-panel ws-empty">
                 <p>
-                  No candidates containing all Priority Words ({batch.priorityWords.join(', ')}) were found in this
-                  generation batch of {batch.diversity.subsetTrialsAttempted} trials. That doesn’t mean they can’t fit
-                  together — try generating again, removing a Priority Word, or adjusting your candidate word list.
+                  <strong>No current batch.</strong> Generated candidates are kept only until you close or refresh the
+                  Workshop. Generate a new batch here, or adjust the inputs in <a href={WORKSPACE_HASH.author}>Author</a>.
                 </p>
-              ) : (
-                <p>
-                  No valid candidates with {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers}{' '}
-                  answers were found in this batch. Try generating again, or add more (especially shorter) candidate
-                  words.
-                </p>
-              )}
-            </section>
+                {finalPuzzle && (
+                  <div className="ws-restored-final">
+                    <p>
+                      Approved Candidate {finalPuzzle.number}
+                      {finalPuzzle.inputs.id.trim() && ` · ${finalPuzzle.inputs.id.trim()}`}
+                      {finalPuzzle.inputs.clue.trim() && ` · “${finalPuzzle.inputs.clue.trim()}”`} is saved in the working draft
+                      as the Final Puzzle, even though its original batch isn’t kept.
+                    </p>
+                    <button type="button" className="ws-button" ref={approveButtonRef} onClick={onOpenFinal}>
+                      Open Final Puzzle
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="ws-results">
+                <section className="ws-candidates" aria-labelledby="ws-candidates-heading">
+                  <h3 id="ws-candidates-heading" className="ws-panel__heading">
+                    Generated Candidates ({candidates.length})
+                  </h3>
+                  <p className="ws-meta" role="status">
+                    Clue “{batch.clue}” · {batch.pool.length} words · seed {batch.seed} ·{' '}
+                    {batch.diversity.subsetTrialsAttempted} trials, {batch.diversity.uniqueCandidateCount} unique
+                    {batch.diversity.uniqueCandidateCount > MAX_DISPLAYED_CANDIDATES && ` (showing first ${MAX_DISPLAYED_CANDIDATES})`}{' '}
+                    · {Math.round(batch.elapsedMs)} ms
+                    {batch.priorityWords.length > 0 && ` · Priority Words: ${batch.priorityWords.join(', ')}`}
+                    {approvedIndex >= 0 && ` · Candidate ${approvedIndex + 1} approved`}
+                  </p>
+                  <p className="ws-muted ws-candidates__note">
+                    Generated candidates are temporary until approved as the Final Puzzle. Unsaved candidates will be lost when
+                    you close or refresh the Workshop.
+                  </p>
+                  {candidates.length > 0 ? (
+                    <ul className={layout === 'screens' ? 'ws-card-grid ws-card-grid--compact' : 'ws-card-grid'}>
+                      {candidates.map((candidate, index) => (
+                        <li key={candidate.identitySignature} data-candidate-key={keys[index]}>
+                          <CandidateCard
+                            candidate={candidate}
+                            number={index + 1}
+                            isSelected={index === selectedIndex}
+                            isApproved={candidate.identitySignature === approvedId}
+                            onSelect={() => openCandidate(index)}
+                            compact={layout === 'screens'}
+                            // Back from Final Puzzle returns focus to the card when there's no inspector.
+                            buttonRef={layout === 'screens' && index === selectedIndex ? approveButtonRef : undefined}
+                          />
+                        </li>
+                      ))}
+                    </ul>
+                  ) : batch.priorityWords.length > 0 ? (
+                    <p>
+                      No candidates containing all Priority Words ({batch.priorityWords.join(', ')}) were found in this
+                      generation batch of {batch.diversity.subsetTrialsAttempted} trials. That doesn’t mean they can’t fit
+                      together — try generating again, removing a Priority Word, or adjusting your candidate word list.
+                    </p>
+                  ) : (
+                    <p>
+                      No valid candidates with {WORKSHOP_GENERATION_CONFIG.minAnswers}–{WORKSHOP_GENERATION_CONFIG.maxAnswers}{' '}
+                      answers were found in this batch. Try generating again, or add more (especially shorter) candidate
+                      words.
+                    </p>
+                  )}
+                </section>
 
-            {layout === 'columns' && (
-              <div className="ws-panel ws-detail-panel">
-                {selected ? (
-                  <CandidateDetail
-                    candidate={selected}
-                    number={selectedIndex + 1}
-                    batchSeed={batch.seed}
-                    isApproved={selected.identitySignature === approvedId}
-                    onApprove={() => onApprove(selected, selectedIndex + 1)}
-                    approveButtonRef={approveButtonRef}
-                  />
-                ) : (
-                  <p className="ws-muted">Select a candidate to inspect it.</p>
+                {layout === 'columns' && (
+                  <div className="ws-panel ws-detail-panel">
+                    {selected ? (
+                      <CandidateDetail
+                        candidate={selected}
+                        number={selectedIndex + 1}
+                        batchSeed={batch.seed}
+                        isApproved={selected.identitySignature === approvedId}
+                        onApprove={() => onApprove(selected, selectedIndex + 1)}
+                        approveButtonRef={approveButtonRef}
+                      />
+                    ) : (
+                      <p className="ws-muted">Select a candidate to inspect it.</p>
+                    )}
+                  </div>
                 )}
               </div>
             )}
           </div>
-        )}
-      </div>
+        </>
+      )}
     </div>
   )
 }
