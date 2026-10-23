@@ -1,3 +1,4 @@
+import { DRAFT_SCHEMA_VERSION } from '../../src/draft/draftSchema'
 import { describe, expect, it } from 'vitest'
 import { DRAFT_PATH } from '../../src/draft/contract'
 import { createInitialDraft } from '../../src/state/workshopReducer'
@@ -106,7 +107,7 @@ describe('draft middleware: load and save', () => {
     expect(await call({ method: 'GET' }, store)).toMatchObject({ status: 200, body: { status: 'empty' } })
     expect(await call({ body: saveBody(0, fullDraft()) }, store)).toMatchObject({ status: 200, body: { status: 'saved', revision: 1 } })
     const loaded = await call({ method: 'GET' }, store)
-    expect(loaded).toMatchObject({ status: 200, body: { status: 'ok', envelope: { revision: 1, schemaVersion: 1 } } })
+    expect(loaded).toMatchObject({ status: 200, body: { status: 'ok', envelope: { revision: 1, schemaVersion: DRAFT_SCHEMA_VERSION } } })
   })
 
   it('reports an unreadable saved draft without changing it, and refuses to overwrite it', async () => {

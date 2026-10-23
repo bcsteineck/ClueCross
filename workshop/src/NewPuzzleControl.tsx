@@ -7,6 +7,8 @@ interface NewPuzzleControlProps {
   onConfirm: () => Promise<ReplaceResult>
   /** Called after a successful reset, once the confirmation has closed. */
   onReset: () => void
+  /** Set while something must finish first (a candidate being saved); Start New Puzzle waits. */
+  blockedReason?: string | null
 }
 
 // New Puzzle: an explicit, confirmed reset of the local working draft only —
@@ -14,7 +16,7 @@ interface NewPuzzleControlProps {
 // the Workshop's inline pattern (a labelled group; focus moves to Cancel;
 // Escape cancels). On failure the current draft is untouched and the
 // reason is shown.
-export function NewPuzzleControl({ onConfirm, onReset }: NewPuzzleControlProps) {
+export function NewPuzzleControl({ onConfirm, onReset, blockedReason = null }: NewPuzzleControlProps) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -38,7 +40,7 @@ export function NewPuzzleControl({ onConfirm, onReset }: NewPuzzleControlProps) 
   }
 
   async function confirm() {
-    if (busy) return
+    if (busy || blockedReason) return
     setBusy(true)
     setError(null)
     const result = await onConfirm()
@@ -80,16 +82,29 @@ export function NewPuzzleControl({ onConfirm, onReset }: NewPuzzleControlProps) 
             <strong>Start a new puzzle?</strong>
           </p>
           <p id="ws-new-puzzle-description" className="ws-muted">
-            This will permanently clear the current working draft, including its authoring inputs, Priority Words, and
-            Final Puzzle. This cannot be undone. Published and scheduled puzzles are not affected.
+            This permanently clears the working draft (its authoring inputs and Priority Words), the current generated
+            batch, all Saved Candidates, and the Final Puzzle. This cannot be undone. Published and scheduled puzzles
+            are not affected.
           </p>
+          {blockedReason && (
+            <p id="ws-new-puzzle-blocked" className="ws-muted" role="status">
+              {blockedReason}
+            </p>
+          )}
           {error && (
             <p className="ws-publish__problem" role="alert">
               The new puzzle wasn’t started, and the current draft is unchanged. {error}
             </p>
           )}
           <div className="ws-publish__actions">
-            <button type="button" className="ws-button ws-button--danger" onClick={() => void confirm()} disabled={busy}>
+            <button
+              type="button"
+              className="ws-button ws-button--danger"
+              onClick={() => void confirm()}
+              disabled={busy}
+              aria-disabled={blockedReason ? true : undefined}
+              aria-describedby={blockedReason ? 'ws-new-puzzle-blocked' : undefined}
+            >
               {busy ? 'Starting…' : 'Start New Puzzle'}
             </button>
             <button type="button" className="ws-button ws-button--secondary" onClick={cancel} disabled={busy} ref={cancelRef}>

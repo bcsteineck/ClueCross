@@ -76,10 +76,6 @@ async function goTo(user: ReturnType<typeof userEvent.setup>, label: string) {
   await user.click(within(screen.getByRole('navigation', { name: 'Workshop' })).getByRole('link', { name: label }))
 }
 
-async function confirmGenerateClearingFinal(user: ReturnType<typeof userEvent.setup>) {
-  const confirm = screen.getByRole('group', { name: 'Generate a new batch and clear the Final Puzzle?' })
-  await user.click(within(confirm).getByRole('button', { name: 'Generate and Clear Final Puzzle' }))
-}
 
 async function fillDogs(user: ReturnType<typeof userEvent.setup>) {
   await user.type(clueField(), 'Dogs')
@@ -87,11 +83,15 @@ async function fillDogs(user: ReturnType<typeof userEvent.setup>) {
   await user.paste(DOGS_CANDIDATE_POOL.join('\n'))
 }
 
+// Generate, save one candidate (into an empty shortlist), and approve it from Saved Candidates.
 async function generateAndApprove(user: ReturnType<typeof userEvent.setup>, index = 0) {
   await user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
   const cards = within(screen.getByRole('region', { name: /Generated Candidates/ })).getAllByRole('button')
   await user.click(cards[index])
-  await user.click(screen.getByRole('button', { name: 'Approve Candidate' }))
+  await user.click(screen.getByRole('button', { name: 'Save Candidate' }))
+  await screen.findByRole('button', { name: 'Saved' }, SAVE_WAIT)
+  await user.click(screen.getByRole('tab', { name: /^Saved Candidates/ }))
+  await user.click(screen.getByRole('button', { name: 'Approve as Final Puzzle' }))
   await screen.findByRole('heading', { name: /^Final Puzzle/ })
 }
 
@@ -171,7 +171,6 @@ describe('working draft: restoring', () => {
     // The unsaved batch isn't restored, but the generation count is.
     expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
-    await confirmGenerateClearingFinal(user)
     expect(screen.getByText(/seed workshop-generation-4/)).toBeTruthy()
   })
 
@@ -182,10 +181,14 @@ describe('working draft: restoring', () => {
     await goTo(user, 'Final Puzzle')
     await screen.findByRole('heading', { name: /^Final Puzzle/ })
     expect(screen.getByRole('heading', { name: /^Final Puzzle/ }).textContent).toMatch('Approved Candidate 2')
+    // Back lands on it in the restored Saved Candidates.
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
-    // The empty current batch points back to it.
-    expect(screen.getByText(/Approved Candidate 2 · dogs7 · “Good dogs” is saved in the working draft/)).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /^Saved Candidates/ }).textContent).toMatch('(2)')
+    expect(screen.getByRole('region', { name: /Selected Candidate 2/ }).textContent).toMatch('Approved')
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Final Puzzle' }))
+    // The empty current batch points to it too.
+    await user.click(screen.getByRole('tab', { name: /^Current Batch/ }))
+    expect(screen.getByText(/Approved Candidate 2 · dogs7 · “Good dogs” is the Final Puzzle in the working draft/)).toBeTruthy()
     await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
 
     await screen.findByRole('heading', { name: /^Final Puzzle/ })
@@ -220,7 +223,10 @@ describe('working draft: restoring', () => {
     await goTo(second.user, 'Candidates')
     expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
     expect(screen.getByText(/No current batch\./)).toBeTruthy()
-    expect(screen.getByText(/Approved Candidate 1 · dogs9 · “Dogs” is saved in the working draft/)).toBeTruthy()
+    expect(screen.getByText(/Approved Candidate 1 · dogs9 · “Dogs” is the Final Puzzle in the working draft/)).toBeTruthy()
+    // Saved Candidates come back with the draft.
+    await second.user.click(screen.getByRole('tab', { name: /^Saved Candidates \(1\)/ }))
+    expect(screen.getByRole('region', { name: /Selected Candidate 1/ }).textContent).toMatch('Approved')
   })
 
   it('explains that generated candidates are temporary', async () => {
@@ -230,7 +236,7 @@ describe('working draft: restoring', () => {
     await user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
     expect(
       screen.getByText(
-        'Generated candidates are temporary until approved as the Final Puzzle. Unsaved candidates will be lost when you close or refresh the Workshop.',
+        'Generated candidates are temporary. Save the ones worth keeping: unsaved candidates are lost when you generate again, close, or refresh the Workshop.',
       ),
     ).toBeTruthy()
     await waitFor(() => expect(savedDraft(store).generationCount).toBe(1), SAVE_WAIT)
@@ -291,7 +297,7 @@ describe('New Puzzle', () => {
     await user.click(button)
     const confirm = screen.getByRole('group', { name: 'Start a new puzzle?' })
     expect(confirm.textContent).toMatch(
-      'This will permanently clear the current working draft, including its authoring inputs, Priority Words, and Final Puzzle. This cannot be undone.',
+      'This permanently clears the working draft (its authoring inputs and Priority Words), the current generated batch, all Saved Candidates, and the Final Puzzle. This cannot be undone.',
     )
     expect(document.activeElement).toBe(within(confirm).getByRole('button', { name: 'Cancel' }))
 
@@ -312,7 +318,6 @@ describe('New Puzzle', () => {
     await ready()
     await first.user.click(screen.getByRole('radio', { name: 'Enter manually' }))
     await first.user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
-    await confirmGenerateClearingFinal(first.user)
     expect(window.location.hash).toBe('#/candidates')
     await first.user.click(screen.getByRole('button', { name: 'New Puzzle' }))
     await first.user.click(screen.getByRole('button', { name: 'Start New Puzzle' }))
@@ -332,6 +337,8 @@ describe('New Puzzle', () => {
 
     await goTo(first.user, 'Final Puzzle')
     expect(screen.getByText(/No Final Puzzle has been approved\./)).toBeTruthy()
+    await goTo(first.user, 'Candidates')
+    expect(screen.getByRole('tab', { name: /^Saved Candidates/ }).textContent).toMatch('(0)')
     await goTo(first.user, 'Author')
 
     expect(savedDraft(first.store)).toEqual({ ...createInitialDraft(), poolSource: 'sourced' })

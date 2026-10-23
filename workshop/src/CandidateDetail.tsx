@@ -1,17 +1,23 @@
 import type { ReactNode, Ref } from 'react'
 import type { PoolCandidate } from '../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import type { ConstructionSuccess } from '../../tools/generator/src/types.js'
+import type { CandidateStatus } from './CandidateActions'
 import { CandidateBoard } from './CandidateBoard'
+import { StatusBadge } from './CandidateCard'
 import { formatMobileCellSize } from './generateBatch'
 import type { SwipeHandlers } from './workspaces/useSwipeNavigation'
 
 interface CandidateDetailProps {
   candidate: PoolCandidate
   number: number
-  batchSeed: string
-  isApproved: boolean
-  onApprove: () => void
-  approveButtonRef?: Ref<HTMLButtonElement>
+  /** The batch it was generated in, if known. */
+  batchSeed: string | null
+  /** Shown as a Saved or Approved badge beside the heading. */
+  status: CandidateStatus
+  /** The collection's actions (Save, or Approve and Remove), under the board and summary. */
+  actions: ReactNode
+  /** Extra provenance for a saved candidate (where and under which clue it was generated). */
+  origin?: string | null
   /** The detail screen's heading and position; defaults to the inspector's "Selected Candidate N". */
   heading?: ReactNode
   headingRef?: Ref<HTMLHeadingElement>
@@ -39,9 +45,9 @@ export function CandidateDetail({
   candidate,
   number,
   batchSeed,
-  isApproved,
-  onApprove,
-  approveButtonRef,
+  status,
+  actions,
+  origin = null,
   heading,
   headingRef,
   navigation,
@@ -54,7 +60,7 @@ export function CandidateDetail({
     <section className="ws-detail" aria-labelledby="ws-detail-heading">
       <h3 id="ws-detail-heading" className="ws-detail__heading" ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
         {heading ?? `Selected Candidate ${number}`}
-        {isApproved && <span className="ws-badge">Approved</span>}
+        <StatusBadge status={status} />
       </h3>
 
       {navigation}
@@ -84,15 +90,7 @@ export function CandidateDetail({
         </div>
       </dl>
 
-      <div className="ws-detail__approve">
-        <button type="button" className="ws-button" onClick={onApprove} ref={approveButtonRef}>
-          {isApproved ? 'Open Final Puzzle' : 'Approve Candidate'}
-        </button>
-        <p className="ws-muted">
-          Approving saves this candidate as your Final Puzzle in the local working draft. It isn’t published.
-          Unapproved candidates aren’t saved and will be lost when you refresh.
-        </p>
-      </div>
+      {actions}
 
       <h4 className="ws-detail__subheading">Selected answers ({candidate.selectedAnswers.length})</h4>
       <ul className="ws-word-list">
@@ -132,8 +130,14 @@ export function CandidateDetail({
 
       <h4 className="ws-detail__subheading">Provenance</h4>
       <dl className="ws-metrics ws-metrics--debug">
+        {origin && (
+          <>
+            <dt>Saved from</dt>
+            <dd>{origin}</dd>
+          </>
+        )}
         <dt>Batch seed</dt>
-        <dd>{batchSeed}</dd>
+        <dd>{batchSeed ?? 'Unknown (saved by an earlier Workshop)'}</dd>
         <dt>Construction seed</dt>
         <dd>{String(candidate.representativeSeed)}</dd>
         <dt>Subset trial</dt>

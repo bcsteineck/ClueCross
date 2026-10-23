@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-10-22
+
+### Workshop Saved Candidates
+
+Phase 2d makes the workflow Current Batch → Saved Candidates → Final Puzzle → Publish. See `docs/architecture.md`, "Workshop candidate workflow".
+
+- **A shortlist for one puzzle, in the working draft.** No archive, library, or batch history; New Puzzle clears it. Stored in the existing draft file (schema version 2), not a second file, so it shares revisions, conflict handling, and atomic writes. Batches stay session-only.
+- **Approve only what's saved.** The Final Puzzle is always one of Saved Candidates (checked by the reducer and the schema), so approving never depends on a batch that a refresh or Generate can drop. Generate therefore no longer clears the Final Puzzle, and its confirmation is gone.
+- **The current clue wins.** Approval suggests the ID and clue from the Author clue at that moment; the saved crossword is never changed.
+- **Exact-layout fingerprint, not the generator's identity.** The generator's `identitySignature` merges rotations and reflections, which swap Across and Down; for players those are different puzzles, so the Workshop uses its own fingerprint (size, answers, directions, starts, translated to 0,0).
+- **"Saved" means written.** Save and Remove ride the autosave queue (no second save path) and are confirmed by waiting for a write that contains them; failures are undone and explained. Removal and approval aren't confirmed with a dialog; Start New Puzzle waits for unfinished writes.
+- **Final Puzzle numbering** follows Saved Candidates ("Approved Candidate 2" is the second saved), since batch positions don't survive a new batch.
+- **Draft body limit raised from 1 MB to 8 MB** so an unlimited shortlist stays practical; the endpoint is still loopback-only.
+- **Publishing is independent of approval.** Changing or clearing the Final Puzzle never changes a publication: the dev calendar's record is durable and only Publish writes to it. The draft's copy of a record (what locks the ID and clue) moves with its candidate into Saved Candidates rather than being dropped, so approving that candidate again shows it as published; another candidate never inherits it. No separate publication history: the copy already in the draft, re-checked with the dev calendar, is enough.
+
 ## 2026-10-21 (later)
 
 ### Workshop visual language
@@ -19,7 +34,7 @@ Below the Candidates column breakpoint, reviewing a batch is a gallery and a sep
 - **One breakpoint.** CSS decides (the existing container query) and publishes the result as a custom property that React reads, rather than a second JavaScript breakpoint that could drift.
 - **History: one entry per visit, not per candidate.** Opening adds an entry; Previous/Next replace it; All Candidates goes back. Keys are hashes of the layout's identity, so a stale URL never selects a different candidate.
 - **Boundary buttons use `aria-disabled`,** so reaching the first or last candidate doesn't drop keyboard focus.
-- **Room for Save Candidate (Phase 2d)** beside Approve in the detail screen; nothing for it is added yet.
+- **Room for Save Candidate (Phase 2d)** beside Approve in the detail screen; nothing for it is added yet. (Done in Phase 2d: Save in Current Batch, Approve and Remove in Saved Candidates.)
 
 ### Workshop workspace layouts
 

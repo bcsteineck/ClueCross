@@ -13,6 +13,10 @@
 //   overwritten automatically.
 // - A failed save keeps the draft in memory and reports it. Nothing retries
 //   on a timer: the next edit, or Retry, tries again.
+// - waitUntilSaved lets a caller learn when a particular change (saving or
+//   removing a candidate) is durably written — by whichever save carries
+//   it, so it shares the queue with autosave rather than racing it — or
+//   that it can't be (a failed save, a conflict, or a New Puzzle reset).
 
 import type { WorkshopDraft } from '../state/workshopReducer'
 import type { DraftClient } from './draftClient'
@@ -30,8 +34,16 @@ export type DraftSaveStatus =
   | { kind: 'conflict'; revision: number }
 
 export type ReplaceResult = { ok: true } | { ok: false; message: string }
+export type SaveWaitResult = ReplaceResult
 
 const UNREACHABLE = 'Couldn’t reach the Workshop server.'
+const CONFLICT = 'The saved draft was changed in another Workshop window or mode.'
+const REPLACED = 'The working draft was replaced.'
+
+interface SaveWaiter {
+  isSaved: (draft: WorkshopDraft) => boolean
+  resolve: (result: SaveWaitResult) => void
+}
 
 export class DraftSaver {
   private revisionValue: number
@@ -45,6 +57,7 @@ export class DraftSaver {
   /** A replaceWith is writing; edits are recorded but not saved until it settles. */
   private replacing = false
   private disposed = false
+  private waiters: SaveWaiter[] = []
 
   private readonly client: DraftClient
   private readonly onStatus: (status: DraftSaveStatus) => void
@@ -92,6 +105,19 @@ export class DraftSaver {
     this.timer = setTimeout(() => void this.flush(), this.debounceMs)
   }
 
+  /**
+   * Resolves { ok: true } once a draft for which isSaved holds has been
+   * durably saved, or { ok: false } as soon as a save fails, a conflict
+   * pauses saving, or the draft is replaced — the change may then be in
+   * memory but isn't on disk. Never resolves ok for an unsaved draft.
+   */
+  waitUntilSaved(isSaved: (draft: WorkshopDraft) => boolean): Promise<SaveWaitResult> {
+    if (isSaved(this.saved)) return Promise.resolve({ ok: true })
+    if (this.disposed) return Promise.resolve({ ok: false, message: REPLACED })
+    if (this.conflictRevision !== null) return Promise.resolve({ ok: false, message: CONFLICT })
+    return new Promise((resolve) => this.waiters.push({ isSaved, resolve }))
+  }
+
   /** Saves now (also Retry). Resolves once nothing more can be saved. */
   flush(): Promise<void> {
     this.clearTimer()
@@ -111,13 +137,12 @@ export class DraftSaver {
     if (this.conflictRevision !== null) {
       return { ok: false, message: 'Resolve the save conflict before starting a new puzzle.' }
     }
+    let replaced = false
     this.clearTimer()
     this.replacing = true
     try {
       await this.running
-      if (this.conflictRevision !== null) {
-        return { ok: false, message: 'The saved draft was changed in another Workshop window or mode.' }
-      }
+      if (this.conflictRevision !== null) return { ok: false, message: CONFLICT }
       const result = await this.client.save({ baseRevision: this.revisionValue, draft })
       if (!result.ok) return { ok: false, message: UNREACHABLE }
       const { body } = result
@@ -126,16 +151,19 @@ export class DraftSaver {
         this.revisionValue = body.revision
         this.saved = draft
         this.latest = draft
+        replaced = true
         this.setStatus({ kind: 'saved' })
         return { ok: true }
       }
       if (body.status === 'conflict') {
         this.pauseForConflict(body.revision)
-        return { ok: false, message: 'The saved draft was changed in another Workshop window or mode.' }
+        return { ok: false, message: CONFLICT }
       }
       return { ok: false, message: body.message }
     } finally {
       this.replacing = false
+      // Changes still waiting belonged to the old puzzle: they will never be saved.
+      if (replaced) this.settleWaiters(REPLACED)
       // A failed reset leaves the current draft in place; keep saving it.
       if (this.hasUnsavedChanges() && this.conflictRevision === null) void this.flush()
     }
@@ -158,6 +186,7 @@ export class DraftSaver {
   dispose(): void {
     this.disposed = true
     this.clearTimer()
+    this.settleWaiters(REPLACED)
   }
 
   private async run(): Promise<void> {
@@ -168,7 +197,7 @@ export class DraftSaver {
       const result = await this.client.save({ baseRevision: this.revisionValue, draft: snapshot })
       if (this.disposed) return
       if (!result.ok) {
-        this.setStatus({ kind: 'failed', message: UNREACHABLE })
+        this.fail(UNREACHABLE)
         return
       }
       const { body } = result
@@ -177,19 +206,37 @@ export class DraftSaver {
         return
       }
       if (body.status !== 'saved') {
-        this.setStatus({ kind: 'failed', message: body.message })
+        this.fail(body.message)
         return
       }
       this.revisionValue = body.revision
       this.saved = snapshot
+      this.settleWaiters()
     }
     if (!this.disposed && this.conflictRevision === null && !this.replacing) this.setStatus({ kind: 'saved' })
+  }
+
+  private fail(message: string): void {
+    this.setStatus({ kind: 'failed', message })
+    this.settleWaiters(message)
   }
 
   private pauseForConflict(revision: number): void {
     this.clearTimer()
     this.conflictRevision = revision
     this.setStatus({ kind: 'conflict', revision })
+    this.settleWaiters(CONFLICT)
+  }
+
+  /** Resolves the waiters the saved draft now satisfies; with `failure`, also every other one. */
+  private settleWaiters(failure?: string): void {
+    const waiting: SaveWaiter[] = []
+    for (const waiter of this.waiters) {
+      if (waiter.isSaved(this.saved)) waiter.resolve({ ok: true })
+      else if (failure !== undefined) waiter.resolve({ ok: false, message: failure })
+      else waiting.push(waiter)
+    }
+    this.waiters = waiting
   }
 
   private clearTimer(): void {
