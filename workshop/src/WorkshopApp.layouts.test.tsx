@@ -100,7 +100,7 @@ describe('Author layout', () => {
 })
 
 describe('Candidates layout', () => {
-  it('reads the gallery, then the inspector, with Approve before the word lists', async () => {
+  it('reads the gallery, then the inspector, with the tab’s action before the word lists', async () => {
     const { user } = renderApp()
     await screen.findByRole('heading', { name: 'Author' })
     await user.type(screen.getByLabelText('Clue'), 'Dogs')
@@ -112,11 +112,24 @@ describe('Candidates layout', () => {
     await user.click(within(gallery).getAllByRole('button')[0])
     const inspector = screen.getByRole('region', { name: /Selected Candidate 1/ })
     expect(precedes(gallery, inspector)).toBe(true)
-    const approve = within(inspector).getByRole('button', { name: 'Approve Candidate' })
-    expect(precedes(approve, within(inspector).getByRole('heading', { name: /Selected answers/ }))).toBe(true)
+    // Current Batch offers Save, never Approve.
+    const save = within(inspector).getByRole('button', { name: 'Save Candidate' })
+    expect(precedes(save, within(inspector).getByRole('heading', { name: /Selected answers/ }))).toBe(true)
+    expect(within(inspector).queryByRole('button', { name: /Approve/ })).toBeNull()
 
-    // Generate stays available here, ahead of the batch, alongside Approve.
+    // Generate stays available here, ahead of the batch.
     expect(precedes(screen.getByRole('button', { name: 'Generate Candidates' }), gallery)).toBe(true)
+    await user.click(save)
+    await within(inspector).findByRole('button', { name: 'Saved' })
+
+    // Saved Candidates: the same gallery and inspector, with Approve and Remove.
+    await user.click(screen.getByRole('tab', { name: 'Saved Candidates (1)' }))
+    const savedGallery = screen.getByRole('region', { name: 'Saved Candidates (1)' })
+    const savedInspector = screen.getByRole('region', { name: /Selected Candidate 1/ })
+    expect(precedes(savedGallery, savedInspector)).toBe(true)
+    const approve = within(savedInspector).getByRole('button', { name: 'Approve as Final Puzzle' })
+    expect(precedes(approve, within(savedInspector).getByRole('button', { name: 'Remove from Saved' }))).toBe(true)
+    expect(precedes(approve, within(savedInspector).getByRole('heading', { name: /Selected answers/ }))).toBe(true)
     await user.click(approve)
     expect(await screen.findByRole('heading', { name: /Final Puzzle/ })).toBeTruthy()
     expect(window.location.hash).toBe('#/final')

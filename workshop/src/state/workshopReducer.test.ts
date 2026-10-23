@@ -1,5 +1,8 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { DOGS_CANDIDATE_POOL } from '../../../tools/generator/src/pool/dogsCandidatePool.js'
+import type { PoolCandidate } from '../../../tools/generator/src/pool/generateCandidatePoolSelection.js'
+import { savedEntry } from '../../server/draft/testDrafts'
+import { candidateFingerprint } from '../candidateFingerprint'
 import { generateBatch } from '../generateBatch'
 import type { WorkshopBatch } from '../generateBatch'
 import { parsePool } from '../parsePool'
@@ -13,12 +16,19 @@ import {
   analyzeActivePool,
   createInitialWorkshopState,
   selectActivePriorityWords,
-  selectApprovedId,
+  selectApprovedFingerprint,
   selectPersistableDraft,
   selectPublished,
   workshopReducer,
 } from './workshopReducer'
 import type { WorkshopAction, WorkshopState } from './workshopReducer'
+
+const fp = (candidate: PoolCandidate) => candidateFingerprint(candidate)
+const save = (candidate: PoolCandidate, number: number, batch?: WorkshopBatch): WorkshopAction => ({
+  type: 'SAVE_CANDIDATE',
+  saved: savedEntry(candidate, number, batch),
+})
+const approve = (candidate: PoolCandidate): WorkshopAction => ({ type: 'APPROVE_SAVED_CANDIDATE', fingerprint: fp(candidate) })
 
 function run(actions: WorkshopAction[], state: WorkshopState = createInitialWorkshopState()): WorkshopState {
   return actions.reduce(workshopReducer, state)
@@ -55,6 +65,7 @@ const PUBLISHED: PublishedState = {
     fingerprintVersion: 1,
   },
 }
+const PUBLISHED_INPUTS = { id: 'dogs1', clue: 'Dogs' }
 
 let batch1: WorkshopBatch
 let batch2: WorkshopBatch
@@ -78,11 +89,14 @@ describe('workshopReducer: initial state', () => {
         sourcing: { context: '', properNouns: 'exclude', abbreviations: 'exclude', sourceKind: 'live', pool: null },
         priorityWords: { manual: [], sourced: [] },
         generationCount: 0,
+        savedCandidates: [],
         finalPuzzle: null,
       },
       session: {
         batch: null,
+        candidateTab: 'batch',
         selectedId: null,
+        savedSelectedId: null,
         generationErrors: [],
         priorityLimitReached: false,
         publicationCheck: null,
@@ -213,9 +227,11 @@ describe('workshopReducer: Priority Words', () => {
 describe('workshopReducer: generation, selection, and Final Puzzle', () => {
   function approvedState() {
     return run([
+      { type: 'SET_CLUE', clue: 'Dogs' },
       { type: 'GENERATION_SUCCEEDED', batch: batch1 },
-      { type: 'SELECT_CANDIDATE', id: batch1.candidates[0].identitySignature },
-      { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 },
+      { type: 'SELECT_CANDIDATE', id: fp(batch1.candidates[0]) },
+      save(batch1.candidates[0], 1, batch1),
+      approve(batch1.candidates[0]),
     ])
   }
 
@@ -231,7 +247,8 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
   it('a refused Generate keeps the previous batch, selection, Final Puzzle, and publication', () => {
     const published = workshopReducer(approvedState(), {
       type: 'FINAL_PUZZLE_PUBLISHED',
-      signature: batch1.candidates[0].identitySignature,
+      signature: fp(batch1.candidates[0]),
+      inputs: PUBLISHED_INPUTS,
       published: PUBLISHED,
     })
     const state = workshopReducer(published, { type: 'GENERATION_FAILED', errors: ['Enter a clue.'] })
@@ -239,20 +256,25 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
     expect(state.session).toEqual({ ...published.session, generationErrors: ['Enter a clue.'] })
   })
 
-  it('a new batch clears the selection, the Final Puzzle, and its publication (current behavior)', () => {
-    const published = workshopReducer(approvedState(), {
-      type: 'FINAL_PUZZLE_PUBLISHED',
-      signature: batch1.candidates[0].identitySignature,
-      published: PUBLISHED,
-    })
+  it('a new batch replaces the batch and opens Current Batch, keeping Saved Candidates, the Final Puzzle, and its publication', () => {
+    const published = run(
+      [
+        { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(batch1.candidates[0]), inputs: PUBLISHED_INPUTS, published: PUBLISHED },
+        { type: 'SET_CANDIDATE_TAB', tab: 'saved' },
+      ],
+      approvedState(),
+    )
     const state = workshopReducer(published, { type: 'GENERATION_SUCCEEDED', batch: batch2 })
     expect(state.draft.generationCount).toBe(2)
-    expect(state.draft.finalPuzzle).toBeNull()
+    expect(state.session.batch).toBe(batch2)
+    expect(state.session.candidateTab).toBe('batch')
     expect(state.session.selectedId).toBeNull()
-    expect(selectPublished(state)).toBeNull()
+    expect(state.draft.savedCandidates).toBe(published.draft.savedCandidates)
+    expect(state.draft.finalPuzzle).toBe(published.draft.finalPuzzle)
+    expect(selectPublished(state)).toBe(PUBLISHED)
   })
 
-  it('approving makes the candidate the Final Puzzle with an ID suggested from the batch clue', () => {
+  it('approving a saved candidate makes it the Final Puzzle with an ID suggested from the current clue', () => {
     const state = approvedState()
     expect(state.draft.finalPuzzle).toEqual({
       candidate: batch1.candidates[0],
@@ -260,20 +282,20 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
       inputs: { id: 'dogs', clue: 'Dogs' },
       publication: null,
     })
-    expect(selectApprovedId(state.draft)).toBe(batch1.candidates[0].identitySignature)
+    expect(selectApprovedFingerprint(state.draft)).toBe(fp(batch1.candidates[0]))
   })
 
   it('re-opening the approved candidate keeps the author’s inputs and its publication', () => {
-    const signature = batch1.candidates[0].identitySignature
+    const signature = fp(batch1.candidates[0])
     const edited = run(
       [
         { type: 'SET_FINAL_PUZZLE_INPUTS', inputs: { id: 'dogs7', clue: 'Good dogs' } },
-        { type: 'FINAL_PUZZLE_PUBLISHED', signature, published: PUBLISHED },
+        { type: 'FINAL_PUZZLE_PUBLISHED', signature, inputs: PUBLISHED_INPUTS, published: PUBLISHED },
       ],
       approvedState(),
     )
     // Re-approving the current Final Puzzle changes nothing (no new draft, so nothing to save).
-    expect(workshopReducer(edited, { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 })).toBe(edited)
+    expect(workshopReducer(edited, approve(batch1.candidates[0]))).toBe(edited)
     expect(edited.draft.finalPuzzle?.inputs).toEqual({ id: 'dogs7', clue: 'Good dogs' })
     expect(selectPublished(edited)).toBe(PUBLISHED)
   })
@@ -281,12 +303,15 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
   it('approving a different candidate replaces the Final Puzzle and drops the publication', () => {
     const state = run(
       [
-        { type: 'FINAL_PUZZLE_PUBLISHED', signature: batch1.candidates[0].identitySignature, published: PUBLISHED },
-        { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[1], number: 2 },
+        { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(batch1.candidates[0]), inputs: PUBLISHED_INPUTS, published: PUBLISHED },
+        save(batch1.candidates[1], 2, batch1),
+        approve(batch1.candidates[1]),
       ],
       approvedState(),
     )
     expect(state.draft.finalPuzzle).toMatchObject({ candidate: batch1.candidates[1], number: 2, inputs: { id: 'dogs' } })
+    // The previously approved candidate stays saved, in its place.
+    expect(state.draft.savedCandidates.map((saved) => saved.fingerprint)).toEqual([fp(batch1.candidates[0]), fp(batch1.candidates[1])])
     expect(state.draft.finalPuzzle?.publication).toBeNull()
     expect(selectPublished(state)).toBeNull()
   })
@@ -303,7 +328,8 @@ describe('workshopReducer: generation, selection, and Final Puzzle', () => {
     const state = approvedState()
     const stale = workshopReducer(state, {
       type: 'FINAL_PUZZLE_PUBLISHED',
-      signature: batch1.candidates[1].identitySignature,
+      signature: fp(batch1.candidates[1]),
+      inputs: PUBLISHED_INPUTS,
       published: PUBLISHED,
     })
     expect(stale).toBe(state)
@@ -320,8 +346,9 @@ describe('workshopReducer: purity and the persistence boundary', () => {
     { type: 'SOURCED_POOL_RECEIVED', pool: sourcedPool() },
     { type: 'SET_POOL_SOURCE', poolSource: 'manual' },
     { type: 'GENERATION_SUCCEEDED', batch: batch1 },
-    { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 },
-    { type: 'FINAL_PUZZLE_PUBLISHED', signature: batch1.candidates[0].identitySignature, published: PUBLISHED },
+    save(batch1.candidates[0], 1, batch1),
+    approve(batch1.candidates[0]),
+    { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(batch1.candidates[0]), inputs: PUBLISHED_INPUTS, published: PUBLISHED },
   ]
 
   it('is deterministic and never mutates its input', () => {
@@ -340,7 +367,7 @@ describe('workshopReducer: purity and the persistence boundary', () => {
     const state = run(workflow())
     const draft = selectPersistableDraft(state)
     expect(Object.keys(draft).sort()).toEqual(
-      ['clue', 'finalPuzzle', 'generationCount', 'poolSource', 'poolText', 'priorityWords', 'sourcing'].sort(),
+      ['clue', 'finalPuzzle', 'generationCount', 'poolSource', 'poolText', 'priorityWords', 'savedCandidates', 'sourcing'].sort(),
     )
     const json = JSON.stringify(draft)
     expect(json).not.toContain('"batch"')
@@ -356,15 +383,16 @@ describe('workshopReducer: restore, New Puzzle, and publication checks', () => {
   function publishedDraft() {
     return run([
       { type: 'GENERATION_SUCCEEDED', batch: batch1 },
-      { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 },
-      { type: 'FINAL_PUZZLE_PUBLISHED', signature: batch1.candidates[0].identitySignature, published: PUBLISHED },
+      save(batch1.candidates[0], 1, batch1),
+      approve(batch1.candidates[0]),
+      { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(batch1.candidates[0]), inputs: PUBLISHED_INPUTS, published: PUBLISHED },
     ]).draft
   }
 
   it('DRAFT_RESTORED replaces the draft and starts a fresh session', () => {
     const busy = run([
       { type: 'GENERATION_SUCCEEDED', batch: batch1 },
-      { type: 'SELECT_CANDIDATE', id: batch1.candidates[0].identitySignature },
+      { type: 'SELECT_CANDIDATE', id: fp(batch1.candidates[0]) },
       { type: 'GENERATION_FAILED', errors: ['x'] },
     ])
     const saved = { ...createInitialWorkshopState().draft, clue: 'Pirates', generationCount: 7 }
@@ -386,7 +414,7 @@ describe('workshopReducer: restore, New Puzzle, and publication checks', () => {
 
   it('a confirmed or unconfirmed check keeps the record; not-found clears it', () => {
     const restored = workshopReducer(createInitialWorkshopState(), { type: 'DRAFT_RESTORED', draft: publishedDraft() })
-    const signature = batch1.candidates[0].identitySignature
+    const signature = fp(batch1.candidates[0])
     for (const outcome of ['confirmed', 'unconfirmed'] as const) {
       const checked = workshopReducer(restored, { type: 'PUBLICATION_CHECKED', signature, outcome })
       expect(checked.session.publicationCheck).toBe(outcome)
@@ -406,11 +434,194 @@ describe('workshopReducer: restore, New Puzzle, and publication checks', () => {
       { type: 'SET_CLUE', clue: 'Dogs' },
       { type: 'TOGGLE_PRIORITY_WORD', word: 'BEAGLE' },
       { type: 'GENERATION_SUCCEEDED', batch: batch1 },
-      { type: 'APPROVE_CANDIDATE', candidate: batch1.candidates[0], number: 1 },
+      save(batch1.candidates[0], 1, batch1),
+      approve(batch1.candidates[0]),
+      { type: 'SET_CANDIDATE_TAB', tab: 'saved' },
       { type: 'NEW_PUZZLE', draft: fresh },
     ])
     expect(state.draft).toBe(fresh)
+    expect(state.draft.savedCandidates).toEqual([])
     expect(state.draft.generationCount).toBe(0)
     expect(state.session).toEqual(createInitialWorkshopState().session)
+  })
+})
+
+describe('workshopReducer: Saved Candidates', () => {
+  const generated = () => run([{ type: 'SET_CLUE', clue: 'Dogs' }, { type: 'GENERATION_SUCCEEDED', batch: batch1 }])
+  const order = (state: WorkshopState) => state.draft.savedCandidates.map((saved) => saved.fingerprint)
+
+  it('saves in order, oldest first, with no limit, and keeps the batch and selection as they were', () => {
+    const before = run([{ type: 'SELECT_CANDIDATE', id: fp(batch1.candidates[4]) }], generated())
+    const state = run(
+      batch1.candidates.map((candidate, index) => save(candidate, index + 1, batch1)),
+      before,
+    )
+    expect(order(state)).toEqual(batch1.candidates.map(fp))
+    expect(state.draft.savedCandidates.length).toBe(batch1.candidates.length)
+    expect(state.session).toBe(before.session)
+  })
+
+  it('never saves the same layout twice, even from a later batch, and keeps its original place', () => {
+    const state = run([save(batch1.candidates[2], 3, batch1), save(batch1.candidates[0], 1, batch1)], generated())
+    // The same crossword reached again (another batch, another clue): no change at all.
+    const again = savedEntry(batch1.candidates[2], 9, { ...batch1, seed: 'workshop-generation-9', clue: 'Pups' })
+    expect(workshopReducer(state, { type: 'SAVE_CANDIDATE', saved: again })).toBe(state)
+    expect(order(state)).toEqual([fp(batch1.candidates[2]), fp(batch1.candidates[0])])
+  })
+
+  it('removes an unapproved candidate, keeping the others in order; never the approved one', () => {
+    const state = run(
+      [save(batch1.candidates[0], 1, batch1), save(batch1.candidates[1], 2, batch1), save(batch1.candidates[2], 3, batch1), approve(batch1.candidates[2])],
+      generated(),
+    )
+    const removed = workshopReducer(state, { type: 'REMOVE_SAVED_CANDIDATE', fingerprint: fp(batch1.candidates[0]) })
+    expect(order(removed)).toEqual([fp(batch1.candidates[1]), fp(batch1.candidates[2])])
+    expect(workshopReducer(removed, { type: 'REMOVE_SAVED_CANDIDATE', fingerprint: fp(batch1.candidates[2]) })).toBe(removed)
+    expect(workshopReducer(removed, { type: 'REMOVE_SAVED_CANDIDATE', fingerprint: 'unknown' })).toBe(removed)
+    // Once saved again it goes to the end.
+    expect(order(run([save(batch1.candidates[0], 1, batch1)], removed)).at(-1)).toBe(fp(batch1.candidates[0]))
+  })
+
+  it('a failed removal puts the entry back where it was', () => {
+    const state = run([save(batch1.candidates[0], 1, batch1), save(batch1.candidates[1], 2, batch1), save(batch1.candidates[2], 3, batch1)], generated())
+    const entry = state.draft.savedCandidates[1]
+    const removed = workshopReducer(state, { type: 'REMOVE_SAVED_CANDIDATE', fingerprint: entry.fingerprint })
+    const restored = workshopReducer(removed, { type: 'RESTORE_SAVED_CANDIDATE', saved: entry, index: 1 })
+    expect(restored.draft.savedCandidates).toEqual(state.draft.savedCandidates)
+    expect(workshopReducer(restored, { type: 'RESTORE_SAVED_CANDIDATE', saved: entry, index: 0 })).toBe(restored)
+  })
+
+  it('approves only saved candidates, with the Author clue as it is now, leaving the saved snapshot unchanged', () => {
+    const saved = run([save(batch1.candidates[3], 4, batch1)], generated())
+    expect(workshopReducer(saved, approve(batch1.candidates[0]))).toBe(saved)
+    const state = run([{ type: 'SET_CLUE', clue: 'Kitchen Essentials' }, approve(batch1.candidates[3])], saved)
+    expect(state.draft.finalPuzzle).toEqual({
+      candidate: batch1.candidates[3],
+      number: 1,
+      inputs: { id: 'kitchenessentials', clue: 'Kitchen Essentials' },
+      publication: null,
+    })
+    expect(state.draft.savedCandidates).toBe(saved.draft.savedCandidates)
+    expect(state.draft.savedCandidates[0].origin.clue).toBe('Dogs')
+  })
+
+  it('an approval of the same layout from another batch matches by fingerprint', () => {
+    const state = run([save(batch1.candidates[0], 1, batch1), approve(batch1.candidates[0])], generated())
+    // A structurally equal copy (as a later batch or a restored draft would hold).
+    const copy = JSON.parse(JSON.stringify(batch1.candidates[0])) as PoolCandidate
+    expect(selectApprovedFingerprint(state.draft)).toBe(fp(copy))
+  })
+
+  it('clearing the Final Puzzle keeps the candidate saved, and it can then be removed', () => {
+    const published = run(
+      [
+        save(batch1.candidates[0], 1, batch1),
+        approve(batch1.candidates[0]),
+        { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(batch1.candidates[0]), inputs: PUBLISHED_INPUTS, published: PUBLISHED },
+      ],
+      generated(),
+    )
+    const cleared = workshopReducer(published, { type: 'CLEAR_FINAL_PUZZLE' })
+    expect(cleared.draft.finalPuzzle).toBeNull()
+    // The snapshot is unchanged; the candidate's publication record moves onto its entry.
+    expect(cleared.draft.savedCandidates[0].candidate).toBe(published.draft.savedCandidates[0].candidate)
+    expect(cleared.draft.savedCandidates[0].publication).toEqual({ inputs: published.draft.finalPuzzle!.inputs, published: PUBLISHED })
+    expect(workshopReducer(cleared, { type: 'CLEAR_FINAL_PUZZLE' })).toBe(cleared)
+    expect(order(workshopReducer(cleared, { type: 'REMOVE_SAVED_CANDIDATE', fingerprint: fp(batch1.candidates[0]) }))).toEqual([])
+  })
+
+  it('remembers each tab’s selection separately', () => {
+    const state = run(
+      [
+        { type: 'SELECT_CANDIDATE', id: fp(batch1.candidates[1]) },
+        { type: 'SET_CANDIDATE_TAB', tab: 'saved' },
+        { type: 'SELECT_SAVED_CANDIDATE', id: fp(batch1.candidates[5]) },
+        { type: 'SET_CANDIDATE_TAB', tab: 'batch' },
+      ],
+      generated(),
+    )
+    expect(state.session).toMatchObject({ candidateTab: 'batch', selectedId: fp(batch1.candidates[1]), savedSelectedId: fp(batch1.candidates[5]) })
+  })
+})
+
+describe('workshopReducer: publication is independent of approval', () => {
+  const A = () => batch1.candidates[0]
+  const B = () => batch1.candidates[1]
+  const PUBLISHED_B: PublishedState = {
+    kind: 'created',
+    publication: { ...PUBLISHED.publication, puzzleId: 'dogs', publishDate: '2026-10-22', contentFingerprint: 'e'.repeat(64) },
+  }
+  const entry = (state: WorkshopState, candidate: PoolCandidate) =>
+    state.draft.savedCandidates.find((saved) => saved.fingerprint === fp(candidate))
+  // A and B saved; A approved with an edited ID, then published.
+  function publishedA() {
+    return run([
+      { type: 'SET_CLUE', clue: 'Dogs' },
+      { type: 'GENERATION_SUCCEEDED', batch: batch1 },
+      save(A(), 1, batch1),
+      save(B(), 2, batch1),
+      approve(A()),
+      { type: 'SET_FINAL_PUZZLE_INPUTS', inputs: PUBLISHED_INPUTS },
+      { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(A()), inputs: PUBLISHED_INPUTS, published: PUBLISHED },
+    ])
+  }
+
+  it('approving B after A was published: B is unpublished, and A keeps its record in Saved Candidates', () => {
+    const state = run([{ type: 'SET_CLUE', clue: 'Pups' }, approve(B())], publishedA())
+    expect(state.draft.finalPuzzle).toMatchObject({ number: 2, inputs: { id: 'pups', clue: 'Pups' }, publication: null })
+    expect(selectPublished(state)).toBe(null)
+    expect(state.session.publicationCheck).toBe(null)
+    expect(entry(state, A())?.publication).toEqual({ inputs: PUBLISHED_INPUTS, published: PUBLISHED })
+    expect(entry(state, B())?.publication).toBe(null)
+  })
+
+  it('clearing a published Final Puzzle keeps the candidate saved with its record', () => {
+    const state = workshopReducer(publishedA(), { type: 'CLEAR_FINAL_PUZZLE' })
+    expect(state.draft.finalPuzzle).toBe(null)
+    expect(state.session.publicationCheck).toBe(null)
+    expect(entry(state, A())).toMatchObject({ publication: { inputs: PUBLISHED_INPUTS, published: PUBLISHED } })
+  })
+
+  it('approving A again restores its published ID, clue, and lock, and re-checks it with the dev calendar', () => {
+    for (const away of [approve(B()), { type: 'CLEAR_FINAL_PUZZLE' } as const]) {
+      const state = run([away, { type: 'SET_CLUE', clue: 'Pups' }, approve(A())], publishedA())
+      expect(state.draft.finalPuzzle).toMatchObject({ number: 1, inputs: PUBLISHED_INPUTS, publication: PUBLISHED })
+      expect(state.session.publicationCheck).toBe('checking')
+      // One copy only: the Final Puzzle's.
+      expect(entry(state, A())?.publication).toBe(null)
+      const gone = workshopReducer(state, { type: 'PUBLICATION_CHECKED', signature: fp(A()), outcome: 'not-found' })
+      expect(gone.draft.finalPuzzle?.publication).toBe(null)
+    }
+  })
+
+  it('publishing B through the normal workflow records it on B only, and A keeps its own', () => {
+    const state = run(
+      [approve(B()), { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(B()), inputs: { id: 'dogs', clue: 'Dogs' }, published: PUBLISHED_B }],
+      publishedA(),
+    )
+    expect(selectPublished(state)).toBe(PUBLISHED_B)
+    expect(entry(state, A())?.publication?.published).toBe(PUBLISHED)
+    // Switching back and forth moves each record with its own candidate.
+    const back = workshopReducer(state, approve(A()))
+    expect(selectPublished(back)).toBe(PUBLISHED)
+    expect(entry(back, B())?.publication).toEqual({ inputs: { id: 'dogs', clue: 'Dogs' }, published: PUBLISHED_B })
+  })
+
+  it('a publish that completes after the author approved another is recorded on the candidate that published', () => {
+    const approvedA = run([{ type: 'SET_CLUE', clue: 'Dogs' }, { type: 'GENERATION_SUCCEEDED', batch: batch1 }, save(A(), 1, batch1), save(B(), 2, batch1), approve(A())])
+    const state = run(
+      [approve(B()), { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(A()), inputs: PUBLISHED_INPUTS, published: PUBLISHED }],
+      approvedA,
+    )
+    expect(selectPublished(state)).toBe(null)
+    expect(entry(state, A())?.publication).toEqual({ inputs: PUBLISHED_INPUTS, published: PUBLISHED })
+    // A candidate no longer saved: nothing to record it on.
+    const removed = run([approve(B()), { type: 'REMOVE_SAVED_CANDIDATE', fingerprint: fp(A()) }], approvedA)
+    expect(workshopReducer(removed, { type: 'FINAL_PUZZLE_PUBLISHED', signature: fp(A()), inputs: PUBLISHED_INPUTS, published: PUBLISHED })).toBe(removed)
+  })
+
+  it('a new batch keeps every saved publication record', () => {
+    const state = run([approve(B()), { type: 'GENERATION_SUCCEEDED', batch: batch2 }], publishedA())
+    expect(entry(state, A())?.publication?.published).toBe(PUBLISHED)
   })
 })

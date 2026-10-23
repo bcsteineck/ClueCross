@@ -8,8 +8,9 @@
 // reach a Production-only view. Back and Forward work through hashchange.
 //
 // Candidates also has a detail screen on narrow workspaces:
-// #/candidates/<key>, where <key> is candidateKey() of a candidate in the
-// current (session-only) batch. Opening it from the gallery adds one
+// #/candidates/<key> for a candidate in the current (session-only) batch,
+// and #/candidates/saved/<key> for one in Saved Candidates, where <key> is
+// candidateKey() of the candidate's fingerprint. Opening it from the gallery adds one
 // history entry; Previous/Next replace that entry; All Candidates goes back
 // to the gallery entry it came from (or replaces the detail entry when
 // there is none). Whether a key names a candidate is up to the Candidates

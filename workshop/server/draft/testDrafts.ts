@@ -16,6 +16,9 @@ import { createInitialWorkshopState, workshopReducer } from '../../src/state/wor
 import type { WorkshopAction, WorkshopDraft } from '../../src/state/workshopReducer'
 import { DRAFT_SCHEMA_VERSION } from '../../src/draft/draftSchema'
 import type { DraftEnvelope } from '../../src/draft/draftSchema'
+import { candidateFingerprint } from '../../src/candidateFingerprint'
+import type { PoolCandidate } from '../../../tools/generator/src/pool/generateCandidatePoolSelection.js'
+import type { SavedCandidate } from '../../src/state/workshopReducer'
 
 export function fixtureSourcedPool(): SourcedPool {
   const parsed = parseSourcingResponse(FIXTURE_SOURCING_RESPONSE)
@@ -47,11 +50,23 @@ export const DEV_PUBLICATION: PublishedState = {
   },
 }
 
+/** A Saved Candidates entry for a batch's candidate, as Save Candidate makes it. */
+export function savedEntry(candidate: PoolCandidate, number: number, batch: WorkshopBatch = dogsBatch()): SavedCandidate {
+  return {
+    fingerprint: candidateFingerprint(candidate),
+    candidate,
+    origin: { batchSeed: batch.seed, number, clue: batch.clue },
+    savedAt: '2026-10-19T11:00:00.000Z',
+    publication: null,
+  }
+}
+
 /**
  * A draft using every durable field: sourced mode active, the manual list
  * kept, Priority Words in both modes, an excluded Pool Review candidate,
- * three generations, and an approved Final Puzzle with edited inputs
- * (optionally recorded as published to the dev calendar).
+ * three generations, two Saved Candidates, and the second approved as the
+ * Final Puzzle with edited inputs (optionally recorded as published to the
+ * dev calendar).
  */
 export function fullDraft({ published = false }: { published?: boolean } = {}): WorkshopDraft {
   const batch = dogsBatch()
@@ -69,15 +84,28 @@ export function fullDraft({ published = false }: { published?: boolean } = {}): 
     { type: 'SET_CANDIDATE_INCLUDED', id: beagle.id, included: false },
     { type: 'TOGGLE_PRIORITY_WORD', word: 'POODLE' },
     { type: 'GENERATION_SUCCEEDED', batch: { ...batch, generationNumber: 3 } },
-    { type: 'APPROVE_CANDIDATE', candidate: batch.candidates[1], number: 2 },
+    { type: 'SAVE_CANDIDATE', saved: savedEntry(batch.candidates[0], 1) },
+    { type: 'SAVE_CANDIDATE', saved: savedEntry(batch.candidates[1], 2) },
+    { type: 'APPROVE_SAVED_CANDIDATE', fingerprint: candidateFingerprint(batch.candidates[1]) },
     { type: 'SET_FINAL_PUZZLE_INPUTS', inputs: { id: 'dogs7', clue: 'Good dogs' } },
   ]
   if (published) {
-    actions.push({ type: 'FINAL_PUZZLE_PUBLISHED', signature: batch.candidates[1].identitySignature, published: DEV_PUBLICATION })
+    actions.push({
+      type: 'FINAL_PUZZLE_PUBLISHED',
+      signature: candidateFingerprint(batch.candidates[1]),
+      inputs: { id: 'dogs7', clue: 'Good dogs' },
+      published: DEV_PUBLICATION,
+    })
   }
   return actions.reduce(workshopReducer, createInitialWorkshopState()).draft
 }
 
 export function envelopeOf(draft: WorkshopDraft, revision = 1): DraftEnvelope {
   return { schemaVersion: DRAFT_SCHEMA_VERSION, revision, savedAt: '2026-10-19T12:00:00.000Z', draft }
+}
+
+/** The same draft as a schema version 1 file (before Saved Candidates), as JSON data. */
+export function legacyEnvelopeOf(draft: WorkshopDraft, revision = 1): unknown {
+  const { savedCandidates: _notInVersion1, ...rest } = draft
+  return JSON.parse(JSON.stringify({ schemaVersion: 1, revision, savedAt: '2026-10-19T12:00:00.000Z', draft: rest }))
 }

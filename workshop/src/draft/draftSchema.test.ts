@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { DEV_PUBLICATION, envelopeOf, fullDraft } from '../../server/draft/testDrafts'
-import { createInitialDraft } from '../state/workshopReducer'
-import { parseDraftEnvelope, parseWorkshopDraft } from './draftSchema'
+import { DEV_PUBLICATION, dogsBatch, envelopeOf, fullDraft, legacyEnvelopeOf } from '../../server/draft/testDrafts'
+import { candidateFingerprint } from '../candidateFingerprint'
+import { createInitialDraft, createInitialSession, workshopReducer } from '../state/workshopReducer'
+import { DRAFT_SCHEMA_VERSION, parseDraftEnvelope, parseWorkshopDraft } from './draftSchema'
 
 // A JSON copy, as the draft arrives from the file or the wire.
 const viaJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
@@ -32,6 +33,10 @@ describe('working-draft validation: round trip', () => {
     expect(parsed.value.finalPuzzle?.number).toBe(2)
     expect(parsed.value.finalPuzzle?.inputs).toEqual({ id: 'dogs7', clue: 'Good dogs' })
     expect(parsed.value.finalPuzzle?.publication).toEqual(DEV_PUBLICATION)
+    expect(parsed.value.savedCandidates.map((saved) => saved.fingerprint)).toEqual(
+      dogsBatch().candidates.slice(0, 2).map(candidateFingerprint),
+    )
+    expect(parsed.value.savedCandidates[1].origin).toEqual({ batchSeed: 'workshop-generation-1', number: 2, clue: 'Dogs' })
   })
 
   it('drops unknown fields and recomputes candidate metrics from the construction', () => {
@@ -99,12 +104,82 @@ describe('working-draft validation: rejections', () => {
       /publishDate must be a YYYY-MM-DD date/,
     )
   })
+
+  it('rejects broken Saved Candidates and a Final Puzzle that isn’t one of them', () => {
+    const saved = (d: Record<string, unknown>) => d.savedCandidates as Record<string, unknown>[]
+    rejects((d) => (d.savedCandidates = undefined), /savedCandidates must be an array/)
+    rejects((d) => (saved(d)[0].fingerprint = 'v1;1x1;'), /savedCandidates\[0\]\.fingerprint doesn't match/)
+    rejects((d) => saved(d).push(saved(d)[0]), /same layout saved twice/)
+    rejects((d) => ((saved(d)[0].origin as Record<string, unknown>).number = 0), /origin\.number must be at least 1/)
+    rejects((d) => ((saved(d)[0].candidate as Record<string, unknown>).answerCount = 99), /answerCount must match/)
+    rejects((d) => saved(d).splice(1, 1), /finalPuzzle must be one of draft\.savedCandidates/)
+  })
+
+  it('keeps a saved candidate’s publication record once another candidate is approved, and checks it', () => {
+    const published = fullDraft({ published: true })
+    const moved = workshopReducer(
+      { draft: published, session: createInitialSession() },
+      { type: 'APPROVE_SAVED_CANDIDATE', fingerprint: published.savedCandidates[0].fingerprint },
+    ).draft
+    expect(moved.savedCandidates[1].publication).toEqual({ inputs: { id: 'dogs7', clue: 'Good dogs' }, published: DEV_PUBLICATION })
+    expect(parseWorkshopDraft(viaJson(moved))).toEqual({ ok: true, value: moved })
+
+    const draft = viaJson(moved) as unknown as Record<string, unknown>
+    const saved = draft.savedCandidates as Record<string, unknown>[]
+    delete saved[0].publication // written before records were kept: none
+    const parsed = parseWorkshopDraft(draft)
+    expect(parsed.ok && parsed.value.savedCandidates[0].publication).toBe(null)
+
+    const rejectsMoved = (mutate: (saved: Record<string, unknown>[]) => void, message: RegExp) => {
+      const copy = viaJson(moved) as unknown as Record<string, unknown>
+      mutate(copy.savedCandidates as Record<string, unknown>[])
+      const result = parseWorkshopDraft(copy)
+      expect(result.ok).toBe(false)
+      if (!result.ok) expect(result.message).toMatch(message)
+    }
+    rejectsMoved((s) => ((s[1].publication as Record<string, unknown>).inputs = { id: 7 }), /savedCandidates\[1\]\.publication\.inputs\.id must be a string/)
+    rejectsMoved(
+      (s) => (((s[1].publication as Record<string, unknown>).published as Record<string, unknown>).kind = 'maybe'),
+      /savedCandidates\[1\]\.publication\.published\.kind must be one of/,
+    )
+    // The Final Puzzle's record is finalPuzzle.publication, never a second copy on its entry.
+    rejectsMoved((s) => (s[0].publication = s[1].publication), /must not have its own publication/)
+  })
 })
 
 describe('working-draft envelope', () => {
-  it('accepts a version-1 envelope with a positive integer revision', () => {
+  it('accepts a current-version envelope with a positive integer revision', () => {
     const envelope = envelopeOf(fullDraft(), 8)
+    expect(envelope.schemaVersion).toBe(2)
     expect(parseDraftEnvelope(viaJson(envelope))).toEqual({ ok: true, value: envelope })
+  })
+
+  it('migrates a version 1 draft, its Final Puzzle becoming the one Saved Candidate', () => {
+    const current = fullDraft({ published: true })
+    const parsed = parseDraftEnvelope(legacyEnvelopeOf(current, 5))
+    if (!parsed.ok) throw new Error(parsed.message)
+    const { draft } = parsed.value
+    expect(parsed.value).toMatchObject({ schemaVersion: DRAFT_SCHEMA_VERSION, revision: 5 })
+    // Everything else is kept exactly, including the Final Puzzle and its publication.
+    expect({ ...draft, savedCandidates: current.savedCandidates }).toEqual(current)
+    expect(draft.savedCandidates).toEqual([
+      {
+        fingerprint: candidateFingerprint(current.finalPuzzle!.candidate),
+        candidate: current.finalPuzzle!.candidate,
+        origin: { batchSeed: null, number: 2, clue: null },
+        savedAt: null,
+        publication: null,
+      },
+    ])
+    // Without a Final Puzzle there is nothing to save.
+    const empty = parseDraftEnvelope(legacyEnvelopeOf(createInitialDraft()))
+    expect(empty.ok && empty.value.draft.savedCandidates).toEqual([])
+  })
+
+  it('a version 1 draft that is broken stays unreadable rather than half-migrated', () => {
+    const legacy = legacyEnvelopeOf(fullDraft()) as { draft: { finalPuzzle: { candidate: { construction: unknown } } } }
+    legacy.draft.finalPuzzle.candidate.construction = { ok: false }
+    expect(parseDraftEnvelope(legacy).ok).toBe(false)
   })
 
   it('rejects unsupported schema versions, bad revisions, and a missing draft', () => {
@@ -113,7 +188,8 @@ describe('working-draft envelope', () => {
       const result = parseDraftEnvelope(value)
       return result.ok ? null : result.message
     }
-    expect(message({ ...envelope(), schemaVersion: 2 })).toMatch(/Unsupported working-draft schema version 2/)
+    expect(message({ ...envelope(), schemaVersion: 3 })).toMatch(/Unsupported working-draft schema version 3/)
+    expect(message({ ...envelope(), schemaVersion: 0 })).toMatch(/Unsupported working-draft schema version 0/)
     expect(message({ ...envelope(), schemaVersion: undefined })).toMatch(/Unsupported working-draft schema version;/)
     expect(message({ ...envelope(), revision: 0 })).toMatch(/revision must be at least 1/)
     expect(message({ ...envelope(), revision: '3' })).toMatch(/revision must be an integer/)

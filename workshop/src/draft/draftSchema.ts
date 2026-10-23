@@ -6,7 +6,15 @@
 // Validation rebuilds a clean copy (unknown fields dropped), so what gets
 // restored or written is exactly a WorkshopDraft. Candidate metrics are
 // derived data: they are recomputed from the validated construction rather
-// than trusted from the file.
+// than trusted from the file, and a saved candidate's fingerprint must match
+// the one recomputed from its construction.
+//
+// Versions: 2 added Saved Candidates (and the rule that the Final Puzzle
+// is one of them). A version 1 file is migrated when it is read: its Final
+// Puzzle, which always embeds the complete candidate, becomes the one saved
+// candidate. Nothing is rewritten until the next save, which writes version 2.
+// A saved candidate's publication record (kept while it isn't the Final
+// Puzzle) may be absent, meaning none.
 
 import { normalizeAnswer } from '../../../tools/generator/src/input.js'
 import { computeMetrics } from '../../../tools/generator/src/metrics/metrics.js'
@@ -21,9 +29,19 @@ import type { CandidateSourcingRequest } from '../sourcing/contract'
 import type { SourcingIssue } from '../sourcing/parseResponse'
 import type { CandidateFlag, ReviewCandidate } from '../sourcing/reviewPool'
 import type { SourcedPool } from '../sourcing/sourceCandidates'
-import type { FinalPuzzleDraft, WorkshopDraft } from '../state/workshopReducer'
+import { candidateFingerprint } from '../candidateFingerprint'
+import type { FinalPuzzleInputs } from '../finalPuzzle/finalPuzzle'
+import type {
+  FinalPuzzleDraft,
+  SavedCandidate,
+  SavedCandidateOrigin,
+  SavedPublication,
+  WorkshopDraft,
+} from '../state/workshopReducer'
 
-export const DRAFT_SCHEMA_VERSION = 1
+export const DRAFT_SCHEMA_VERSION = 2
+/** Older versions this Workshop can still read (and migrates on read). */
+const MIGRATABLE_SCHEMA_VERSIONS = [1]
 
 /** The saved file: one versioned envelope around the durable draft. */
 export interface DraftEnvelope {
@@ -226,17 +244,87 @@ function parsePublishedState(value: unknown, path: string): PublishedState {
 
 function parseFinalPuzzle(value: unknown, path: string): FinalPuzzleDraft {
   const record = requireRecord(value, path)
-  const inputs = requireRecord(record.inputs, `${path}.inputs`)
   const number = requireInteger(record.number, `${path}.number`)
   if (number < 1) throw new ShapeError(`${path}.number must be at least 1.`)
   return {
     candidate: parsePoolCandidate(record.candidate, `${path}.candidate`),
     number,
-    inputs: { id: requireString(inputs.id, `${path}.inputs.id`), clue: requireString(inputs.clue, `${path}.inputs.clue`) },
+    inputs: parseInputs(record.inputs, `${path}.inputs`),
     publication: record.publication === null ? null : parsePublishedState(record.publication, `${path}.publication`),
   }
 }
 
+function parseInputs(value: unknown, path: string): FinalPuzzleInputs {
+  const inputs = requireRecord(value, path)
+  return { id: requireString(inputs.id, `${path}.id`), clue: requireString(inputs.clue, `${path}.clue`) }
+}
+
+function parseSavedPublication(value: unknown, path: string): SavedPublication {
+  const record = requireRecord(value, path)
+  return {
+    inputs: parseInputs(record.inputs, `${path}.inputs`),
+    published: parsePublishedState(record.published, `${path}.published`),
+  }
+}
+
+function requireNullable<T>(value: unknown, path: string, parse: (value: unknown, path: string) => T): T | null {
+  return value === null ? null : parse(value, path)
+}
+
+function parseOrigin(value: unknown, path: string): SavedCandidateOrigin {
+  const record = requireRecord(value, path)
+  const number = requireNullable(record.number, `${path}.number`, requireInteger)
+  if (number !== null && number < 1) throw new ShapeError(`${path}.number must be at least 1.`)
+  return {
+    batchSeed: requireNullable(record.batchSeed, `${path}.batchSeed`, requireString),
+    number,
+    clue: requireNullable(record.clue, `${path}.clue`, requireString),
+  }
+}
+
+function parseSavedCandidate(value: unknown, path: string): SavedCandidate {
+  const record = requireRecord(value, path)
+  const candidate = parsePoolCandidate(record.candidate, `${path}.candidate`)
+  const fingerprint = requireString(record.fingerprint, `${path}.fingerprint`)
+  if (fingerprint !== candidateFingerprint(candidate)) {
+    throw new ShapeError(`${path}.fingerprint doesn't match the candidate's layout.`)
+  }
+  return {
+    fingerprint,
+    candidate,
+    origin: parseOrigin(record.origin, `${path}.origin`),
+    savedAt: requireNullable(record.savedAt, `${path}.savedAt`, requireString),
+    // Absent in drafts written before saved publications were kept.
+    publication:
+      record.publication === undefined
+        ? null
+        : requireNullable(record.publication, `${path}.publication`, parseSavedPublication),
+  }
+}
+
+function parseSavedCandidates(value: unknown, path: string): SavedCandidate[] {
+  const saved = requireArray(value, path, parseSavedCandidate)
+  if (new Set(saved.map((entry) => entry.fingerprint)).size !== saved.length) {
+    throw new ShapeError(`${path} has the same layout saved twice.`)
+  }
+  return saved
+}
+
+/** A version 1 Final Puzzle becomes the only saved candidate, so the version 2 rule holds. */
+function migratedSavedCandidates(finalPuzzle: FinalPuzzleDraft | null): SavedCandidate[] {
+  if (!finalPuzzle) return []
+  return [
+    {
+      fingerprint: candidateFingerprint(finalPuzzle.candidate),
+      candidate: finalPuzzle.candidate,
+      origin: { batchSeed: null, number: finalPuzzle.number, clue: null },
+      savedAt: null,
+      publication: null,
+    },
+  ]
+}
+
+// Every field except savedCandidates (see parseDraftWithShortlist).
 function parseDraft(value: unknown, path: string): WorkshopDraft {
   const record = requireRecord(value, path)
   const sourcing = requireRecord(record.sourcing, `${path}.sourcing`)
@@ -257,8 +345,25 @@ function parseDraft(value: unknown, path: string): WorkshopDraft {
       sourced: parsePriorityWords(priorityWords.sourced, `${path}.priorityWords.sourced`),
     },
     generationCount: requireNonNegativeInteger(record.generationCount, `${path}.generationCount`),
+    savedCandidates: [],
     finalPuzzle: record.finalPuzzle === null ? null : parseFinalPuzzle(record.finalPuzzle, `${path}.finalPuzzle`),
   }
+}
+
+function parseDraftWithShortlist(value: unknown, path: string, schemaVersion: number): WorkshopDraft {
+  const draft = parseDraft(value, path)
+  if (schemaVersion < 2) return { ...draft, savedCandidates: migratedSavedCandidates(draft.finalPuzzle) }
+  const savedCandidates = parseSavedCandidates(requireRecord(value, path).savedCandidates, `${path}.savedCandidates`)
+  if (draft.finalPuzzle) {
+    const approved = candidateFingerprint(draft.finalPuzzle.candidate)
+    const saved = savedCandidates.find((entry) => entry.fingerprint === approved)
+    if (!saved) throw new ShapeError(`${path}.finalPuzzle must be one of ${path}.savedCandidates.`)
+    // The Final Puzzle's publication is finalPuzzle.publication, never a second copy.
+    if (saved.publication) {
+      throw new ShapeError(`${path}.savedCandidates entry for the Final Puzzle must not have its own publication.`)
+    }
+  }
+  return { ...draft, savedCandidates }
 }
 
 function capture<T>(parse: () => T): ParseResult<T> {
@@ -272,15 +377,16 @@ function capture<T>(parse: () => T): ParseResult<T> {
 
 /** Validates an untrusted working draft, returning a clean copy. */
 export function parseWorkshopDraft(value: unknown): ParseResult<WorkshopDraft> {
-  return capture(() => parseDraft(value, 'draft'))
+  return capture(() => parseDraftWithShortlist(value, 'draft', DRAFT_SCHEMA_VERSION))
 }
 
 /** Validates an untrusted saved envelope, including its schema version and revision. */
 export function parseDraftEnvelope(value: unknown): ParseResult<DraftEnvelope> {
   return capture(() => {
     const record = requireRecord(value, 'envelope')
-    if (record.schemaVersion !== DRAFT_SCHEMA_VERSION) {
-      const found = typeof record.schemaVersion === 'number' ? ` ${record.schemaVersion}` : ''
+    const version = record.schemaVersion
+    if (version !== DRAFT_SCHEMA_VERSION && !MIGRATABLE_SCHEMA_VERSIONS.includes(version as number)) {
+      const found = typeof version === 'number' ? ` ${version}` : ''
       throw new ShapeError(`Unsupported working-draft schema version${found}; this Workshop reads version ${DRAFT_SCHEMA_VERSION}.`)
     }
     const revision = requireInteger(record.revision, 'envelope.revision')
@@ -289,7 +395,7 @@ export function parseDraftEnvelope(value: unknown): ParseResult<DraftEnvelope> {
       schemaVersion: DRAFT_SCHEMA_VERSION,
       revision,
       savedAt: requireString(record.savedAt, 'envelope.savedAt'),
-      draft: parseDraft(record.draft, 'draft'),
+      draft: parseDraftWithShortlist(record.draft, 'draft', version as number),
     }
   })
 }

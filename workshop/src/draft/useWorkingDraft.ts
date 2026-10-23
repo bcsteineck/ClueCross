@@ -20,7 +20,7 @@ import { createInitialDraft } from '../state/workshopReducer'
 import type { WorkshopAction, WorkshopDraft } from '../state/workshopReducer'
 import type { DraftClient } from './draftClient'
 import { DraftSaver } from './draftSaver'
-import type { DraftSaveStatus, ReplaceResult } from './draftSaver'
+import type { DraftSaveStatus, ReplaceResult, SaveWaitResult } from './draftSaver'
 import { parseDraftEnvelope } from './draftSchema'
 
 export type DraftPhase =
@@ -50,6 +50,8 @@ export interface WorkingDraft {
   retrySave: () => void
   overwriteAfterConflict: () => void
   startNewPuzzle: () => Promise<ReplaceResult>
+  /** See DraftSaver.waitUntilSaved: when a dispatched change is durably saved, or why it isn't. */
+  waitUntilSaved: (isSaved: (draft: WorkshopDraft) => boolean) => Promise<SaveWaitResult>
   /** Recovery from an unreadable file: sets it aside and starts an empty draft. */
   replaceInvalidDraft: () => Promise<ReplaceResult>
 }
@@ -138,6 +140,12 @@ export function useWorkingDraft(client: DraftClient, draft: WorkshopDraft, rawDi
     [rawDispatch],
   )
 
+  const waitUntilSaved = useCallback(
+    (isSaved: (draft: WorkshopDraft) => boolean): Promise<SaveWaitResult> =>
+      saverRef.current?.waitUntilSaved(isSaved) ?? Promise.resolve({ ok: false, message: 'The working draft isn’t loaded.' }),
+    [],
+  )
+
   async function startNewPuzzle(): Promise<ReplaceResult> {
     const saver = saverRef.current
     if (!saver) return { ok: false, message: 'The working draft isn’t loaded.' }
@@ -176,5 +184,6 @@ export function useWorkingDraft(client: DraftClient, draft: WorkshopDraft, rawDi
     overwriteAfterConflict: () => void saverRef.current?.overwriteAfterConflict(),
     startNewPuzzle,
     replaceInvalidDraft,
+    waitUntilSaved,
   }
 }

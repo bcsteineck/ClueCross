@@ -104,12 +104,6 @@ async function openAdvanced(user: ReturnType<typeof userEvent.setup>) {
   if (!(summary.parentElement as HTMLDetailsElement).open) await user.click(summary)
 }
 
-// A new batch while a Final Puzzle exists asks first; confirm it.
-async function confirmGenerateClearingFinal(user: ReturnType<typeof userEvent.setup>) {
-  const confirm = screen.getByRole('group', { name: 'Generate a new batch and clear the Final Puzzle?' })
-  await user.click(within(confirm).getByRole('button', { name: 'Generate and Clear Final Puzzle' }))
-}
-
 describe('WorkshopApp inputs', () => {
   it('shows the pool summary and diagnostics in order: errors, warnings, info', async () => {
     const user = await setup()
@@ -213,9 +207,30 @@ describe('WorkshopApp candidates', () => {
   })
 })
 
-async function approve(user: ReturnType<typeof userEvent.setup>, cardIndex: number) {
+// Approval happens in Saved Candidates: save the batch's candidate (once
+// written it reads Saved), then find it in Saved Candidates — by where it
+// was saved from — and approve it there.
+async function save(user: ReturnType<typeof userEvent.setup>, cardIndex: number) {
+  await user.click(screen.getByRole('tab', { name: /^Current Batch/ }))
   await user.click(candidateCards()[cardIndex])
-  await user.click(screen.getByRole('button', { name: /Approve Candidate|Open Final Puzzle/ }))
+  const action = screen.getByRole('button', { name: /^(Save Candidate|Saving…|Saved|Approved)$/ })
+  if (action.textContent === 'Save Candidate') await user.click(action)
+  await waitFor(() => expect(action.textContent).toMatch(/Saved|Approved/))
+}
+
+async function approve(user: ReturnType<typeof userEvent.setup>, cardIndex: number) {
+  await save(user, cardIndex)
+  await user.click(screen.getByRole('tab', { name: /^Saved Candidates/ }))
+  const origin = new RegExp(`^Candidate ${cardIndex + 1} of `)
+  for (const card of savedCards()) {
+    await user.click(card)
+    if (origin.test(within(screen.getByRole('region', { name: /Selected Candidate/ })).getByText(/^Candidate \d+ of /).textContent ?? '')) break
+  }
+  await user.click(screen.getByRole('button', { name: /^(Approve as Final Puzzle|Open Final Puzzle)$/ }))
+}
+
+function savedCards() {
+  return within(screen.getByRole('region', { name: /^Saved Candidates/ })).getAllByRole('button')
 }
 
 function finalPuzzle() {
@@ -227,7 +242,7 @@ function validationStatus() {
 }
 
 describe('WorkshopApp approval and Final Puzzle', () => {
-  it('approving opens the Final Puzzle with the batch clue, a suggested id, the board, and answers', async () => {
+  it('approving a saved candidate opens the Final Puzzle with the Author clue, a suggested id, the board, and answers', async () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem')
     const user = await setup()
     await fillInputs(user)
@@ -235,7 +250,8 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     await approve(user, 3)
 
     const region = finalPuzzle()
-    expect(within(region).getByRole('heading', { name: /Final Puzzle/ }).textContent).toMatch('Approved Candidate 4')
+    // Numbered by its place in Saved Candidates.
+    expect(within(region).getByRole('heading', { name: /Final Puzzle/ }).textContent).toMatch('Approved Candidate 1')
     expect(document.activeElement).toBe(within(region).getByRole('heading', { name: /Final Puzzle/ }))
     expect(screen.queryByRole('region', { name: /Generated Candidates/ })).toBeNull()
     expect((screen.getByLabelText('Clue') as HTMLInputElement).value).toBe('Dogs')
@@ -348,21 +364,28 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     await user.clear(screen.getByLabelText('Puzzle ID'))
     await user.type(screen.getByLabelText('Puzzle ID'), 'edited')
 
+    // Back lands in Saved Candidates on the approved candidate.
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
     expect(screen.queryByRole('region', { name: /Final Puzzle/ })).toBeNull()
-    const cards = candidateCards()
-    expect(cards).toHaveLength(20)
-    expect(cards[3].textContent).toMatch('Approved')
-    expect(cards[3].getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByText(/Candidate 4 approved/)).toBeTruthy()
+    expect(screen.getByRole('tab', { name: /^Saved Candidates/ }).getAttribute('aria-selected')).toBe('true')
+    expect(savedCards()).toHaveLength(1)
+    expect(savedCards()[0].textContent).toMatch('Approved')
+    expect(savedCards()[0].getAttribute('aria-pressed')).toBe('true')
     expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Final Puzzle' }))
+    // Approved can't be removed.
+    expect(screen.queryByRole('button', { name: 'Remove from Saved' })).toBeNull()
 
-    // Moving between workspaces keeps the authoring inputs and the batch.
+    // Moving between workspaces keeps the authoring inputs, the batch, and the tab.
     await goTo(user, 'Author')
     expect((screen.getByLabelText('Clue') as HTMLInputElement).value).toBe('Dogs')
     await goTo(user, 'Candidates')
-    expect(candidateCards()[3].getAttribute('aria-pressed')).toBe('true')
+    expect(savedCards()[0].getAttribute('aria-pressed')).toBe('true')
+    await user.click(screen.getByRole('tab', { name: /^Current Batch/ }))
+    expect(candidateCards()).toHaveLength(20)
+    expect(candidateCards()[3].textContent).toMatch('Approved')
+    expect(screen.getByText(/Candidate 4 approved/)).toBeTruthy()
 
+    await user.click(screen.getByRole('tab', { name: /^Saved Candidates/ }))
     await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('edited')
     expect(within(finalPuzzle()).getByRole('img').innerHTML).toBe(firstBoard)
@@ -370,34 +393,45 @@ describe('WorkshopApp approval and Final Puzzle', () => {
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
     await approve(user, 7)
     expect(within(finalPuzzle()).getByRole('heading', { name: /Final Puzzle/ }).textContent).toMatch(
-      'Approved Candidate 8',
+      'Approved Candidate 2',
     )
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('dogs')
     expect(within(finalPuzzle()).getByRole('img').innerHTML).not.toBe(firstBoard)
 
+    // The approval moved; the first stays saved (and is removable again).
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    expect(savedCards().map((card) => /Approved/.test(card.textContent ?? ''))).toEqual([false, true])
+    await user.click(savedCards()[0])
+    expect(screen.getByRole('button', { name: 'Remove from Saved' })).toBeTruthy()
+    await user.click(screen.getByRole('tab', { name: /^Current Batch/ }))
     expect(candidateCards()[7].textContent).toMatch('Approved')
+    expect(candidateCards()[3].textContent).toMatch('Saved')
     expect(candidateCards()[3].textContent).not.toMatch('Approved')
   })
 
-  it('a new generation clears selection and approval and uses the next seed', async () => {
+  it('a new generation opens Current Batch with no selection and the next seed, keeping Saved Candidates and the Final Puzzle', async () => {
     const user = await setup()
     await fillInputs(user)
     await generate(user)
 
     await approve(user, 0)
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
-    expect(candidateCards()[0].textContent).toMatch('Approved')
+    await save(user, 5)
+    await user.click(screen.getByRole('tab', { name: /^Saved Candidates/ }))
 
+    // No confirmation: only the unsaved batch is replaced.
     await generate(user)
-    await confirmGenerateClearingFinal(user)
-
+    expect(screen.queryByRole('group', { name: /clear the Final Puzzle/ })).toBeNull()
+    expect(screen.getByRole('tab', { name: /^Current Batch/ }).getAttribute('aria-selected')).toBe('true')
     expect(screen.getByText(/seed workshop-generation-2/)).toBeTruthy()
     expect(screen.getByText('Select a candidate to inspect it.')).toBeTruthy()
-    for (const card of candidateCards()) {
-      expect(card.getAttribute('aria-pressed')).toBe('false')
-      expect(card.textContent).not.toMatch('Approved')
-    }
+    for (const card of candidateCards()) expect(card.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByRole('tab', { name: /^Saved Candidates/ }).textContent).toMatch('(2)')
+
+    await user.click(screen.getByRole('tab', { name: /^Saved Candidates/ }))
+    expect(savedCards().map((card) => /Approved/.test(card.textContent ?? ''))).toEqual([true, false])
+    await goTo(user, 'Final Puzzle')
+    expect(within(finalPuzzle()).getByRole('heading', { name: /Final Puzzle/ }).textContent).toMatch('Approved Candidate 1')
   })
 })
 
@@ -415,10 +449,9 @@ describe('WorkshopApp small and empty batches', () => {
     await approve(user, 0)
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
     expect(screen.getByRole('region', { name: /Selected Candidate 1/ })).toBeTruthy()
-    expect(candidateCards()[0].textContent).toMatch('Approved')
+    expect(savedCards()[0].textContent).toMatch('Approved')
 
     await generate(user)
-    await confirmGenerateClearingFinal(user)
     expect(screen.getByRole('heading', { name: 'Generated Candidates (4)' })).toBeTruthy()
     const cards = candidateCards()
     expect(cards.map((card) => card.textContent?.match(/Candidate \d+/)?.[0])).toEqual([
@@ -428,7 +461,6 @@ describe('WorkshopApp small and empty batches', () => {
       'Candidate 4',
     ])
     expect(cards.every((card) => card.getAttribute('aria-pressed') === 'false')).toBe(true)
-    expect(cards.some((card) => card.textContent?.includes('Approved'))).toBe(false)
     await user.click(cards[2])
     expect(screen.getByRole('region', { name: /Selected Candidate 3/ })).toBeTruthy()
 
@@ -1113,6 +1145,9 @@ describe('WorkshopApp publishing: session state', () => {
 
     await goTo(user, 'Final Puzzle')
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    // Publishing leaves Saved Candidates as they were.
+    expect(savedCards()).toHaveLength(1)
+    expect(savedCards()[0].textContent).toMatch('Approved')
     await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
     expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('workshopdogs')
     expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
@@ -1129,6 +1164,111 @@ describe('WorkshopApp publishing: session state', () => {
     expect(screen.queryByText('Scheduled for October 4, 2026')).toBeNull()
     expect(publisher.publish).toHaveBeenCalledTimes(1)
     expect(publisher.preview.mock.calls.length).toBe(previewCalls) // "dogs" is invalid locally: no preview
+  })
+
+  // Publishing is independent of approval: the dev calendar (here, the fake
+  // publisher's records) is only ever changed by an explicit Publish.
+  it('approving another candidate, clearing, restarting, and New Puzzle never change or inherit a publication', async () => {
+    const calendar = new Map<string, PublicationSummary>()
+    const publisher = fakePublisher({
+      preview: async (request) => {
+        const existing = calendar.get(request.id.trim())
+        return { ok: true, body: existing ? { status: 'existing', publication: existing } : ESTIMATE }
+      },
+      publish: async (request) => {
+        const publication = publicationOf(request, calendar.size ? '2026-10-09' : '2026-10-04')
+        calendar.set(publication.puzzleId, publication)
+        return { ok: true, body: { status: 'created', publication } }
+      },
+    })
+    const store = createMemoryDraftStore()
+    const user = userEvent.setup()
+    const first = render(<WorkshopApp publisher={publisher} drafts={memoryDraftClient(store)} />)
+    await authoringReady()
+    await fillInputs(user)
+    await generate(user)
+    const setId = async (id: string) => {
+      await user.clear(screen.getByLabelText('Puzzle ID'))
+      await user.type(screen.getByLabelText('Puzzle ID'), id)
+    }
+    const backToSaved = async () => {
+      await goTo(user, 'Final Puzzle')
+      await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
+    }
+    const savedNote = (id: string, date: string) =>
+      `Published to the dev calendar as “${id}”, scheduled for ${date}.`
+    const showSaved = async (cardIndex: number) => {
+      await user.click(savedCards()[cardIndex])
+      return screen.getByRole('region', { name: /Selected Candidate/ }).textContent ?? ''
+    }
+
+    // A: approved and published.
+    await approve(user, 3)
+    await setId('workshopdogs')
+    await goTo(user, 'Publish')
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+    await user.click(screen.getByRole('button', { name: 'Publish to Dev Calendar' }))
+    await user.click(screen.getByRole('button', { name: 'Publish' }))
+    await screen.findByText('Scheduled for October 4, 2026')
+
+    // B approved: editable, not published; A keeps its record and calendar entry.
+    await backToSaved()
+    await approve(user, 7)
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(false)
+    await setId('workshoppups')
+    await goTo(user, 'Publish')
+    await screen.findByText('Expected: Scheduled for October 4, 2026')
+    expect(screen.queryByText(/^(Already )?Scheduled for/)).toBeNull()
+    expect(publisher.publish).toHaveBeenCalledTimes(1)
+    expect([...calendar.keys()]).toEqual(['workshopdogs'])
+    await backToSaved()
+    expect(await showSaved(0)).toMatch(savedNote('workshopdogs', 'October 4, 2026'))
+    expect(await showSaved(1)).toMatch('Approved')
+
+    // B published through the normal, explicit workflow.
+    await user.click(screen.getByRole('button', { name: 'Open Final Puzzle' }))
+    await goTo(user, 'Publish')
+    await user.click(await screen.findByRole('button', { name: 'Publish to Dev Calendar' }))
+    await user.click(screen.getByRole('button', { name: 'Publish' }))
+    await screen.findByText('Scheduled for October 9, 2026')
+    expect(calendar.get('workshopdogs')?.publishDate).toBe('2026-10-04')
+
+    // Clearing the Final Puzzle publishes and unpublishes nothing; B keeps its record too.
+    await goTo(user, 'Final Puzzle')
+    await user.click(screen.getByRole('button', { name: 'Clear Final Puzzle' }))
+    await goTo(user, 'Candidates')
+    await user.click(screen.getByRole('tab', { name: /^Saved Candidates/ }))
+    expect(await showSaved(1)).toMatch(savedNote('workshoppups', 'October 9, 2026'))
+    expect(publisher.publish).toHaveBeenCalledTimes(2)
+    await waitFor(() => {
+      const current = store.current()
+      expect(current.kind === 'ok' && current.envelope.draft.savedCandidates.map((saved) => saved.publication?.inputs.id)).toEqual(
+        ['workshopdogs', 'workshoppups'],
+      )
+    })
+    first.unmount()
+
+    // After a restart, approving A again restores it as published, confirmed by the dev calendar.
+    render(<WorkshopApp publisher={publisher} drafts={memoryDraftClient(store)} />)
+    await user.click(await screen.findByRole('link', { name: 'Candidates' }))
+    await user.click(screen.getByRole('tab', { name: /^Saved Candidates/ }))
+    expect(await showSaved(0)).toMatch(savedNote('workshopdogs', 'October 4, 2026'))
+    await user.click(screen.getByRole('button', { name: 'Approve as Final Puzzle' }))
+    expect((screen.getByLabelText('Puzzle ID') as HTMLInputElement).value).toBe('workshopdogs')
+    expect(screen.getByLabelText('Puzzle ID').hasAttribute('readonly')).toBe(true)
+    await goTo(user, 'Publish')
+    expect(await screen.findByText(/The dev calendar still has this puzzle/)).toBeTruthy()
+    expect(screen.getByText('Scheduled for October 4, 2026')).toBeTruthy()
+
+    // New Puzzle clears the draft and leaves the dev calendar alone.
+    await user.click(screen.getByRole('button', { name: 'New Puzzle' }))
+    await user.click(screen.getByRole('button', { name: 'Start New Puzzle' }))
+    await waitFor(() => {
+      const current = store.current()
+      expect(current.kind === 'ok' && current.envelope.draft.savedCandidates).toEqual([])
+    })
+    expect(publisher.publish).toHaveBeenCalledTimes(2)
+    expect([...calendar.keys()]).toEqual(['workshopdogs', 'workshoppups'])
   })
 })
 

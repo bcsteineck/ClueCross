@@ -728,6 +728,20 @@ $ws-final-columns: 720px;
   margin-left: 0;
 }
 
+// Saved: neutral and outlined, quieter than Approved; Saving… is plain text.
+// Both are words, so neither relies on color.
+.ws-badge--saved {
+  background: $color-gray-00;
+  color: $color-gray-80;
+  box-shadow: inset 0 0 0 $border-1 $ws-border-strong;
+}
+
+.ws-badge--pending {
+  background: none;
+  color: $ws-text-muted;
+  font-weight: 400;
+}
+
 // Board preview: a square frame; the candidate's own bounding grid is
 // fitted inside it at its true aspect ratio, so cell size scales with
 // the candidate's dimensions while every preview shares one area.
@@ -904,6 +918,14 @@ $ws-final-columns: 720px;
   border-top: $border-1 solid $ws-border;
   border-bottom: $border-1 solid $ws-border;
   padding: $spacing-16 0;
+}
+
+// Approve as Final Puzzle (primary) beside Remove from Saved (secondary),
+// wrapping onto two rows when the inspector is narrow.
+.ws-detail__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-8;
 }
 
 // Final Puzzle: the read-only board (the focus) beside the ID, clue,
@@ -1569,9 +1591,10 @@ $ws-sidebar-width: 200px;
   }
 }
 
-.ws-tabs__soon {
-  font-size: 12px;
+.ws-tabs__count {
   font-weight: 400;
+  color: $ws-text-muted;
+  font-variant-numeric: tabular-nums;
 }
 
 // Advanced: a quiet, collapsed utility below the publishing actions.

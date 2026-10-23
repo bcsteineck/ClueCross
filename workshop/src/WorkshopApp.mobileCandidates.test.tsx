@@ -80,6 +80,22 @@ async function generate(user: ReturnType<typeof userEvent.setup>) {
 }
 
 const cards = () => within(screen.getByRole('region', { name: /Generated Candidates/ })).getAllByRole('button')
+const savedCards = () => within(screen.getByRole('region', { name: /^Saved Candidates/ })).getAllByRole('button')
+const tab = (name: 'Current Batch' | 'Saved Candidates') => screen.getByRole('tab', { name: new RegExp(`^${name}`) })
+
+// Saves Current Batch candidates by number (each from its detail screen,
+// staying there until it reads Saved), then shows Saved Candidates.
+async function saveCandidates(user: ReturnType<typeof userEvent.setup>, numbers: number[]) {
+  for (const number of numbers) {
+    await user.click(card(number))
+    await user.click(screen.getByRole('button', { name: 'Save Candidate' }))
+    await screen.findByRole('button', { name: 'Saved' })
+    expect(detailHeading().textContent).toMatch(new RegExp(`^Candidate ${number} of`))
+    await user.click(screen.getByRole('button', { name: 'All Candidates' }))
+    await screen.findByRole('region', { name: /Generated Candidates/ })
+  }
+  await user.click(tab('Saved Candidates'))
+}
 const card = (number: number) => cards().find((button) => button.textContent?.startsWith(`Candidate ${number}`))!
 const detailHeading = () => screen.getByRole('heading', { level: 3, name: /^Candidate \d+ of \d+/ })
 const boardLabel = () => screen.getByRole('img', { name: /^Puzzle preview/ }).getAttribute('aria-label')
@@ -105,9 +121,11 @@ describe('Narrow Candidates: gallery and detail screens', () => {
     expect(card(1).getAttribute('aria-pressed')).toBeNull()
     expect(card(1).textContent).not.toMatch(/·|@ 360/)
     expect(gallery).toBeTruthy()
-    // The gallery carries the list tabs, Saved Candidates still unavailable.
-    expect(screen.getByRole('tab', { name: 'Current Batch' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('tab', { name: /Saved Candidates/ }).getAttribute('aria-disabled')).toBe('true')
+    // The gallery carries the list tabs, with their counts.
+    expect(tab('Current Batch').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Current Batch').textContent).toBe(`Current Batch (${cards().length})`)
+    expect(tab('Saved Candidates').getAttribute('aria-selected')).toBe('false')
+    expect(tab('Saved Candidates').textContent).toBe('Saved Candidates (0)')
 
     const lengthBefore = window.history.length
     await user.click(card(3))
@@ -121,7 +139,10 @@ describe('Narrow Candidates: gallery and detail screens', () => {
     expect(screen.getByRole('link', { name: 'Candidates' }).getAttribute('aria-current')).toBe('page')
     expect(screen.queryByRole('tablist')).toBeNull()
     expect(screen.queryByRole('tab', { name: /Saved Candidates/ })).toBeNull()
-    expect(screen.queryByText(/Saving candidates across batches/)).toBeNull()
+    expect(screen.queryByText(/Generated candidates are temporary/)).toBeNull()
+    // Current Batch's one action is Save.
+    expect(screen.getByRole('button', { name: 'Save Candidate' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Approve/ })).toBeNull()
   })
 
   it('shows the list tabs again when returning to the gallery, and the detail starts with All Candidates', async () => {
@@ -136,9 +157,9 @@ describe('Narrow Candidates: gallery and detail screens', () => {
 
     await user.click(allCandidates)
     await screen.findByRole('region', { name: /Generated Candidates/ })
-    expect(screen.getByRole('tab', { name: 'Current Batch' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('tab', { name: /Saved Candidates/ }).getAttribute('aria-disabled')).toBe('true')
-    expect(screen.getByText(/Saving candidates across batches/)).toBeTruthy()
+    expect(tab('Current Batch').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Saved Candidates')).toBeTruthy()
+    expect(screen.getByText(/Generated candidates are temporary/)).toBeTruthy()
     expect(screen.getByRole('tabpanel')).toBeTruthy()
     expect(document.activeElement).toBe(card(2))
   })
@@ -271,20 +292,25 @@ describe('Narrow Candidates: gallery and detail screens', () => {
     expect(window.history.length).toBe(length)
   })
 
-  it('approves from the detail screen and opens Final Puzzle; Back from Final returns focus to the card', async () => {
+  it('saves from the detail screen, approves from a Saved detail screen, and Back from Final returns focus to its card', async () => {
     const { user } = renderApp()
     await generate(user)
-    await user.click(card(2))
-    const approve = screen.getByRole('button', { name: 'Approve Candidate' })
-    expect(within(screen.getByRole('region', { name: /^Candidate 2 of/ })).getByRole('button', { name: 'Approve Candidate' })).toBe(approve)
+    await saveCandidates(user, [2])
+    await user.click(savedCards()[0])
+    expect(window.location.hash).toMatch(/^#\/candidates\/saved\/[a-z0-9]+$/)
+    expect(detailHeading().textContent).toMatch(/^Candidate 1 of 1/)
+    const approve = screen.getByRole('button', { name: 'Approve as Final Puzzle' })
+    expect(within(screen.getByRole('region', { name: /^Candidate 1 of/ })).getByRole('button', { name: 'Approve as Final Puzzle' })).toBe(approve)
     await user.click(approve)
     expect(await screen.findByRole('heading', { name: /Final Puzzle/ })).toBeTruthy()
     expect(window.location.hash).toBe('#/final')
-    expect(screen.getByText(/Approved Candidate 2/)).toBeTruthy()
+    expect(screen.getByText(/Approved Candidate 1/)).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Back to Candidate Review' }))
-    await screen.findByRole('region', { name: /Generated Candidates/ })
-    await waitFor(() => expect(document.activeElement).toBe(card(2)))
+    await screen.findByRole('region', { name: /^Saved Candidates/ })
+    await waitFor(() => expect(document.activeElement).toBe(savedCards()[0]))
+    expect(savedCards()[0].textContent).toMatch(/Approved/)
+    await user.click(tab('Current Batch'))
     expect(card(2).textContent).toMatch(/Approved/)
   })
 
@@ -297,7 +323,7 @@ describe('Narrow Candidates: gallery and detail screens', () => {
     })
     await waitFor(() => expect(window.location.hash).toBe('#/candidates'))
     expect(screen.getByRole('region', { name: /Generated Candidates/ })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Approve Candidate' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Approve|Save Candidate/ })).toBeNull()
     expect(window.history.length).toBe(length + 1) // the typed URL's own entry, replaced in place
 
     act(() => {
@@ -349,7 +375,7 @@ describe('Switching between narrow and wide', () => {
     setLayout('columns')
     const inspector = await screen.findByRole('region', { name: /Selected Candidate 3/ })
     expect(screen.getByRole('region', { name: /Generated Candidates/ })).toBeTruthy()
-    expect(within(inspector).getByRole('button', { name: 'Approve Candidate' })).toBeTruthy()
+    expect(within(inspector).getByRole('button', { name: 'Save Candidate' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'All Candidates' })).toBeNull()
     expect(card(3).getAttribute('aria-pressed')).toBe('true')
     expect(window.location.hash).toBe(detailHash)
@@ -389,8 +415,8 @@ describe('Switching between narrow and wide', () => {
     expect(window.location.hash).toBe('#/candidates')
     expect(window.history.length).toBe(length)
     // Beside the inspector, the list tabs stay.
-    expect(screen.getByRole('tab', { name: 'Current Batch' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByRole('tab', { name: /Saved Candidates/ }).getAttribute('aria-disabled')).toBe('true')
+    expect(tab('Current Batch').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Saved Candidates').getAttribute('aria-selected')).toBe('false')
   })
 })
 
@@ -419,18 +445,108 @@ describe('Detail screen and the rest of the Workshop', () => {
     expect(screen.queryByRole('link', { name: 'Production Schedule' })).toBeNull()
   })
 
-  it('Generate from the detail screen still asks before replacing an approved Final Puzzle', async () => {
+  it('Generate from a Saved detail screen opens the new Current Batch without asking, keeping the Final Puzzle', async () => {
     const { user } = renderApp()
     await generate(user)
-    await user.click(card(2))
-    await user.click(screen.getByRole('button', { name: 'Approve Candidate' }))
+    await saveCandidates(user, [2])
+    await user.click(savedCards()[0])
+    await user.click(screen.getByRole('button', { name: 'Approve as Final Puzzle' }))
     await screen.findByRole('heading', { name: /Final Puzzle/ })
     window.history.back()
-    await waitFor(() => expect(detailHeading().textContent).toMatch(/^Candidate 2 of/))
+    await waitFor(() => expect(detailHeading().textContent).toMatch(/^Candidate 1 of 1/))
+    expect(screen.getByRole('button', { name: 'Open Final Puzzle' })).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: 'Generate Candidates' }))
-    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
-    expect(detailHeading().textContent).toMatch(/^Candidate 2 of/)
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    expect(await screen.findByRole('region', { name: /Generated Candidates/ })).toBeTruthy()
+    expect(screen.getByText(/seed workshop-generation-2/)).toBeTruthy()
+    expect(tab('Current Batch').getAttribute('aria-selected')).toBe('true')
+    expect(tab('Saved Candidates').textContent).toBe('Saved Candidates (1)')
+  })
+})
+
+describe('Narrow Saved Candidates', () => {
+  it('Previous, Next, and swipes go through Saved Candidates only, in saved order', async () => {
+    const { user } = renderApp()
+    await generate(user)
+    await saveCandidates(user, [5, 2, 7])
+    expect(savedCards().map((button) => /Candidate (\d+)/.exec(button.textContent ?? '')?.[1])).toEqual(['1', '2', '3'])
+    await user.click(savedCards()[0])
+    const historyLength = window.history.length
+    expect(detailHeading().textContent).toMatch(/^Candidate 1 of 3/)
+    const first = boardLabel()
+    expect(previous().getAttribute('aria-disabled')).toBe('true')
+
+    await user.click(next())
+    expect(detailHeading().textContent).toMatch(/^Candidate 2 of 3/)
+    swipe(-120, 5)
+    expect(detailHeading().textContent).toMatch(/^Candidate 3 of 3/)
+    expect(next().getAttribute('aria-disabled')).toBe('true')
+    swipe(-120, 5) // the end: no wrap
+    expect(detailHeading().textContent).toMatch(/^Candidate 3 of 3/)
+    swipe(120, 5)
+    swipe(120, 5)
+    expect(boardLabel()).toBe(first)
+    // Saved detail screens offer Approve and Remove, never Save.
+    expect(screen.getByRole('button', { name: 'Approve as Final Puzzle' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Remove from Saved' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Save Candidate' })).toBeNull()
+    // Previous/Next and swipes replace the detail entry rather than adding entries.
+    expect(window.history.length).toBe(historyLength)
+
+    // Back restores the Saved gallery, with focus on the card that was open.
+    window.history.back()
+    await screen.findByRole('region', { name: /^Saved Candidates/ })
+    await waitFor(() => expect(document.activeElement).toBe(savedCards()[0]))
+    expect(tab('Saved Candidates').getAttribute('aria-selected')).toBe('true')
+  })
+
+  it('restores the Saved gallery’s own scroll position', async () => {
+    const { user } = renderApp()
+    await generate(user)
+    await saveCandidates(user, [1, 2])
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 640 })
+    await user.click(savedCards()[1])
+    Object.defineProperty(window, 'scrollY', { configurable: true, value: 0 })
+    scrollTo.mockClear()
+    await user.click(screen.getByRole('button', { name: 'All Candidates' }))
+    await screen.findByRole('region', { name: /^Saved Candidates/ })
+    expect(scrollTo).toHaveBeenCalledWith(0, 640)
+  })
+
+  it('removing on a detail screen moves on to the candidate that took its place; removing the last returns to the empty gallery', async () => {
+    const { user } = renderApp()
+    await generate(user)
+    await saveCandidates(user, [3, 4])
+    await user.click(savedCards()[0])
+    await user.click(screen.getByRole('button', { name: 'Remove from Saved' }))
+    await waitFor(() => expect(detailHeading().textContent).toMatch(/^Candidate 1 of 1/))
+    expect(document.activeElement).toBe(detailHeading())
+    expect(window.location.hash).toMatch(/^#\/candidates\/saved\//)
+
+    await user.click(screen.getByRole('button', { name: 'Remove from Saved' }))
+    await screen.findByText('No saved candidates yet')
+    expect(window.location.hash).toBe('#/candidates')
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'View Current Batch' })))
+    await user.click(screen.getByRole('button', { name: 'View Current Batch' }))
+    expect(tab('Current Batch').getAttribute('aria-selected')).toBe('true')
+    // Both are saveable again.
+    expect(card(3).textContent).not.toMatch(/Saved/)
+    expect(card(4).textContent).not.toMatch(/Saved/)
+  })
+
+  it('a Saved detail URL survives a refresh (Saved Candidates are in the draft)', async () => {
+    const { user } = renderApp({ initial: restored() })
+    await screen.findByRole('heading', { name: 'Author' })
+    await user.click(screen.getByRole('link', { name: 'Candidates' }))
+    await user.click(tab('Saved Candidates'))
+    await user.click(savedCards()[1])
+    const hash = window.location.hash
+    cleanup()
+    window.history.replaceState(null, '', hash)
+    renderApp({ initial: restored() })
+    await waitFor(() => expect(detailHeading().textContent).toMatch(/^Candidate 2 of 2/))
     expect(screen.getByRole('button', { name: 'Open Final Puzzle' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Remove from Saved' })).toBeNull()
   })
 })

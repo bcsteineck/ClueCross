@@ -6,7 +6,7 @@
 //
 // Transport hardening (local, not authentication): loopback clients only,
 // same-origin browser requests, GET and PUT only, a JSON body for PUT, and
-// a 1 MB limit. The draft directory itself is never served as a static file,
+// an 8 MB limit. The draft directory itself is never served as a static file,
 // even though it sits inside the Workshop's Vite root.
 
 import type { Connect, Plugin } from 'vite'
@@ -15,7 +15,10 @@ import { BodyTooLargeError, hasJsonContentType, isSameOriginRequest, readBody, s
 import { handleDraftLoad, handleDraftSave } from './draftEndpoint'
 import type { DraftStore } from './draftStore'
 
-export const MAX_DRAFT_BODY_BYTES = 1024 * 1024
+// Saved Candidates have no count limit and each is about 6 KB of JSON, so
+// this leaves room for over a thousand; a save past it is refused and
+// reported like any other failed save, never half-written.
+export const MAX_DRAFT_BODY_BYTES = 8 * 1024 * 1024
 /** The draft directory's name; any request path through it is refused. */
 export const DRAFT_DIRECTORY_NAME = '.local'
 

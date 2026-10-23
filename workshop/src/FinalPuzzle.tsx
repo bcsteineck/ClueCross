@@ -10,6 +10,8 @@ interface FinalPuzzleProps {
   inputs: FinalPuzzleInputs
   onInputsChange: (inputs: FinalPuzzleInputs) => void
   onBack: () => void
+  /** Clears the approval; the candidate stays in Saved Candidates. */
+  onClear: () => void
   /** prepareFinalPuzzle's result for this candidate and these inputs (shared with Publish). */
   validation: FinalPuzzleValidation
   /** Set once the server confirms a durable publication; locks the ID and clue. */
@@ -27,7 +29,17 @@ function fieldErrors(issues: MetadataIssue[], field: MetadataIssue['field']): st
 // the developer export live in the Publish workspace. Read-only geometry for
 // now (the word-based editor comes later); a different board means
 // approving another candidate. Once published, the ID and clue lock.
-export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack, validation, published, notice = null }: FinalPuzzleProps) {
+export function FinalPuzzle({
+  candidate,
+  number,
+  inputs,
+  onInputsChange,
+  onBack,
+  onClear,
+  validation,
+  published,
+  notice = null,
+}: FinalPuzzleProps) {
   const { ready } = validation
   const { construction } = candidate
   const idErrors = fieldErrors(validation.metadataErrors, 'id')
@@ -60,7 +72,14 @@ export function FinalPuzzle({ candidate, number, inputs, onInputsChange, onBack,
           <a className="ws-button ws-button--secondary" href={WORKSPACE_HASH.publish}>
             Go to Publish
           </a>
+          <button type="button" className="ws-button ws-button--tertiary" onClick={onClear} aria-describedby="ws-final-clear-hint">
+            Clear Final Puzzle
+          </button>
         </div>
+        <p id="ws-final-clear-hint" className="ws-muted">
+          Clearing removes the approval (and this ID and clue); the candidate stays in Saved Candidates. Approving another
+          saved candidate replaces this one.
+        </p>
         {notice && (
           <p className="ws-final__notice" aria-live="polite">
             {notice}

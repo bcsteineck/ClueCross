@@ -217,3 +217,72 @@ describe('DraftSaver: page unload', () => {
     expect(busy.calls).toHaveLength(1)
   })
 })
+
+describe('DraftSaver: waiting for a change to be written', () => {
+  const hasClue = (clue: string) => (draft: WorkshopDraft) => draft.clue === clue
+
+  it('resolves only once a save carrying the change succeeds, even behind a save already in flight', async () => {
+    const { client, calls, saved } = controlledClient()
+    const saver = saverWith(client)
+    saver.update(withClue('typing'), { immediate: true })
+    // The change is made while an older save is still in flight.
+    const waited = vi.fn()
+    void saver.waitUntilSaved(hasClue('saved')).then(waited)
+    saver.update(withClue('saved'), { immediate: true })
+    calls[0].resolve(saved(1))
+    await vi.waitFor(() => expect(calls).toHaveLength(2))
+    expect(waited).not.toHaveBeenCalled()
+    expect(calls[1].request).toEqual({ baseRevision: 1, draft: withClue('saved') })
+    calls[1].resolve(saved(2))
+    await vi.waitFor(() => expect(waited).toHaveBeenCalledWith({ ok: true }))
+  })
+
+  it('is already satisfied when the saved draft has the change', async () => {
+    const { client } = controlledClient()
+    const saver = saverWith(client, 3, withClue('done'))
+    await expect(saver.waitUntilSaved(hasClue('done'))).resolves.toEqual({ ok: true })
+  })
+
+  it('reports a failed or refused save, and never resolves ok for it', async () => {
+    const { client, calls } = controlledClient()
+    const saver = saverWith(client)
+    const unreachable = saver.waitUntilSaved(hasClue('x'))
+    saver.update(withClue('x'), { immediate: true })
+    calls[0].resolve({ ok: false })
+    await expect(unreachable).resolves.toEqual({ ok: false, message: 'Couldn’t reach the Workshop server.' })
+
+    const refused = saver.waitUntilSaved(hasClue('y'))
+    saver.update(withClue('y'), { immediate: true })
+    calls[1].resolve({ ok: true, body: { status: 'unavailable', message: 'Disk full.' } })
+    await expect(refused).resolves.toEqual({ ok: false, message: 'Disk full.' })
+  })
+
+  it('reports a conflict, and refuses to wait while one is unresolved', async () => {
+    const { client, calls } = controlledClient()
+    const saver = saverWith(client)
+    const waiting = saver.waitUntilSaved(hasClue('x'))
+    saver.update(withClue('x'), { immediate: true })
+    calls[0].resolve({ ok: true, body: { status: 'conflict', revision: 4 } })
+    await expect(waiting).resolves.toMatchObject({ ok: false })
+    await expect(saver.waitUntilSaved(hasClue('z'))).resolves.toMatchObject({ ok: false })
+  })
+
+  it('a change still waiting when New Puzzle replaces the draft is never saved', async () => {
+    const { client, calls, saved } = controlledClient()
+    const saver = saverWith(client)
+    saver.update(withClue('old'), { immediate: true })
+    const waiting = saver.waitUntilSaved(hasClue('older edit'))
+    saver.update(withClue('older edit'), { immediate: true })
+    const replaced = saver.replaceWith(createInitialDraft())
+    // The save in flight finishes first, then the reset is written.
+    calls[0].resolve(saved(1))
+    await vi.waitFor(() => expect(calls).toHaveLength(2))
+    expect(calls[1].request.draft).toEqual(createInitialDraft())
+    calls[1].resolve(saved(2))
+    await expect(replaced).resolves.toEqual({ ok: true })
+    await expect(waiting).resolves.toEqual({ ok: false, message: 'The working draft was replaced.' })
+    // Nothing more is written: the old puzzle's change can't come back.
+    await vi.runAllTimersAsync()
+    expect(calls).toHaveLength(2)
+  })
+})
