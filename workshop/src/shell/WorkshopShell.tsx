@@ -132,7 +132,7 @@ export function WorkshopShell({ workspace, production, navigation, statusBar, on
 
       <aside className="ws-sidebar" inert={drawerOpen}>
         <p className="ws-sidebar__brand">ClueCross Workshop</p>
-        <p className="ws-muted">Internal authoring tool. Not part of the ClueCross game.</p>
+        <p className="ws-muted">Internal authoring tool.</p>
         {navigation && (
           <nav className="ws-shell-nav" aria-label="Workshop">
             <WorkshopNav workspace={workspace} production={production} onNavigate={onNavigate} />
