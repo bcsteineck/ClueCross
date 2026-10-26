@@ -7,15 +7,17 @@
 }
 
 .mobile-reveal-view__selector {
-  box-sizing: border-box;
-  width: 100%;
+  // Same footprint as .mobile-puzzle-view__board, so the score line and
+  // Cancel Reveal land where they sit on the Puzzle view: the puzzle's own
+  // shape (cols:rows) inside 16px padding. The board's grid keeps that
+  // ratio inside its padding, so the ratio applies to this content box too
+  // (content-box sizing). --cols/--rows come from MobileLayout (see there),
+  // since this view never renders an actual PuzzleBoard to read them from
+  // directly. If the letters need more room than that, this grows to fit
+  // them (it never scrolls). .mobile-reveal-view__cancel-band below absorbs
+  // any leftover height instead, matching .mobile-puzzle-view__actions.
+  box-sizing: content-box;
   padding: $spacing-16;
-  // Same footprint as .mobile-puzzle-view__board — the puzzle's own shape
-  // (cols:rows), sized from width alone, never stretched taller by extra
-  // vertical room. --cols/--rows come from MobileLayout (see there), since
-  // this view never renders an actual PuzzleBoard to read them from
-  // directly. .mobile-reveal-view__cancel-band below absorbs any leftover
-  // height instead, matching .mobile-puzzle-view__actions.
   aspect-ratio: var(--cols) / var(--rows);
   flex-shrink: 0;
   display: flex;
@@ -26,6 +28,4 @@
   width: 100%;
   padding: $spacing-16;
   flex: 1 0 auto;
-  background: $color-gray-10;
-  border-top: $border-1 solid $color-gray-30;
 }

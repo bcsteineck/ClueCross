@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { GameState } from './core/gameEngine'
-import { toDateKey } from './core/archiveCalendar'
+import { formatFullDate, toDateKey } from './core/archiveCalendar'
 import { clearDateCompleted } from './core/completionTracking'
 import { clearPuzzleProgress } from './core/puzzleProgress'
 import { clearPuzzleResult, getPuzzleResultStarCount } from './core/puzzleResults'
@@ -70,7 +70,7 @@ function PuzzlePlayer({ calendar, client, onArchiveOpen, testTools }: PuzzlePlay
   // never needs a second request.
   const loaded = useRef(new Map<DateKey, PublishedPuzzle>())
   loaded.current.set(current.publishDate, current)
-  const [pending, setPending] = useState<{ key: DateKey; state: ArchiveSelectionStatus['state'] } | null>(null)
+  const [pending, setPending] = useState<{ key: DateKey; state: 'loading' | ArchiveSelectionStatus['state'] } | null>(null)
   // Only the newest selection's response may be applied.
   const selectionRequest = useRef(0)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -165,7 +165,7 @@ function PuzzlePlayer({ calendar, client, onArchiveOpen, testTools }: PuzzlePlay
     currentDate: current.publishDate,
     earliestMonth,
     latestMonth,
-    selectionStatus: pending ? { date: dateFromKey(pending.key), state: pending.state } : null,
+    selectionStatus: pending && pending.state !== 'loading' ? { date: dateFromKey(pending.key), state: pending.state } : null,
     onRetrySelection: pending ? () => selectKey(pending.key) : undefined,
     onShowCurrent: () => selectKey(current.publishDate),
   }
@@ -182,6 +182,21 @@ function PuzzlePlayer({ calendar, client, onArchiveOpen, testTools }: PuzzlePlay
     onSelectDate: handleSelectDate,
     getDateStarCount,
     archive,
+  }
+
+  // An Archive puzzle being fetched shows the same loading screen as the
+  // app's first load; the active puzzle's session stays in the cache, so a
+  // failed load returns to it (and the Archive) unchanged. Requests have no
+  // timeout, so the screen offers a way out: today's puzzle, which is
+  // always loaded, and which supersedes the pending request.
+  if (pending?.state === 'loading') {
+    return (
+      <PlayerStatus
+        kind="loading"
+        title={`Loading the puzzle for ${formatFullDate(dateFromKey(pending.key))}…`}
+        onShowCurrent={() => selectKey(current.publishDate)}
+      />
+    )
   }
 
   return (

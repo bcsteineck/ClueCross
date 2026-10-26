@@ -128,6 +128,21 @@ describe('Mobile score line', () => {
     expect(scoreLine().closest('[aria-live], [role="status"], [role="alert"]')).toBeNull()
   })
 
+  it('stays in place on the Reveal Letter view, between the letters and Cancel Reveal', async () => {
+    const user = userEvent.setup()
+    await renderApp(dogsClient())
+    await reveal(user, 'B')
+    await reveal(user, 'U')
+    await reveal(user, 'P')
+    await reveal(user, 'E') // 170
+
+    await user.click(screen.getByRole('button', { name: /^reveal letter/i }))
+    expect(screen.getByRole('button', { name: /^cancel reveal$/i })).toBeTruthy()
+    expect(scoreLine().previousElementSibling?.classList.contains('mobile-reveal-view__selector')).toBe(true)
+    expect(scoreLine().nextElementSibling?.classList.contains('mobile-reveal-view__cancel-band')).toBe(true)
+    expect(readScoreLine()).toMatchObject({ score: 'Score: 1830 out of 2000', stars: '3 out of 3 stars' })
+  })
+
   it('follows reveals, including a change in stars, and ignores typed entries', async () => {
     const user = userEvent.setup()
     await renderApp(dogsClient())
