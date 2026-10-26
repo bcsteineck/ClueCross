@@ -1,0 +1,55 @@
+@use '../../styles/tokens' as *;
+
+.mobile-score-line {
+  display: flex;
+  // One line at every normal phone width; wraps only if it genuinely can't fit.
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: $spacing-4 $spacing-12;
+  box-sizing: border-box;
+  width: 100%;
+  // A fixed-height band between the board and the actions: it never grows
+  // or shrinks with the space around it.
+  flex-shrink: 0;
+  padding: $spacing-8 $spacing-16;
+  background-color: $color-brand-primary-wash;
+  font-family: $font-body;
+  font-size: $font-size-16;
+  color: $color-gray-90;
+
+  // StarRating's own top padding is for its larger card placements; here it
+  // sits centred on the text line.
+  .star-rating {
+    padding-top: 0;
+  }
+}
+
+.mobile-score-line__score {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.mobile-score-line__value {
+  font-weight: $font-weight-semibold;
+  color: $color-brand-primary;
+  font-size: $font-size-18;
+}
+
+.mobile-score-line__total {
+  color: $color-gray-70;
+  font-size: $font-size-16;
+}
+
+// Read as "Score: 1250 out of 2000" rather than the visible "/".
+.mobile-score-line__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
