@@ -14,10 +14,13 @@ import { ArchiveDateButton } from './ArchiveDateButton'
 import { ArchiveMonthSelector } from './ArchiveMonthSelector'
 import './ArchiveCalendar.scss'
 
-/** A pending Archive selection whose puzzle is still loading or failed to load. */
+/**
+ * An Archive selection whose puzzle failed to load. (While one is loading,
+ * the player shows its full loading screen instead of the calendar.)
+ */
 export interface ArchiveSelectionStatus {
   date: Date
-  state: 'loading' | 'unavailable' | 'error'
+  state: 'unavailable' | 'error'
 }
 
 // The released calendar, from the server — never the browser clock.
@@ -125,8 +128,8 @@ export function ArchiveCalendar({
   )
 }
 
-// Loading/failure feedback for an archived puzzle being opened. The puzzle
-// already on screen stays in place until the new one has loaded.
+// Failure feedback for an archived puzzle that couldn't be opened. The
+// puzzle that was on screen is still the active one.
 function SelectionStatusMessage({
   status,
   onRetry,
@@ -138,24 +141,20 @@ function SelectionStatusMessage({
 }) {
   const fullDate = formatFullDate(status.date)
   return (
-    <div className="archive-calendar__status" role={status.state === 'loading' ? 'status' : 'alert'}>
+    <div className="archive-calendar__status" role="alert">
       <p className="archive-calendar__status-message">
-        {status.state === 'loading'
-          ? `Loading the puzzle for ${fullDate}…`
-          : status.state === 'unavailable'
-            ? `The puzzle for ${fullDate} isn’t available.`
-            : `The puzzle for ${fullDate} couldn’t be loaded.`}
+        {status.state === 'unavailable'
+          ? `The puzzle for ${fullDate} isn’t available.`
+          : `The puzzle for ${fullDate} couldn’t be loaded.`}
       </p>
-      {status.state !== 'loading' && (
-        <div className="archive-calendar__status-actions">
-          {status.state === 'error' && onRetry && <Button onClick={onRetry}>Retry</Button>}
-          {onShowCurrent && (
-            <Button variant="text" onClick={onShowCurrent}>
-              Go to Today’s Puzzle
-            </Button>
-          )}
-        </div>
-      )}
+      <div className="archive-calendar__status-actions">
+        {status.state === 'error' && onRetry && <Button onClick={onRetry}>Retry</Button>}
+        {onShowCurrent && (
+          <Button variant="text" onClick={onShowCurrent}>
+            Go to Today’s Puzzle
+          </Button>
+        )}
+      </div>
     </div>
   )
 }

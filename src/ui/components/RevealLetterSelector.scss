@@ -17,11 +17,20 @@
 // match .mobile-puzzle-view__board's footprint (see
 // MobileRevealView.scss/MobilePuzzleView.scss) — filling that exactly,
 // rather than relying on the approximate fixed min-height above, is what
-// keeps Cancel Reveal landing at the same height Reveal Letter did.
+// keeps Cancel Reveal (and the score line above it) landing where Reveal
+// Letter did.
 .mobile-reveal-view__selector .reveal-letter-selector {
   width: 100%;
   flex: 1;
   min-height: 0;
+}
+
+// Narrower phones: tighter spacing between the heading, letters, and
+// footer, so the letters still fit the board's footprint.
+@media (max-width: 389px) {
+  .mobile-reveal-view__selector .reveal-letter-selector {
+    gap: $spacing-12;
+  }
 }
 
 .reveal-letter-selector__heading {

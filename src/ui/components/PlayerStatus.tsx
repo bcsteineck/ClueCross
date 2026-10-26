@@ -5,6 +5,10 @@ import './PlayerStatus.scss'
 export interface PlayerStatusProps {
   kind: 'loading' | 'error' | 'empty'
   onRetry?: () => void
+  /** Replaces the default title (e.g. which Archive puzzle is loading). */
+  title?: string
+  /** While an Archive puzzle loads: abandons it for today's puzzle. */
+  onShowCurrent?: () => void
 }
 
 const MESSAGES: Record<PlayerStatusProps['kind'], { title: string; detail: string }> = {
@@ -15,9 +19,11 @@ const MESSAGES: Record<PlayerStatusProps['kind'], { title: string; detail: strin
 
 // The minimal app-level states before a puzzle exists to play: loading the
 // released calendar, a failed load (with Retry), or a calendar with nothing
-// released yet. Never falls back to a bundled puzzle.
-export function PlayerStatus({ kind, onRetry }: PlayerStatusProps) {
-  const { title, detail } = MESSAGES[kind]
+// released yet. Never falls back to a bundled puzzle. The loading screen
+// is also shown while an Archive puzzle loads.
+export function PlayerStatus({ kind, onRetry, title: titleOverride, onShowCurrent }: PlayerStatusProps) {
+  const { title: defaultTitle, detail } = MESSAGES[kind]
+  const title = titleOverride ?? defaultTitle
   return (
     <main className="player-status">
       <img src="/images/logo/cc_logo.svg" alt="ClueCross" className="player-status__logo" />
@@ -26,6 +32,12 @@ export function PlayerStatus({ kind, onRetry }: PlayerStatusProps) {
         {detail && <p className="player-status__detail">{detail}</p>}
         {kind === 'error' && onRetry && <Button onClick={onRetry}>Retry</Button>}
       </ContainerCard>
+      {/* Outside the status card, so it isn't read as part of the announcement. */}
+      {onShowCurrent && (
+        <Button variant="text" onClick={onShowCurrent}>
+          Go to Today’s Puzzle
+        </Button>
+      )}
     </main>
   )
 }

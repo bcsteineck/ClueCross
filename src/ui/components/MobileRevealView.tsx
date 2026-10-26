@@ -2,6 +2,7 @@ import { getFreeRevealsSublabel } from '../../core/letterCosts'
 import { usePuzzleSession } from '../../state/PuzzleSessionContext'
 import './MobileRevealView.scss'
 import { MobileInfoBar } from './MobileInfoBar'
+import { MobileScoreLine } from './MobileScoreLine'
 import { RevealButton } from './RevealButton'
 import { RevealLetterSelector } from './RevealLetterSelector'
 
@@ -14,8 +15,9 @@ export interface MobileRevealViewProps {
 }
 
 // Same info-bar shell and 1:1 primary-content footprint as
-// MobilePuzzleView (spec section 6/7), so switching Puzzle <-> Reveal
-// doesn't cause the surrounding chrome to jump.
+// MobilePuzzleView (spec section 6/7), including the score line between
+// it and the action, so switching Puzzle <-> Reveal doesn't cause the
+// surrounding chrome to jump.
 export function MobileRevealView({
   date,
   isCurrentPuzzle,
@@ -36,6 +38,7 @@ export function MobileRevealView({
       <div className="mobile-reveal-view__selector">
         <RevealLetterSelector onRevealed={onRevealed} />
       </div>
+      <MobileScoreLine />
       <div className="mobile-reveal-view__cancel-band">
         <RevealButton
           variant="cancel"

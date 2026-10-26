@@ -201,7 +201,11 @@ describe('opening archived puzzles', () => {
     await renderApp(client)
     await openArchive(user)
     await user.click(dateButton(/open puzzle for october 8, 2026/i))
-    expect(screen.getByText('Loading the puzzle for October 8, 2026…')).toBeTruthy()
+    // The app's full loading screen, naming the date.
+    expect(screen.getByRole('status').textContent).toBe('Loading the puzzle for October 8, 2026…')
+    expect(screen.getByRole('img', { name: 'ClueCross' })).toBeTruthy()
+    expect(screen.queryByTestId('cell-r0c0')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Go to Today’s Puzzle' })).toBeTruthy()
 
     await act(async () => pending.resolve({ kind: 'unavailable' }))
     expect(screen.getByRole('alert').textContent).toMatch('The puzzle for October 8, 2026 isn’t available.')
@@ -234,6 +238,10 @@ describe('opening archived puzzles', () => {
     await renderApp(client)
     await openArchive(user)
     await user.click(dateButton(/open puzzle for october 8, 2026/i))
+    // The loading screen's way out abandons the slow request.
+    await user.click(screen.getByRole('button', { name: 'Go to Today’s Puzzle' }))
+    expect(clueHeading().textContent).toBe("Today's ClueCurrent")
+    await openArchive(user)
     await user.click(dateButton(/open puzzle for october 11, 2026/i))
     await waitFor(() => expect(clueHeading().textContent).toMatch('Yesterday'))
 
