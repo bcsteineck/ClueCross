@@ -32,7 +32,6 @@
   flex-direction: column;
   align-items: center;
   gap: $spacing-8;
-  border-bottom: $border-1 solid $color-gray-30;
 }
 
 .mobile-stats-view__score-heading {
@@ -56,7 +55,6 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-16;
-  border-bottom: $border-1 solid $color-gray-30;
 }
 
 .mobile-stats-view__score-total {

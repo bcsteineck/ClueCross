@@ -6,6 +6,7 @@ import type { LayoutDefinition } from '../../layout/types'
 import { usePuzzleSession } from '../../state/PuzzleSessionContext'
 import './MobilePuzzleView.scss'
 import { MobileInfoBar } from './MobileInfoBar'
+import { MobileScoreLine } from './MobileScoreLine'
 import { PuzzleView } from './PuzzleView'
 import { RevealButton } from './RevealButton'
 import { ShareResultButton } from './ShareResultButton'
@@ -22,8 +23,8 @@ export interface MobilePuzzleViewProps {
   onRevealClick: () => void
 }
 
-// Spec section 6: info/nav bar, 1:1 puzzle, Reveal Letter action (Share
-// Result once the puzzle is complete), native keyboard (handled by Cell.tsx
+// Spec section 6: info/nav bar, 1:1 puzzle, the score and stars, Reveal
+// Letter action (Share Result once the puzzle is complete), native keyboard (handled by Cell.tsx
 // directly — no on-screen keyboard here).
 export function MobilePuzzleView({
   layout,
@@ -56,6 +57,7 @@ export function MobilePuzzleView({
           onActiveDirectionChange={onActiveDirectionChange}
         />
       </div>
+      <MobileScoreLine />
       <div className="mobile-puzzle-view__actions">
         {complete ? (
           <ShareResultButton />
