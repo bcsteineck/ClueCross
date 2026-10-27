@@ -832,7 +832,7 @@ Full instructions should explain at minimum:
 
 - Read the clue.
 - Fill the interconnected words.
-- Use Reveal Letter when stuck.
+- Use Reveal Letter.
 - Revealing a letter locks every occurrence of that letter.
 - Every puzzle begins with three free reveals.
 - Additional reveals reduce score according to letter cost.
