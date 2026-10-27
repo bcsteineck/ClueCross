@@ -29,17 +29,18 @@ export function MobileHowToPlayView({ onBack }: MobileHowToPlayViewProps) {
         <h1 ref={titleRef} tabIndex={-1} className="mobile-how-to-play-view__title">
           How to Play
         </h1>
-        <ol className="mobile-how-to-play-view__steps">
-          <li>Read the clue at the top of the puzzle.</li>
-          <li>Fill in the interconnected words that all relate to that clue.</li>
-          <li>Use Reveal Letter when you get stuck.</li>
-          <li>Revealing a letter locks every occurrence of that letter across the whole board.</li>
-          <li>Every puzzle begins with three free reveals.</li>
-          <li>Additional reveals reduce your score according to that letter's cost.</li>
+        <ul className="mobile-how-to-play-view__steps">
+          <li>Use each day's clue to solve the puzzle.</li>
+          <li>Fill in the interconnected words that all relate to the puzzle clue.</li>
+          <li>Reveal letters one at a time using the "Reveal Letter" feature to help complete the puzzle.</li>
+          <li>Revealing a letter locks every occurrence of that letter across the puzzle board.</li>
+          <li>Puzzles begin with three free letter reveals.</li>
+          <li>Letter reveals reduce your score according to the cost of each letter.</li>
+          <li>Additional reveals reduce your score according to each letter's cost.</li>
+          <li>Scores are translated into a 0 to 3 star rating upon puzzle completion.</li>
           <li>The higher your remaining score, the more stars you earn.</li>
-          <li>Puzzles are scored on a 3-star system, from 0 to 3 stars.</li>
-          <li>Archive lets you play previously published puzzles at any time.</li>
-        </ol>
+          <li>Enjoy previously published puzzles at your leisure using the Archive feature.</li>
+        </ul>
       </div>
     </div>
   )
