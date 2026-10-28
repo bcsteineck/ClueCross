@@ -223,6 +223,14 @@ $ws-final-columns: 720px;
   }
 }
 
+// Copy to Manual: the button, its hint, then the outcome, stacked.
+.ws-copy-manual {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  margin-top: $spacing-8;
+}
+
 .ws-sourcing__options {
   display: grid;
   grid-template-columns: max-content minmax(0, 220px);
