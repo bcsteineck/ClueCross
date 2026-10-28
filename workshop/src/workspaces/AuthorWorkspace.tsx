@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Dispatch, FormEvent, RefObject } from 'react'
 import { WORKSHOP_GENERATION_CONFIG } from '../generateBatch'
 import { MIN_USABLE_ANSWERS, RECOMMENDED_POOL_SIZE } from '../poolDiagnostics'
@@ -6,6 +7,7 @@ import type { buildPoolSummary } from '../poolDiagnostics'
 import { PoolReview } from '../PoolReview'
 import { PriorityWordsPicker } from '../PriorityWordsPicker'
 import type { AbbreviationSetting, ProperNounSetting } from '../sourcing/contract'
+import { copyableSourcedWords, copySourcedToManual } from '../sourcing/copyToManual'
 import type { PoolSource, SourceKind, WorkshopAction, WorkshopDraft } from '../state/workshopReducer'
 import { GenerateControl } from './GenerateControl'
 import type { GenerateProps } from './generateProps'
@@ -61,6 +63,20 @@ export function AuthorWorkspace({
 }: AuthorWorkspaceProps) {
   const { clue, poolSource, poolText } = draft
   const { context, properNouns, abbreviations, sourceKind, pool: sourcedPool } = draft.sourcing
+  // The outcome of the last Copy to Manual, shown beside the button.
+  const [copyMessage, setCopyMessage] = useState('')
+  const copyable = sourcedPool ? copyableSourcedWords(sourcedPool.candidates).length : 0
+
+  function copyToManual() {
+    if (!sourcedPool) return
+    const { poolText: next, added } = copySourcedToManual(poolText, sourcedPool.candidates)
+    if (added.length > 0) dispatch({ type: 'SET_POOL_TEXT', poolText: next })
+    setCopyMessage(
+      added.length === 0
+        ? 'All words already exist in Manual.'
+        : `${added.length} ${added.length === 1 ? 'word' : 'words'} added to Manual.`,
+    )
+  }
   const blockingIds = diagnostics
     .filter((diagnostic) => diagnostic.severity === 'error')
     .map((diagnostic) => `ws-diagnostic-${diagnostic.code}`)
@@ -192,6 +208,27 @@ export function AuthorWorkspace({
                 <div className="ws-errors" role="alert">
                   <strong>{sourcingError.label}:</strong> {sourcingError.message}
                   {sourcedPool && ' The previous Pool Review below is unchanged.'}
+                </div>
+              )}
+              {sourcedPool && (
+                <div className="ws-copy-manual">
+                  <button
+                    type="button"
+                    className="ws-button ws-button--secondary"
+                    onClick={copyToManual}
+                    disabled={copyable === 0}
+                    aria-describedby="ws-copy-manual-hint"
+                  >
+                    Copy to Manual
+                  </button>
+                  <p id="ws-copy-manual-hint" className="ws-muted">
+                    {copyable === 0
+                      ? 'No included words to copy.'
+                      : 'Adds the included words to Enter manually, where you can edit them. Words already there are skipped; nothing stays linked.'}
+                  </p>
+                  <p className="ws-muted" role="status">
+                    {copyMessage}
+                  </p>
                 </div>
               )}
               {sourcedPool && (
