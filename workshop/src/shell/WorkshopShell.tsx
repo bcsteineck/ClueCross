@@ -3,7 +3,7 @@ import type { KeyboardEvent, ReactNode, RefObject } from 'react'
 import { WORKSPACE_HASH, WORKSPACE_LABEL } from './useWorkspaceRoute'
 import type { Workspace } from './useWorkspaceRoute'
 
-const AUTHORING_WORKSPACES: Workspace[] = ['author', 'candidates', 'final', 'publish']
+const AUTHORING_WORKSPACES: Workspace[] = ['author', 'candidates', 'editor', 'final', 'publish']
 
 interface WorkshopShellProps {
   workspace: Workspace

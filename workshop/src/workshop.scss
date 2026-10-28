@@ -688,14 +688,20 @@ $ws-final-columns: 720px;
 
 .ws-card__header {
   display: flex;
+  // A long (edited or renamed) name wraps, and the badges move under it
+  // rather than past the card's edge.
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
-  gap: $spacing-8;
+  gap: $spacing-4 $spacing-8;
   min-height: 22px;
   font-size: $ws-font-meta;
 }
 
 .ws-card__number {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: $font-weight-semibold;
   color: $color-gray-90;
 }
@@ -1658,4 +1664,369 @@ $ws-sidebar-width: 200px;
     border-top: none;
     background: $color-gray-10;
   }
+}
+
+// Manual Editor (Phase 3): the 12×12 board is the focus, with the editing
+// tools in a column beside it. Editing needs room: below
+// $ws-editor-columns the Editor is read-only, and React reads that from
+// --ws-editor-layout (EditorWorkspace's useEditorReadOnly), so the two can
+// never disagree about the breakpoint. Every board state is also in each
+// cell's text name; color, outline style, and the dot marker reinforce it.
+
+$ws-editor-columns: 760px;
+$ws-editor-split: 980px;
+
+.ws-editor {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-16;
+  min-width: 0;
+  --ws-editor-layout: readonly;
+
+  @container ws-workspace (min-width: #{$ws-editor-columns}) {
+    --ws-editor-layout: edit;
+  }
+
+}
+
+.ws-editor__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-12;
+
+  .ws-workspace__title .ws-badge {
+    margin-left: $spacing-8;
+  }
+
+  .ws-muted {
+    margin-top: $spacing-4;
+  }
+}
+
+.ws-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: $spacing-12 $spacing-16;
+  padding-bottom: $spacing-16;
+  border-bottom: $border-1 solid $ws-border;
+}
+
+.ws-editor__name {
+  flex: 1 1 240px;
+  max-width: 360px;
+}
+
+.ws-editor__toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-8;
+}
+
+.ws-editor__save {
+  margin-left: auto;
+  align-self: center;
+}
+
+.ws-editor__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $spacing-24 $spacing-32;
+  align-items: start;
+
+  @container ws-workspace (min-width: #{$ws-editor-split}) {
+    grid-template-columns: minmax(0, 600px) minmax(300px, 1fr);
+  }
+}
+
+.ws-editor__board {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+  max-width: 600px;
+  min-width: 0;
+}
+
+.ws-editor__tools {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-20;
+  min-width: 0;
+  max-width: 560px;
+
+  .ws-detail__subheading {
+    margin-bottom: $spacing-8;
+  }
+}
+
+// A two-way choice (Current / Original, Across / Down): pressed is filled
+// and bold, so it doesn't rely on color.
+.ws-editor__view {
+  display: inline-flex;
+  align-self: flex-start;
+  border: $border-1 solid $ws-border-strong;
+  border-radius: $radius-4;
+  overflow: hidden;
+}
+
+.ws-editor__toggle {
+  min-height: 36px;
+  padding: 0 $spacing-12;
+  border: none;
+  background: $color-gray-00;
+  color: $color-gray-80;
+  font: inherit;
+  font-size: $ws-font-label;
+  cursor: pointer;
+
+  & + & {
+    border-left: $border-1 solid $ws-border-strong;
+  }
+
+  &[aria-pressed='true'] {
+    background: $ws-accent;
+    color: $color-gray-00;
+    font-weight: $font-weight-semibold;
+  }
+}
+
+.ws-editor-board {
+  width: 100%;
+  aspect-ratio: 1;
+  container-type: inline-size;
+}
+
+.ws-editor-board__grid {
+  display: grid;
+  grid-template-columns: repeat(var(--size), 1fr);
+  grid-template-rows: repeat(var(--size), 1fr);
+  width: 100%;
+  height: 100%;
+  border: $border-1 solid $ws-border-strong;
+  background: $color-gray-10;
+}
+
+// Rows and cells are ARIA structure only; the cells sit in the outer grid.
+.ws-editor-board__row,
+.ws-editor-board__grid > [role='row'] > [role='gridcell'] {
+  display: contents;
+}
+
+.ws-editor-board__cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-right: $border-1 solid $color-gray-20;
+  border-bottom: $border-1 solid $color-gray-20;
+  background: transparent;
+  color: $color-gray-90;
+  font: inherit;
+  font-weight: 700;
+  font-size: calc(100cqi / var(--size) * 0.5);
+  line-height: 1;
+
+  &:focus-visible {
+    outline-offset: -3px;
+    z-index: 1;
+  }
+
+  &--filled {
+    background: $color-gray-00;
+    box-shadow: inset 0 0 0 $border-1 $color-gray-80;
+  }
+
+  &--selected {
+    background: $color-brand-primary-wash;
+    box-shadow: inset 0 0 0 $border-2 $ws-accent;
+  }
+
+  // The word being moved: dashed where it comes from.
+  &--moving {
+    color: $ws-text-muted;
+    box-shadow: inset 0 0 0 $border-1 $color-gray-60;
+    outline: $border-2 dashed $color-gray-60;
+    outline-offset: -4px;
+  }
+
+  // A suggested start: a dot in the corner, not color alone.
+  &--suggested::after {
+    content: '';
+    position: absolute;
+    right: 12%;
+    bottom: 12%;
+    width: 18%;
+    aspect-ratio: 1;
+    border-radius: $radius-full;
+    background: $ws-accent;
+  }
+
+  &--preview {
+    background: $ws-success-wash;
+    color: $ws-success;
+    box-shadow: inset 0 0 0 $border-2 $ws-success;
+  }
+
+  // Invalid: red, and dashed (the preview text also says ✕ and why).
+  &--preview-invalid {
+    background: $ws-error-wash;
+    color: $ws-error;
+    outline: $border-2 dashed $ws-error;
+    outline-offset: -4px;
+  }
+}
+
+button.ws-editor-board__cell {
+  cursor: pointer;
+}
+
+.ws-editor-board__number {
+  position: absolute;
+  top: 6%;
+  left: 8%;
+  font-size: calc(100cqi / var(--size) * 0.22);
+  font-weight: $font-weight-semibold;
+  color: $ws-text-muted;
+}
+
+.ws-editor__preview {
+  margin: 0;
+  min-height: 1.45em;
+  font-size: $ws-font-label;
+}
+
+.ws-editor__notice {
+  min-height: 1.45em;
+}
+
+.ws-editor__issues {
+  p,
+  ul {
+    margin: 0;
+  }
+
+  ul {
+    padding-left: $spacing-20;
+  }
+
+  &--blocking {
+    @include ws-callout($ws-error, $ws-error-wash);
+  }
+
+  &--advisory {
+    margin-top: $spacing-8;
+    @include ws-callout($ws-warning, $ws-warning-wash);
+  }
+}
+
+.ws-editor__placing,
+.ws-editor__selected {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+  padding: $spacing-12 $spacing-16;
+  border-left: 4px solid $ws-accent;
+  background: $color-gray-10;
+
+  p {
+    margin: 0;
+  }
+
+  .ws-detail__subheading {
+    margin-bottom: 0;
+  }
+}
+
+.ws-editor__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $spacing-4 $spacing-8;
+  margin: $spacing-8 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-editor__word {
+  display: inline-flex;
+  align-items: baseline;
+  gap: $spacing-8;
+  min-height: 32px;
+  padding: $spacing-4 $spacing-8;
+  border: $border-1 solid $ws-border-strong;
+  border-radius: $radius-4;
+  background: $color-gray-00;
+  color: $color-gray-90;
+  font: inherit;
+  font-size: $ws-font-label;
+
+  @at-root button#{&} {
+    cursor: pointer;
+  }
+
+  &[aria-pressed='true'] {
+    border-color: $ws-accent;
+    box-shadow: inset 0 0 0 $border-1 $ws-accent;
+    background: $color-brand-primary-wash;
+  }
+}
+
+.ws-editor__word-text {
+  font-family: $ws-font-mono;
+  font-weight: $font-weight-semibold;
+}
+
+.ws-editor__word-number,
+.ws-editor__word-count {
+  color: $ws-text-muted;
+  font-size: $ws-font-meta;
+}
+
+.ws-editor__word-tag {
+  font-size: 12px;
+  font-weight: $font-weight-semibold;
+  color: $color-gray-80;
+}
+
+.ws-editor__manual {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: $spacing-8;
+  margin-top: $spacing-12;
+
+  .ws-field {
+    flex: 1 1 180px;
+  }
+
+  // Level with the input, not the label above it (.ws-button defaults to flex-start).
+  .ws-button {
+    align-self: flex-end;
+  }
+
+  .ws-muted,
+  .ws-field__error {
+    flex-basis: 100%;
+  }
+}
+
+.ws-editor__shortcuts {
+  padding-top: $spacing-12;
+  border-top: $border-1 solid $ws-border;
+}
+
+.ws-card__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  background: $color-gray-10;
+  border-radius: $radius-4;
+  color: $ws-text-muted;
+  font-size: $ws-font-meta;
 }

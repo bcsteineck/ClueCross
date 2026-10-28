@@ -83,6 +83,7 @@ describe('workspace routing', () => {
     expect(within(nav()).getAllByRole('link').map((link) => link.textContent)).toEqual([
       'Author',
       'Candidates',
+      'Editor',
       'Final Puzzle',
       'Publish',
     ])

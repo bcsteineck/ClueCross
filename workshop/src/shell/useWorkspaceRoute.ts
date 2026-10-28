@@ -10,19 +10,25 @@
 // Candidates also has a detail screen on narrow workspaces:
 // #/candidates/<key> for a candidate in the current (session-only) batch,
 // and #/candidates/saved/<key> for one in Saved Candidates, where <key> is
-// candidateKey() of the candidate's fingerprint. Opening it from the gallery adds one
+// candidateKey() of the candidate's fingerprint (Current Batch) or of its
+// persistent id (Saved Candidates). Opening it from the gallery adds one
 // history entry; Previous/Next replace that entry; All Candidates goes back
 // to the gallery entry it came from (or replaces the detail entry when
 // there is none). Whether a key names a candidate is up to the Candidates
 // workspace, which replaces an unknown or stale one with #/candidates.
+//
+// The Manual Editor is #/editor/<id>, where <id> is the edited saved
+// candidate's persistent id, so a refresh or Back/Forward reopens the same
+// version. #/editor alone opens the Editor with no candidate.
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-export type Workspace = 'author' | 'candidates' | 'final' | 'publish' | 'schedule'
+export type Workspace = 'author' | 'candidates' | 'editor' | 'final' | 'publish' | 'schedule'
 
 export const WORKSPACE_HASH: Record<Workspace, string> = {
   author: '#/author',
   candidates: '#/candidates',
+  editor: '#/editor',
   final: '#/final',
   publish: '#/publish',
   schedule: '#/schedule',
@@ -31,6 +37,7 @@ export const WORKSPACE_HASH: Record<Workspace, string> = {
 export const WORKSPACE_LABEL: Record<Workspace, string> = {
   author: 'Author',
   candidates: 'Candidates',
+  editor: 'Editor',
   final: 'Final Puzzle',
   publish: 'Publish',
   schedule: 'Production Schedule',
@@ -39,6 +46,12 @@ export const WORKSPACE_LABEL: Record<Workspace, string> = {
 export const DEFAULT_WORKSPACE: Workspace = 'author'
 
 const CANDIDATE_DETAIL_PREFIX = `${WORKSPACE_HASH.candidates}/`
+const EDITOR_PREFIX = `${WORKSPACE_HASH.editor}/`
+
+/** The Editor route for an edited saved candidate's id. */
+export function editorHash(id: string): string {
+  return EDITOR_PREFIX + encodeURIComponent(id)
+}
 
 /** The detail-route hash for a candidate key. */
 export function candidateDetailHash(key: string): string {
@@ -67,6 +80,8 @@ export interface WorkspaceRoute {
   workspace: Workspace
   /** The candidate key in #/candidates/<key> (possibly empty or malformed), else null. */
   candidateDetail: string | null
+  /** The saved candidate id in #/editor/<id> (possibly unknown), else null. */
+  editorId: string | null
 }
 
 /** The workspace a hash names, or null when it names none available in this mode. */
@@ -80,13 +95,22 @@ export function parseWorkspaceHash(hash: string, { production }: { production: b
 /** The route a hash names, or null when it names none available in this mode. */
 export function parseRouteHash(hash: string, { production }: { production: boolean }): WorkspaceRoute | null {
   if (hash.startsWith(CANDIDATE_DETAIL_PREFIX)) {
-    return { workspace: 'candidates', candidateDetail: hash.slice(CANDIDATE_DETAIL_PREFIX.length) }
+    return { workspace: 'candidates', candidateDetail: hash.slice(CANDIDATE_DETAIL_PREFIX.length), editorId: null }
+  }
+  if (hash.startsWith(EDITOR_PREFIX)) {
+    let id: string
+    try {
+      id = decodeURIComponent(hash.slice(EDITOR_PREFIX.length))
+    } catch {
+      id = ''
+    }
+    return { workspace: 'editor', candidateDetail: null, editorId: id }
   }
   const workspace = parseWorkspaceHash(hash, { production })
-  return workspace ? { workspace, candidateDetail: null } : null
+  return workspace ? { workspace, candidateDetail: null, editorId: null } : null
 }
 
-const DEFAULT_ROUTE: WorkspaceRoute = { workspace: DEFAULT_WORKSPACE, candidateDetail: null }
+const DEFAULT_ROUTE: WorkspaceRoute = { workspace: DEFAULT_WORKSPACE, candidateDetail: null, editorId: null }
 
 function currentRoute(production: boolean): WorkspaceRoute {
   return parseRouteHash(window.location.hash, { production }) ?? DEFAULT_ROUTE
@@ -119,6 +143,8 @@ export interface CandidateDetailNavigation {
 
 export function useWorkspaceRoute(production: boolean): WorkspaceRoute & {
   navigate: (workspace: Workspace) => void
+  /** Opens #/editor/<id> as a new history entry (`replace`: in place of the current one). */
+  openEditor: (id: string, options?: { replace?: boolean }) => void
   candidateDetailNavigation: CandidateDetailNavigation
 } {
   const [route, setRoute] = useState<WorkspaceRoute>(() => currentRoute(production))
@@ -136,8 +162,15 @@ export function useWorkspaceRoute(production: boolean): WorkspaceRoute & {
   }, [production])
 
   const navigate = useCallback((next: Workspace) => {
-    setRoute({ workspace: next, candidateDetail: null })
+    setRoute({ workspace: next, candidateDetail: null, editorId: null })
     if (window.location.hash !== WORKSPACE_HASH[next]) window.location.hash = WORKSPACE_HASH[next]
+  }, [])
+
+  // pushState/replaceState don't fire hashchange, so the route is set here too.
+  const openEditor = useCallback((id: string, { replace = false }: { replace?: boolean } = {}) => {
+    if (replace) window.history.replaceState(null, '', editorHash(id))
+    else if (window.location.hash !== editorHash(id)) window.history.pushState(null, '', editorHash(id))
+    setRoute({ workspace: 'editor', candidateDetail: null, editorId: id })
   }, [])
 
   // pushState/replaceState don't fire hashchange, so the route is set here too.
@@ -146,11 +179,11 @@ export function useWorkspaceRoute(production: boolean): WorkspaceRoute & {
       open: (key) => {
         const state: CandidateDetailHistoryState = { wsCandidateDetailFromGallery: true }
         window.history.pushState(state, '', candidateDetailHash(key))
-        setRoute({ workspace: 'candidates', candidateDetail: key })
+        setRoute({ workspace: 'candidates', candidateDetail: key, editorId: null })
       },
       show: (key) => {
         window.history.replaceState(window.history.state, '', candidateDetailHash(key))
-        setRoute({ workspace: 'candidates', candidateDetail: key })
+        setRoute({ workspace: 'candidates', candidateDetail: key, editorId: null })
       },
       close: () => {
         if (isFromGallery(window.history.state)) {
@@ -159,15 +192,15 @@ export function useWorkspaceRoute(production: boolean): WorkspaceRoute & {
           return
         }
         window.history.replaceState(null, '', WORKSPACE_HASH.candidates)
-        setRoute({ workspace: 'candidates', candidateDetail: null })
+        setRoute({ workspace: 'candidates', candidateDetail: null, editorId: null })
       },
       discard: () => {
         window.history.replaceState(null, '', WORKSPACE_HASH.candidates)
-        setRoute({ workspace: 'candidates', candidateDetail: null })
+        setRoute({ workspace: 'candidates', candidateDetail: null, editorId: null })
       },
     }),
     [],
   )
 
-  return { ...route, navigate, candidateDetailNavigation }
+  return { ...route, navigate, openEditor, candidateDetailNavigation }
 }

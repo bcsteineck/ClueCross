@@ -37,6 +37,23 @@ describe('publishFinalPuzzle: validation', () => {
     expect(store.records()).toEqual([])
   })
 
+  it('re-checks the minimum crossword structure itself: one word, or words that never cross, are refused', async () => {
+    // What a manually edited Final Puzzle could hold if a client skipped
+    // its own checks (or a saved draft were altered): the server decides.
+    const store = new MemoryPublicationStore({ now: NOON_SEPT_30 })
+    const single = construct([{ word: 'CAT', direction: 'across', start: { x: 0, y: 0 } }])
+    const outcome = await publishFinalPuzzle({ construction: single, id: 'onecat', clue: 'Cat' }, store)
+    expect(outcome.kind).toBe('invalid')
+    if (outcome.kind !== 'invalid') return
+    expect(outcome.errors.export).toEqual([
+      'The puzzle has 1 answer; a crossword needs at least two crossing answers.',
+    ])
+    const preview = await previewPublication({ construction: single, id: 'onecat', clue: 'Cat' }, store)
+    expect(preview.kind).toBe('invalid')
+    expect(store.transactionCount).toBe(0)
+    expect(store.records()).toEqual([])
+  })
+
   it('stores the server-assembled pair, built from the construction and trimmed inputs', async () => {
     const store = new MemoryPublicationStore({ now: NOON_SEPT_30 })
     const request = catsRequest({ id: ' cats ', clue: '  Cats  ' })

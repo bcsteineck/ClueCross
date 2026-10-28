@@ -179,6 +179,37 @@ export function validateExportStructure(puzzle: PuzzleDefinition, layout: Layout
 }
 
 /**
+ * The smallest layout that is a crossword: at least two answers, at least
+ * one place where they cross, and no answer used twice. Generated
+ * candidates always meet this; a manually edited one is held to it here
+ * too, so approval, Publish readiness, and the server's own re-check before
+ * publishing all refuse a single word or a list of uncrossed words.
+ * (Connectivity is checked on the assembled board, below.)
+ */
+export function validateMinimumStructure(construction: ConstructionSuccess): string[] {
+  const errors: string[] = []
+  const answers = construction.placedAnswers
+  if (answers.length < 2) {
+    errors.push(`The puzzle has ${answers.length} ${answers.length === 1 ? 'answer' : 'answers'}; a crossword needs at least two crossing answers.`)
+  }
+  const words = answers.map((answer) => answer.word.toUpperCase())
+  const repeated = [...new Set(words.filter((word, index) => words.indexOf(word) !== index))]
+  if (repeated.length > 0) errors.push(`Answers must be unique; ${repeated.join(', ')} appears more than once.`)
+  if (answers.length >= 2) {
+    const uses = new Map<string, number>()
+    for (const answer of answers) {
+      for (let i = 0; i < answer.word.length; i++) {
+        const x = answer.direction === 'across' ? answer.start.x + i : answer.start.x
+        const y = answer.direction === 'across' ? answer.start.y : answer.start.y + i
+        uses.set(positionKey(x, y), (uses.get(positionKey(x, y)) ?? 0) + 1)
+      }
+    }
+    if (![...uses.values()].some((count) => count > 1)) errors.push('No answers cross; a crossword needs at least one intersection.')
+  }
+  return errors
+}
+
+/**
  * Assembles and validates the Final Puzzle from the approved candidate's
  * construction. Assembly runs on the trimmed
  * inputs even while metadata is invalid, so structural problems are still
@@ -199,6 +230,7 @@ export function prepareFinalPuzzle(
   // exact construction being exported: derived entries = authored answers.
   const invariant = checkGeometryInvariant(construction)
   if (!invariant.ok) exportErrors.push(invariant.reason)
+  exportErrors.push(...validateMinimumStructure(construction))
 
   try {
     const built = buildPuzzle({

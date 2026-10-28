@@ -233,6 +233,7 @@ describe('Final Puzzle export validation', () => {
     expect(result.ready).toBe(false)
     expect(result.productionErrors).toEqual([])
     expect(result.exportErrors).toEqual([
+      'No answers cross; a crossword needs at least one intersection.',
       'The board is not connected: every cell must be reachable from every other through its answers.',
     ])
   })
@@ -250,6 +251,7 @@ describe('Final Puzzle export validation', () => {
     expect(result.exportErrors).toEqual([
       'Geometry invariant violated: derived entries must equal authored answers ' +
         '(incidental runs: down CC, down AA, down TR; unmatched answers: none).',
+      'No answers cross; a crossword needs at least one intersection.',
     ])
   })
 

@@ -7,6 +7,8 @@ import { WORKSPACE_HASH } from './shell/useWorkspaceRoute'
 interface FinalPuzzleProps {
   candidate: PoolCandidate
   number: number
+  /** Its name in Saved Candidates ("Candidate 2", or an edited version's name). */
+  label?: string
   inputs: FinalPuzzleInputs
   onInputsChange: (inputs: FinalPuzzleInputs) => void
   onBack: () => void
@@ -32,6 +34,7 @@ function fieldErrors(issues: MetadataIssue[], field: MetadataIssue['field']): st
 export function FinalPuzzle({
   candidate,
   number,
+  label = `Candidate ${number}`,
   inputs,
   onInputsChange,
   onBack,
@@ -63,7 +66,7 @@ export function FinalPuzzle({
       <div className="ws-final__header">
         <h2 id="ws-final-heading" className="ws-workspace__title" tabIndex={-1} data-workspace-heading>
           Final Puzzle
-          <span className="ws-badge">Approved Candidate {number}</span>
+          <span className="ws-badge">Approved {label}</span>
         </h2>
         <div className="ws-publish__actions">
           <button type="button" className="ws-button ws-button--secondary" onClick={onBack}>

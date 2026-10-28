@@ -11,6 +11,8 @@ import type { FinalPuzzleDraft } from '../state/workshopReducer'
 
 interface PublishWorkspaceProps {
   finalPuzzle: FinalPuzzleDraft | null
+  /** The Final Puzzle's name in Saved Candidates; defaults to "Candidate N". */
+  label?: string
   /** prepareFinalPuzzle's result for the Final Puzzle (null without one). */
   validation: FinalPuzzleValidation | null
   publisher: PublishingClient
@@ -37,7 +39,7 @@ function downloadFile(file: ExportFile) {
 // component with the same request as before; this workspace only arranges
 // them. Publishing is offered only for a valid Final Puzzle — reaching
 // #/publish directly changes nothing about that.
-export function PublishWorkspace({ finalPuzzle, validation, publisher, production, published, onPublished, notice }: PublishWorkspaceProps) {
+export function PublishWorkspace({ finalPuzzle, label, validation, publisher, production, published, onPublished, notice }: PublishWorkspaceProps) {
   const heading = (
     <h2 className="ws-workspace__title" tabIndex={-1} data-workspace-heading>
       Publish
@@ -86,7 +88,7 @@ export function PublishWorkspace({ finalPuzzle, validation, publisher, productio
           Readiness
         </h3>
         <p>
-          Approved Candidate {finalPuzzle.number}
+          Approved {label ?? `Candidate ${finalPuzzle.number}`}
           {inputs.id.trim() && ` · ${inputs.id.trim()}`}
           {inputs.clue.trim() && ` · “${inputs.clue.trim()}”`}
           {published && ' · Published: the ID and clue are locked.'}

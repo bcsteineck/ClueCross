@@ -6,27 +6,35 @@ import type { CandidateStatus } from '../CandidateActions'
 import { CandidateCard } from '../CandidateCard'
 import { CandidateDetail } from '../CandidateDetail'
 import { candidateFingerprint } from '../candidateFingerprint'
+import { isLocked, savedCandidateName } from '../editor/editedCandidate'
 import { MAX_DISPLAYED_CANDIDATES, WORKSHOP_GENERATION_CONFIG } from '../generateBatch'
 import type { WorkshopBatch } from '../generateBatch'
 import { WORKSPACE_HASH, candidateKey } from '../shell/useWorkspaceRoute'
 import type { CandidateDetailNavigation } from '../shell/useWorkspaceRoute'
+import { approvalIssues } from '../state/workshopReducer'
 import type { CandidateTab, FinalPuzzleDraft, SavedCandidate } from '../state/workshopReducer'
 import { CandidateScreen } from './CandidateScreen'
 import { GenerateControl } from './GenerateControl'
 import type { GenerateProps } from './generateProps'
 import { useCandidatesLayout } from './useCandidatesLayout'
 
-/** Saving and removing candidates: WorkshopApp runs the writes; this workspace shows them. */
+/** Saving, removing, and editing candidates: WorkshopApp runs the writes; this workspace shows them. */
 export interface CandidateOps {
-  /** Fingerprint -> the write in progress for that candidate. */
-  pending: Record<string, 'save' | 'remove'>
-  /** Fingerprint -> why its last save or removal wasn't written. */
+  /**
+   * The write in progress for a candidate: by fingerprint for a batch
+   * candidate being saved, by id for a saved one being removed or copied
+   * into a new edited version.
+   */
+  pending: Record<string, 'save' | 'remove' | 'edit'>
+  /** Why a candidate's last write didn't happen (keyed as `pending`). */
   errors: Record<string, string>
   /** Announced politely after a save or removal is written. */
   announcement: string
   onSave: (candidate: PoolCandidate, index: number) => void
-  /** `onRemoved` runs once the removal is written, in the same update that drops it from the list. */
-  onRemove: (fingerprint: string, onRemoved: () => void) => void
+  /** By saved id. `onRemoved` runs once the removal is written, in the same update that drops it from the list. */
+  onRemove: (id: string, onRemoved: () => void) => void
+  /** Edit Candidate (by saved id): opens the Editor, making an edited copy first when needed. */
+  onEdit: (id: string) => void
 }
 
 interface CandidatesWorkspaceProps {
@@ -35,19 +43,21 @@ interface CandidatesWorkspaceProps {
   savedCandidates: SavedCandidate[]
   tab: CandidateTab
   onTabChange: (tab: CandidateTab) => void
-  /** Fingerprints of each tab's selection. */
+  /** Each tab's selection: a fingerprint in Current Batch, an id in Saved Candidates. */
   selectedId: string | null
   savedSelectedId: string | null
-  onSelect: (tab: CandidateTab, fingerprint: string) => void
-  /** The approved candidate's fingerprint. */
+  onSelect: (tab: CandidateTab, id: string) => void
+  /** The approved saved candidate's id. */
   approvedId: string | null
+  /** The approved layout's fingerprint when it's a generated candidate (Current Batch's Approved marker). */
+  approvedBatchFingerprint?: string | null
   finalPuzzle: FinalPuzzleDraft | null
   /** The Author clue that approving would use. */
   currentClue: string
   /** Errors from the last refused Generate (the inputs to fix are in Author). */
   generationErrors: string[]
   ops: CandidateOps
-  onApprove: (fingerprint: string) => void
+  onApprove: (id: string) => void
   onOpenFinal: () => void
   /** The control that approved (or reopens) the Final Puzzle; focus returns here from it. */
   approveButtonRef: RefObject<HTMLButtonElement | null>
@@ -58,10 +68,14 @@ interface CandidatesWorkspaceProps {
 }
 
 interface Entry {
-  candidate: PoolCandidate
+  candidate: PoolCandidate | null
+  /** The selection and write key: the fingerprint in Current Batch, the saved id in Saved Candidates. */
+  id: string
   fingerprint: string
   key: string
   saved: SavedCandidate | null
+  /** A name other than the default "Candidate N" (an edited or renamed one), if any. */
+  title: string | undefined
 }
 
 // Detail routes: #/candidates/<key> (Current Batch), #/candidates/saved/<key>.
@@ -93,6 +107,7 @@ function savedGalleryScroll(collection: string): number | null {
 
 function describeOrigin(saved: SavedCandidate | null): string | null {
   if (!saved) return null
+  if (saved.edit) return `Edited version of ${saved.edit.sourceLabel}`
   const { number, clue, batchSeed } = saved.origin
   const parts = [number !== null && `Candidate ${number}`, batchSeed && `of ${batchSeed}`, clue !== null && `(clue “${clue}”)`]
   const text = parts.filter(Boolean).join(' ')
@@ -133,6 +148,7 @@ export function CandidatesWorkspace({
   savedSelectedId,
   onSelect,
   approvedId,
+  approvedBatchFingerprint = null,
   finalPuzzle,
   currentClue,
   generationErrors,
@@ -154,21 +170,27 @@ export function CandidatesWorkspace({
     () =>
       (batch?.candidates ?? []).map((candidate) => {
         const fingerprint = candidateFingerprint(candidate)
-        return { candidate, fingerprint, key: candidateKey(fingerprint), saved: null }
+        return { candidate, id: fingerprint, fingerprint, key: candidateKey(fingerprint), saved: null, title: undefined }
       }),
     [batch],
   )
   const savedEntries = useMemo<Entry[]>(
     () =>
-      savedCandidates.map((saved) => ({
+      savedCandidates.map((saved, index) => ({
         candidate: saved.candidate,
+        id: saved.id,
         fingerprint: saved.fingerprint,
-        key: candidateKey(saved.fingerprint),
+        key: candidateKey(saved.id),
         saved,
+        title: saved.edit || saved.name?.trim() ? savedCandidateName(saved, index) : undefined,
       })),
     [savedCandidates],
   )
-  const savedSet = useMemo(() => new Set(savedCandidates.map((saved) => saved.fingerprint)), [savedCandidates])
+  // Layouts saved as generated candidates (Current Batch's Saved marker).
+  const savedSet = useMemo(
+    () => new Set(savedCandidates.filter((saved) => !saved.edit).map((saved) => saved.fingerprint)),
+    [savedCandidates],
+  )
 
   const route = useMemo(() => parseDetail(candidateDetail), [candidateDetail])
   // The detail route names its collection; otherwise the tab decides.
@@ -184,9 +206,9 @@ export function CandidatesWorkspace({
   const lastSavedIndex = useRef(0)
   let selectedIndex: number
   if (detailIndex >= 0) selectedIndex = detailIndex
-  else if (collection === 'batch') selectedIndex = batchEntries.findIndex((entry) => entry.fingerprint === selectedId)
+  else if (collection === 'batch') selectedIndex = batchEntries.findIndex((entry) => entry.id === selectedId)
   else {
-    const remembered = savedEntries.findIndex((entry) => entry.fingerprint === savedSelectedId)
+    const remembered = savedEntries.findIndex((entry) => entry.id === savedSelectedId)
     selectedIndex =
       remembered >= 0 ? remembered : savedEntries.length > 0 ? Math.min(lastSavedIndex.current, savedEntries.length - 1) : -1
   }
@@ -198,12 +220,14 @@ export function CandidatesWorkspace({
     if (collection === 'saved' && selectedIndex >= 0) lastSavedIndex.current = selectedIndex
   }, [collection, selectedIndex])
 
-  function statusOf(fingerprint: string): CandidateStatus {
-    if (fingerprint === approvedId) return 'approved'
-    const pending = ops.pending[fingerprint]
-    if (pending === 'save') return 'saving'
-    if (pending === 'remove') return 'removing'
-    return savedSet.has(fingerprint) ? 'saved' : 'unsaved'
+  function statusOf(entry: Entry): CandidateStatus {
+    if (entry.saved) {
+      if (entry.id === approvedId) return 'approved'
+      return ops.pending[entry.id] === 'remove' ? 'removing' : 'saved'
+    }
+    if (entry.fingerprint === approvedBatchFingerprint) return 'approved'
+    if (ops.pending[entry.fingerprint] === 'save') return 'saving'
+    return savedSet.has(entry.fingerprint) ? 'saved' : 'unsaved'
   }
 
   // A detail route being left by All Candidates after its candidate was
@@ -220,7 +244,7 @@ export function CandidatesWorkspace({
     }
     if (route.collection !== tab) onTabChange(route.collection)
     const current = route.collection === 'batch' ? selectedId : savedSelectedId
-    if (detailEntry.fingerprint !== current) onSelect(route.collection, detailEntry.fingerprint)
+    if (detailEntry.id !== current) onSelect(route.collection, detailEntry.id)
   }, [route, candidateDetail, detailEntry, tab, selectedId, savedSelectedId, onSelect, onTabChange, detailNavigation])
 
   // Moving between the gallery and the detail screen (not a resize across
@@ -260,7 +284,7 @@ export function CandidatesWorkspace({
 
   function openCandidate(index: number) {
     const entry = entries[index]
-    onSelect(collection, entry.fingerprint)
+    onSelect(collection, entry.id)
     if (layout === 'screens') {
       const scroll: GalleryScrollState = { wsGalleryScroll: { collection: collectionId, y: window.scrollY } }
       window.history.replaceState({ ...window.history.state, ...scroll }, '')
@@ -274,13 +298,13 @@ export function CandidatesWorkspace({
   function removeCandidate(entry: Entry, index: number) {
     const onDetail = screen === 'detail'
     const detail = candidateDetail
-    ops.onRemove(entry.fingerprint, () => {
+    ops.onRemove(entry.id, () => {
       // Select the candidate that takes its place, or the one before it.
-      const remaining = savedEntries.filter((other) => other.fingerprint !== entry.fingerprint)
+      const remaining = savedEntries.filter((other) => other.id !== entry.id)
       const next = remaining[Math.min(index, remaining.length - 1)] ?? null
       lastSavedIndex.current = index
       focusAfterRemoval.current = true
-      if (next) onSelect('saved', next.fingerprint)
+      if (next) onSelect('saved', next.id)
       if (!onDetail) return
       if (next) detailNavigation.show(detailRoute('saved', next.key))
       else {
@@ -291,19 +315,28 @@ export function CandidatesWorkspace({
   }
 
   function actionsFor(entry: Entry, index: number, withApproveRef: boolean): ReactNode {
-    const status = statusOf(entry.fingerprint)
-    const error = ops.errors[entry.fingerprint] ?? null
-    return collection === 'batch' ? (
-      <BatchCandidateActions status={status} error={error} onSave={() => ops.onSave(entry.candidate, index)} />
-    ) : (
+    const status = statusOf(entry)
+    const error = ops.errors[entry.id] ?? null
+    const { candidate, saved } = entry
+    if (collection === 'batch' || !saved) {
+      return candidate && <BatchCandidateActions status={status} error={error} onSave={() => ops.onSave(candidate, index)} />
+    }
+    return (
       <SavedCandidateActions
+        // A new candidate's actions start without an open confirmation.
+        key={entry.id}
         status={status}
         error={error}
         currentClue={currentClue}
-        publication={entry.saved?.publication ?? null}
-        onApprove={() => onApprove(entry.fingerprint)}
+        publication={saved.publication}
+        edited={saved.edit !== null}
+        editsInPlace={saved.edit !== null && !isLocked(saved, approvedId)}
+        opening={ops.pending[entry.id] === 'edit'}
+        approvalIssues={approvalIssues(saved)}
+        onApprove={() => onApprove(entry.id)}
         onOpenFinal={onOpenFinal}
         onRemove={() => removeCandidate(entry, index)}
+        onEdit={() => ops.onEdit(entry.id)}
         approveButtonRef={withApproveRef ? approveButtonRef : undefined}
       />
     )
@@ -344,12 +377,14 @@ export function CandidatesWorkspace({
           {entries.length > 0 ? (
             <ul className={layout === 'screens' ? 'ws-card-grid ws-card-grid--compact' : 'ws-card-grid'}>
               {entries.map((entry, index) => (
-                <li key={entry.fingerprint} data-candidate-key={entry.key}>
+                <li key={entry.id} data-candidate-key={entry.key}>
                   <CandidateCard
                     candidate={entry.candidate}
                     number={index + 1}
+                    title={entry.title}
+                    edited={entry.saved?.edit != null}
                     isSelected={index === selectedIndex}
-                    status={statusOf(entry.fingerprint)}
+                    status={statusOf(entry)}
                     onSelect={() => openCandidate(index)}
                     compact={layout === 'screens'}
                     // Back from Final Puzzle returns focus to the card when there's no inspector.
@@ -369,9 +404,11 @@ export function CandidatesWorkspace({
               <CandidateDetail
                 candidate={selected.candidate}
                 number={selectedIndex + 1}
+                title={selected.title}
+                edited={selected.saved?.edit != null}
                 batchSeed={batchSeedOf(selected)}
                 origin={describeOrigin(selected.saved)}
-                status={statusOf(selected.fingerprint)}
+                status={statusOf(selected)}
                 actions={actionsFor(selected, selectedIndex, true)}
               />
             ) : (
@@ -439,7 +476,7 @@ export function CandidatesWorkspace({
       </div>
     )
   } else {
-    const approvedIndex = batchEntries.findIndex((entry) => entry.fingerprint === approvedId)
+    const approvedIndex = batchEntries.findIndex((entry) => entry.fingerprint === approvedBatchFingerprint)
     panel = renderGallery(
       `Generated Candidates (${batchEntries.length})`,
       <p className="ws-meta" role="status">
@@ -497,15 +534,17 @@ export function CandidatesWorkspace({
       {screen === 'detail' && detailEntry ? (
         <CandidateScreen
           candidate={detailEntry.candidate}
+          title={detailEntry.title}
+          edited={detailEntry.saved?.edit != null}
           index={detailIndex}
           total={entries.length}
           batchSeed={batchSeedOf(detailEntry)}
           origin={describeOrigin(detailEntry.saved)}
-          status={statusOf(detailEntry.fingerprint)}
+          status={statusOf(detailEntry)}
           actions={actionsFor(detailEntry, detailIndex, false)}
           headingRef={detailHeadingRef}
           onShow={(index) => {
-            onSelect(collection, entries[index].fingerprint)
+            onSelect(collection, entries[index].id)
             detailNavigation.show(detailRoute(collection, entries[index].key))
           }}
           onAllCandidates={detailNavigation.close}
