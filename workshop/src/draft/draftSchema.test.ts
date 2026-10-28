@@ -119,7 +119,7 @@ describe('working-draft validation: rejections', () => {
     const published = fullDraft({ published: true })
     const moved = workshopReducer(
       { draft: published, session: createInitialSession() },
-      { type: 'APPROVE_SAVED_CANDIDATE', fingerprint: published.savedCandidates[0].fingerprint },
+      { type: 'APPROVE_SAVED_CANDIDATE', id: published.savedCandidates[0].id },
     ).draft
     expect(moved.savedCandidates[1].publication).toEqual({ inputs: { id: 'dogs7', clue: 'Good dogs' }, published: DEV_PUBLICATION })
     expect(parseWorkshopDraft(viaJson(moved))).toEqual({ ok: true, value: moved })
@@ -150,7 +150,7 @@ describe('working-draft validation: rejections', () => {
 describe('working-draft envelope', () => {
   it('accepts a current-version envelope with a positive integer revision', () => {
     const envelope = envelopeOf(fullDraft(), 8)
-    expect(envelope.schemaVersion).toBe(2)
+    expect(envelope.schemaVersion).toBe(3)
     expect(parseDraftEnvelope(viaJson(envelope))).toEqual({ ok: true, value: envelope })
   })
 
@@ -161,16 +161,24 @@ describe('working-draft envelope', () => {
     const { draft } = parsed.value
     expect(parsed.value).toMatchObject({ schemaVersion: DRAFT_SCHEMA_VERSION, revision: 5 })
     // Everything else is kept exactly, including the Final Puzzle and its publication.
-    expect({ ...draft, savedCandidates: current.savedCandidates }).toEqual(current)
+    expect({
+      ...draft,
+      savedCandidates: current.savedCandidates,
+      finalPuzzle: { ...draft.finalPuzzle, savedId: current.finalPuzzle!.savedId },
+    }).toEqual(current)
     expect(draft.savedCandidates).toEqual([
       {
+        id: 'saved-1',
+        name: null,
         fingerprint: candidateFingerprint(current.finalPuzzle!.candidate),
         candidate: current.finalPuzzle!.candidate,
         origin: { batchSeed: null, number: 2, clue: null },
         savedAt: null,
         publication: null,
+        edit: null,
       },
     ])
+    expect(draft.finalPuzzle?.savedId).toBe('saved-1')
     // Without a Final Puzzle there is nothing to save.
     const empty = parseDraftEnvelope(legacyEnvelopeOf(createInitialDraft()))
     expect(empty.ok && empty.value.draft.savedCandidates).toEqual([])
@@ -188,7 +196,7 @@ describe('working-draft envelope', () => {
       const result = parseDraftEnvelope(value)
       return result.ok ? null : result.message
     }
-    expect(message({ ...envelope(), schemaVersion: 3 })).toMatch(/Unsupported working-draft schema version 3/)
+    expect(message({ ...envelope(), schemaVersion: 4 })).toMatch(/Unsupported working-draft schema version 4/)
     expect(message({ ...envelope(), schemaVersion: 0 })).toMatch(/Unsupported working-draft schema version 0/)
     expect(message({ ...envelope(), schemaVersion: undefined })).toMatch(/Unsupported working-draft schema version;/)
     expect(message({ ...envelope(), revision: 0 })).toMatch(/revision must be at least 1/)

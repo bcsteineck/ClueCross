@@ -35,6 +35,7 @@ const DEBOUNCED_ACTIONS = new Set<WorkshopAction['type']>([
   'SET_POOL_TEXT',
   'SET_SOURCING_CONTEXT',
   'SET_FINAL_PUZZLE_INPUTS',
+  'RENAME_SAVED_CANDIDATE',
 ])
 
 const UNREACHABLE = 'Couldn’t reach the Workshop server to load the working draft.'

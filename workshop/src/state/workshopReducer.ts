@@ -20,7 +20,10 @@
 //
 // Candidate workflow: Current Batch -> Saved Candidates -> Final Puzzle.
 // A batch is session-only; saving copies a candidate into the draft's
-// shortlist (savedCandidates, oldest first, one entry per fingerprint).
+// shortlist (savedCandidates, oldest first). Every saved entry has its own
+// persistent id. A generated candidate is saved at most once per layout
+// (fingerprint); edited versions (editor/editedCandidate) are separate
+// entries that may share a layout with each other or with their source.
 // Only a saved candidate can be approved, and the approved one stays in the
 // shortlist and can't be removed — so the Final Puzzle always corresponds
 // to a saved candidate. A new batch replaces the old one and keeps both the
@@ -37,6 +40,10 @@
 
 import type { PoolCandidate } from '../../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import { candidateFingerprint } from '../candidateFingerprint'
+import { withEditedLayout } from '../editor/editedCandidate'
+import type { EditedVersion } from '../editor/editedCandidate'
+import { layoutIssues } from '../editor/editorLayout'
+import type { EditorLayout } from '../editor/editorLayout'
 import { suggestPuzzleId } from '../finalPuzzle/finalPuzzle'
 import type { FinalPuzzleInputs } from '../finalPuzzle/finalPuzzle'
 import type { WorkshopBatch } from '../generateBatch'
@@ -54,6 +61,8 @@ export type SourceKind = 'live' | 'fixture'
 
 /** The approved candidate being prepared for publishing, with the author's ID and clue. */
 export interface FinalPuzzleDraft {
+  /** The id of the approved Saved Candidates entry. */
+  savedId: string
   /** A copy of the approved saved candidate (same fingerprint as its Saved Candidates entry). */
   candidate: PoolCandidate
   /** The candidate's 1-based position in Saved Candidates when it was approved. */
@@ -88,11 +97,24 @@ export interface SavedCandidateOrigin {
   clue: string | null
 }
 
-/** One entry in the Saved Candidates shortlist: an unchanging snapshot of the candidate. */
+/**
+ * One entry in the Saved Candidates shortlist: an unchanging snapshot of a
+ * generated candidate, or an edited version (edit set) whose candidate is
+ * derived from its current words.
+ */
 export interface SavedCandidate {
-  /** candidateFingerprint(candidate); unique in the shortlist. */
+  /** Persistent identity, unique in the shortlist. Never a fingerprint, name, or number. */
+  id: string
+  /** The author's name for it; null shows the default (see savedCandidateName). */
+  name: string | null
+  /**
+   * candidateFingerprint(candidate): unique among generated entries (a
+   * layout is saved once); edited versions may repeat one. '' when there
+   * is no candidate.
+   */
   fingerprint: string
-  candidate: PoolCandidate
+  /** Null only for an edited version with nothing to show (an empty board). */
+  candidate: PoolCandidate | null
   origin: SavedCandidateOrigin
   /** ISO 8601 time it was saved; null if unknown. */
   savedAt: string | null
@@ -102,6 +124,8 @@ export interface SavedCandidate {
    * then null). Approving it again restores that Final Puzzle as published.
    */
   publication: SavedPublication | null
+  /** Set for an edited version (Manual Editor); null for a generated candidate. */
+  edit: EditedVersion | null
 }
 
 /** A saved candidate's dev-calendar publication and the ID and clue it was published with. */
@@ -132,7 +156,7 @@ export interface WorkshopDraft {
   generationCount: number
   /** The shortlist for this puzzle, oldest first. Includes the Final Puzzle's candidate. */
   savedCandidates: SavedCandidate[]
-  /** Always one of savedCandidates (same fingerprint), or null. */
+  /** Always one of savedCandidates (finalPuzzle.savedId), or null. */
   finalPuzzle: FinalPuzzleDraft | null
 }
 
@@ -144,7 +168,7 @@ export interface WorkshopSession {
   candidateTab: CandidateTab
   /** Fingerprint of the candidate selected in Current Batch. */
   selectedId: string | null
-  /** Fingerprint of the candidate selected in Saved Candidates (the first one when unset or gone). */
+  /** Id of the candidate selected in Saved Candidates (the first one when unset or gone). */
   savedSelectedId: string | null
   /** Errors from the last refused Generate; cleared by the next successful one. */
   generationErrors: string[]
@@ -176,25 +200,32 @@ export type WorkshopAction =
   | { type: 'SET_CANDIDATE_TAB'; tab: CandidateTab }
   /** Selects a candidate (by fingerprint) in Current Batch. */
   | { type: 'SELECT_CANDIDATE'; id: string }
-  /** Selects a candidate (by fingerprint) in Saved Candidates. */
+  /** Selects a candidate (by id) in Saved Candidates. */
   | { type: 'SELECT_SAVED_CANDIDATE'; id: string }
-  /** Appends to Saved Candidates; nothing happens if the same layout is already saved. */
+  /** Appends a generated candidate to Saved Candidates; nothing happens if the same layout is already saved. */
   | { type: 'SAVE_CANDIDATE'; saved: SavedCandidate }
-  /** Removes from Saved Candidates; never removes the approved one. */
-  | { type: 'REMOVE_SAVED_CANDIDATE'; fingerprint: string }
+  /** Appends a new edited version (its layout may repeat another's). */
+  | { type: 'CREATE_EDITED_CANDIDATE'; saved: SavedCandidate }
+  /** A completed edit to an edited version's words or pool; never applies to an approved or published one. */
+  | { type: 'UPDATE_EDITED_LAYOUT'; id: string; layout: EditorLayout }
+  /** Sets (or, with an empty name, clears) a saved candidate's custom name. */
+  | { type: 'RENAME_SAVED_CANDIDATE'; id: string; name: string }
+  /** Removes from Saved Candidates; never removes the approved one, and never any other entry. */
+  | { type: 'REMOVE_SAVED_CANDIDATE'; id: string }
   /** Puts back an entry whose removal couldn't be saved, at its old position. */
   | { type: 'RESTORE_SAVED_CANDIDATE'; saved: SavedCandidate; index: number }
-  /** Approves a saved candidate as the Final Puzzle, using the current Author clue. */
-  | { type: 'APPROVE_SAVED_CANDIDATE'; fingerprint: string }
+  /** Approves a saved candidate as the Final Puzzle, using the current Author clue; refused while its layout has blocking issues. */
+  | { type: 'APPROVE_SAVED_CANDIDATE'; id: string }
   /** Removes the approval; the candidate stays saved. */
   | { type: 'CLEAR_FINAL_PUZZLE' }
   | { type: 'SET_FINAL_PUZZLE_INPUTS'; inputs: FinalPuzzleInputs }
-  | { type: 'FINAL_PUZZLE_PUBLISHED'; signature: string; inputs: FinalPuzzleInputs; published: PublishedState }
+  /** savedId: the saved candidate that was published. */
+  | { type: 'FINAL_PUZZLE_PUBLISHED'; savedId: string; inputs: FinalPuzzleInputs; published: PublishedState }
   /** Replaces the whole draft with a saved one; the session starts fresh. */
   | { type: 'DRAFT_RESTORED'; draft: WorkshopDraft }
   /** Starts over with `draft` (a createInitialDraft() already saved) and a fresh session. */
   | { type: 'NEW_PUZZLE'; draft: WorkshopDraft }
-  | { type: 'PUBLICATION_CHECKED'; signature: string; outcome: Exclude<PublicationCheck, 'checking'> }
+  | { type: 'PUBLICATION_CHECKED'; savedId: string; outcome: Exclude<PublicationCheck, 'checking'> }
 
 export function createInitialDraft(): WorkshopDraft {
   return {
@@ -305,16 +336,37 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
       return { ...state, session: { ...state.session, savedSelectedId: action.id } }
     case 'SAVE_CANDIDATE': {
       const { saved } = action
-      if (findSaved(state.draft, saved.fingerprint) >= 0) return state
+      if (findSaved(state.draft, saved.id) >= 0 || findGenerated(state.draft, saved.fingerprint) >= 0) return state
       return withDraft(state, { savedCandidates: [...state.draft.savedCandidates, saved] })
     }
+    case 'CREATE_EDITED_CANDIDATE': {
+      const { saved } = action
+      if (!saved.edit || findSaved(state.draft, saved.id) >= 0) return state
+      return withDraft(state, { savedCandidates: [...state.draft.savedCandidates, saved] })
+    }
+    case 'UPDATE_EDITED_LAYOUT': {
+      const index = findSaved(state.draft, action.id)
+      const saved = state.draft.savedCandidates[index]
+      if (!saved?.edit || saved.publication || action.id === selectApprovedId(state.draft)) return state
+      const updated = withEditedLayout({ ...saved, edit: saved.edit }, action.layout)
+      return withDraft(state, { savedCandidates: state.draft.savedCandidates.with(index, updated) })
+    }
+    case 'RENAME_SAVED_CANDIDATE': {
+      const index = findSaved(state.draft, action.id)
+      if (index < 0) return state
+      // Kept as typed (a trailing space mid-typing included); blank means the default name.
+      const name = action.name.trim() ? action.name : null
+      return withDraft(state, {
+        savedCandidates: state.draft.savedCandidates.with(index, { ...state.draft.savedCandidates[index], name }),
+      })
+    }
     case 'REMOVE_SAVED_CANDIDATE': {
-      const index = findSaved(state.draft, action.fingerprint)
-      if (index < 0 || action.fingerprint === selectApprovedFingerprint(state.draft)) return state
+      const index = findSaved(state.draft, action.id)
+      if (index < 0 || action.id === selectApprovedId(state.draft)) return state
       return withDraft(state, { savedCandidates: state.draft.savedCandidates.filter((_, i) => i !== index) })
     }
     case 'RESTORE_SAVED_CANDIDATE': {
-      if (findSaved(state.draft, action.saved.fingerprint) >= 0) return state
+      if (findSaved(state.draft, action.saved.id) >= 0) return state
       const savedCandidates = [...state.draft.savedCandidates]
       savedCandidates.splice(Math.min(Math.max(action.index, 0), savedCandidates.length), 0, action.saved)
       return withDraft(state, { savedCandidates })
@@ -327,10 +379,14 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
       // is never changed. Showing the Final Puzzle is the caller's navigation.
       // A candidate published earlier comes back with the ID and clue it
       // was published with, and its record is re-checked as on restore.
-      const index = findSaved(state.draft, action.fingerprint)
-      if (index < 0 || action.fingerprint === selectApprovedFingerprint(state.draft)) return state
+      // An edited layout must be one connected crossword (see approvalIssues).
+      const index = findSaved(state.draft, action.id)
+      if (index < 0 || action.id === selectApprovedId(state.draft)) return state
+      if (approvalIssues(state.draft.savedCandidates[index]).length > 0) return state
       let savedCandidates = withFinalPublicationKept(state.draft)
       const saved = savedCandidates[index]
+      const candidate = saved.candidate
+      if (!candidate) return state
       const clue = state.draft.clue.trim()
       if (saved.publication) savedCandidates = savedCandidates.with(index, { ...saved, publication: null })
       return {
@@ -338,7 +394,8 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
           ...state.draft,
           savedCandidates,
           finalPuzzle: {
-            candidate: saved.candidate,
+            savedId: saved.id,
+            candidate,
             number: index + 1,
             inputs: saved.publication?.inputs ?? { id: suggestPuzzleId(clue), clue },
             publication: saved.publication?.published ?? null,
@@ -362,13 +419,13 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
       // Recorded on the candidate that published, even if the author
       // approved another (or cleared the Final Puzzle) while the request was
       // in flight; dropped only if that candidate is no longer saved.
-      if (action.signature === selectApprovedFingerprint(state.draft) && state.draft.finalPuzzle) {
+      if (action.savedId === selectApprovedId(state.draft) && state.draft.finalPuzzle) {
         return {
           draft: { ...state.draft, finalPuzzle: { ...state.draft.finalPuzzle, publication: action.published } },
           session: { ...state.session, publicationCheck: null },
         }
       }
-      const index = findSaved(state.draft, action.signature)
+      const index = findSaved(state.draft, action.savedId)
       if (index < 0) return state
       const savedCandidates = state.draft.savedCandidates.with(index, {
         ...state.draft.savedCandidates[index],
@@ -386,7 +443,7 @@ export function workshopReducer(state: WorkshopState, action: WorkshopAction): W
     case 'PUBLICATION_CHECKED': {
       const finalPuzzle = state.draft.finalPuzzle
       // Only for the restored record still being checked.
-      if (!finalPuzzle?.publication || action.signature !== candidateFingerprint(finalPuzzle.candidate)) return state
+      if (!finalPuzzle?.publication || action.savedId !== finalPuzzle.savedId) return state
       if (state.session.publicationCheck !== 'checking') return state
       const session = { ...state.session, publicationCheck: action.outcome }
       if (action.outcome !== 'not-found') return { ...state, session }
@@ -422,16 +479,34 @@ export function analyzeActivePool(
     : analyzeCandidatePool(poolReviewEntries(sourcedPool?.candidates ?? []))
 }
 
-/** The approved candidate's fingerprint, or null. */
+/** The approved candidate's layout fingerprint, or null (for Current Batch's Approved marker). */
 export function selectApprovedFingerprint(draft: WorkshopDraft): string | null {
   return draft.finalPuzzle ? candidateFingerprint(draft.finalPuzzle.candidate) : null
+}
+
+/** The approved saved candidate's id, or null. */
+export function selectApprovedId(draft: WorkshopDraft): string | null {
+  return draft.finalPuzzle?.savedId ?? null
+}
+
+/**
+ * Why a saved candidate can't be approved as the Final Puzzle; empty when
+ * it can. A generated candidate always meets these rules; an edited
+ * version's current layout is checked (blocking issues only — the
+ * answer-count and Priority Word warnings never block).
+ */
+export function approvalIssues(saved: SavedCandidate): string[] {
+  if (!saved.edit) return saved.candidate ? [] : ['This candidate has no layout.']
+  const { blocking } = layoutIssues(saved.edit.words)
+  if (blocking.length === 0 && !saved.candidate) return ['This layout can’t be read as a crossword.']
+  return blocking
 }
 
 /** A copy of the shortlist with the Final Puzzle's publication (if any) kept on its saved entry. */
 // (The same array when there's nothing to keep.)
 function withFinalPublicationKept(draft: WorkshopDraft): SavedCandidate[] {
   const finalPuzzle = draft.finalPuzzle
-  const index = finalPuzzle?.publication ? findSaved(draft, candidateFingerprint(finalPuzzle.candidate)) : -1
+  const index = finalPuzzle?.publication ? findSaved(draft, finalPuzzle.savedId) : -1
   if (!finalPuzzle?.publication || index < 0) return draft.savedCandidates
   return draft.savedCandidates.with(index, {
     ...draft.savedCandidates[index],
@@ -439,8 +514,13 @@ function withFinalPublicationKept(draft: WorkshopDraft): SavedCandidate[] {
   })
 }
 
-function findSaved(draft: WorkshopDraft, fingerprint: string): number {
-  return draft.savedCandidates.findIndex((saved) => saved.fingerprint === fingerprint)
+function findSaved(draft: WorkshopDraft, id: string): number {
+  return draft.savedCandidates.findIndex((saved) => saved.id === id)
+}
+
+/** The generated (not edited) entry saved for this layout, if any. */
+function findGenerated(draft: WorkshopDraft, fingerprint: string): number {
+  return draft.savedCandidates.findIndex((saved) => !saved.edit && saved.fingerprint === fingerprint)
 }
 
 /** The publication recorded for the current Final Puzzle, if any. */

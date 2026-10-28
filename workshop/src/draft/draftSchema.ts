@@ -10,13 +10,27 @@
 // the one recomputed from its construction.
 //
 // Versions: 2 added Saved Candidates (and the rule that the Final Puzzle
-// is one of them). A version 1 file is migrated when it is read: its Final
-// Puzzle, which always embeds the complete candidate, becomes the one saved
-// candidate. Nothing is rewritten until the next save, which writes version 2.
+// is one of them). 3 gave every saved candidate a persistent id (and an
+// optional custom name), added edited versions from the Manual Editor, and
+// made the Final Puzzle name its saved candidate by id (finalPuzzle.savedId)
+// rather than by layout, since edited versions may share a layout.
+//
+// Older files are migrated when they are read, and nothing is rewritten
+// until the next save, which writes version 3:
+//   1 -> its Final Puzzle, which always embeds the complete candidate,
+//        becomes the one saved candidate;
+//   1, 2 -> saved candidates get ids "saved-1", "saved-2", … in list order
+//        (deterministic, so the server and the browser agree), no custom
+//        name, and no edit; the Final Puzzle is matched to its entry by
+//        fingerprint, as version 2 required.
 // A saved candidate's publication record (kept while it isn't the Final
 // Puzzle) may be absent, meaning none.
+//
+// An edited version's candidate is never read from the file: it is
+// derived again from the version's validated words, like metrics.
 
 import { normalizeAnswer } from '../../../tools/generator/src/input.js'
+import type { Direction } from '../../../tools/generator/src/types.js'
 import { computeMetrics } from '../../../tools/generator/src/metrics/metrics.js'
 import type { PoolCandidate } from '../../../tools/generator/src/pool/generateCandidatePoolSelection.js'
 import type { ConstructionSuccess } from '../../../tools/generator/src/types.js'
@@ -30,6 +44,10 @@ import type { SourcingIssue } from '../sourcing/parseResponse'
 import type { CandidateFlag, ReviewCandidate } from '../sourcing/reviewPool'
 import type { SourcedPool } from '../sourcing/sourceCandidates'
 import { candidateFingerprint } from '../candidateFingerprint'
+import { withEditedLayout } from '../editor/editedCandidate'
+import type { EditedVersion } from '../editor/editedCandidate'
+import { sameAnswer } from '../editor/editorLayout'
+import type { EditorPoolWord, EditorWord } from '../editor/editorLayout'
 import type { FinalPuzzleInputs } from '../finalPuzzle/finalPuzzle'
 import type {
   FinalPuzzleDraft,
@@ -39,9 +57,9 @@ import type {
   WorkshopDraft,
 } from '../state/workshopReducer'
 
-export const DRAFT_SCHEMA_VERSION = 2
+export const DRAFT_SCHEMA_VERSION = 3
 /** Older versions this Workshop can still read (and migrates on read). */
-const MIGRATABLE_SCHEMA_VERSIONS = [1]
+const MIGRATABLE_SCHEMA_VERSIONS = [1, 2]
 
 /** The saved file: one versioned envelope around the durable draft. */
 export interface DraftEnvelope {
@@ -242,11 +260,13 @@ function parsePublishedState(value: unknown, path: string): PublishedState {
   }
 }
 
-function parseFinalPuzzle(value: unknown, path: string): FinalPuzzleDraft {
+// savedId is resolved for older versions by parseDraftWithShortlist.
+function parseFinalPuzzle(value: unknown, path: string, schemaVersion: number): FinalPuzzleDraft {
   const record = requireRecord(value, path)
   const number = requireInteger(record.number, `${path}.number`)
   if (number < 1) throw new ShapeError(`${path}.number must be at least 1.`)
   return {
+    savedId: schemaVersion < 3 ? '' : requireId(record.savedId, `${path}.savedId`),
     candidate: parsePoolCandidate(record.candidate, `${path}.candidate`),
     number,
     inputs: parseInputs(record.inputs, `${path}.inputs`),
@@ -282,16 +302,77 @@ function parseOrigin(value: unknown, path: string): SavedCandidateOrigin {
   }
 }
 
-function parseSavedCandidate(value: unknown, path: string): SavedCandidate {
+function requireId(value: unknown, path: string): string {
+  const id = requireString(value, path)
+  if (id === '') throw new ShapeError(`${path} must not be empty.`)
+  return id
+}
+
+/** An answer stored in construction form, so it must normalize to itself. */
+function requireAnswer(value: unknown, path: string): string {
+  const word = requireString(value, path)
+  const normalized = normalizeAnswer(word)
+  if (!normalized.ok || normalized.answer !== word) throw new ShapeError(`${path} is not a valid answer.`)
+  return word
+}
+
+function parseEditorWord(value: unknown, path: string): EditorWord {
   const record = requireRecord(value, path)
-  const candidate = parsePoolCandidate(record.candidate, `${path}.candidate`)
-  const fingerprint = requireString(record.fingerprint, `${path}.fingerprint`)
-  if (fingerprint !== candidateFingerprint(candidate)) {
-    throw new ShapeError(`${path}.fingerprint doesn't match the candidate's layout.`)
-  }
+  const start = requireRecord(record.start, `${path}.start`)
   return {
-    fingerprint,
-    candidate,
+    id: requireId(record.id, `${path}.id`),
+    word: requireAnswer(record.word, `${path}.word`),
+    direction: requireOneOf(record.direction, ['across', 'down'] as const satisfies readonly Direction[], `${path}.direction`),
+    start: { x: requireInteger(start.x, `${path}.start.x`), y: requireInteger(start.y, `${path}.start.y`) },
+  }
+}
+
+// Shape only: whether the words make a valid crossword is the Editor's
+// validation summary (an invalid layout loads, and can't be approved).
+function parseEditorWords(value: unknown, path: string): EditorWord[] {
+  const words = requireArray(value, path, parseEditorWord)
+  if (new Set(words.map((word) => word.id)).size !== words.length) throw new ShapeError(`${path} has duplicate word ids.`)
+  return words
+}
+
+function parsePoolWord(value: unknown, path: string): EditorPoolWord {
+  const record = requireRecord(value, path)
+  return {
+    word: requireAnswer(record.word, `${path}.word`),
+    source: requireOneOf(record.source, ['pool', 'manual'] as const, `${path}.source`),
+  }
+}
+
+function parseEdit(value: unknown, path: string): EditedVersion {
+  const record = requireRecord(value, path)
+  const words = parseEditorWords(record.words, `${path}.words`)
+  const pool = requireArray(record.pool, `${path}.pool`, parsePoolWord)
+  if (new Set(pool.map((entry) => entry.word)).size !== pool.length) throw new ShapeError(`${path}.pool has duplicate words.`)
+  words.forEach((word, index) => {
+    if (!pool.some((entry) => sameAnswer(entry.word, word.word))) {
+      throw new ShapeError(`${path}.words[${index}] isn't in ${path}.pool.`)
+    }
+  })
+  const editNumber = requireInteger(record.editNumber, `${path}.editNumber`)
+  if (editNumber < 1) throw new ShapeError(`${path}.editNumber must be at least 1.`)
+  return {
+    words,
+    pool,
+    baseline: parseEditorWords(record.baseline, `${path}.baseline`),
+    original: parseEditorWords(record.original, `${path}.original`),
+    priorityWords: requireArray(record.priorityWords, `${path}.priorityWords`, requireAnswer),
+    sourceId: requireNullable(record.sourceId, `${path}.sourceId`, requireId),
+    parentId: requireNullable(record.parentId, `${path}.parentId`, requireId),
+    sourceLabel: requireString(record.sourceLabel, `${path}.sourceLabel`),
+    editNumber,
+  }
+}
+
+function parseSavedCandidate(value: unknown, path: string, schemaVersion: number, index: number): SavedCandidate {
+  const record = requireRecord(value, path)
+  const common = {
+    id: schemaVersion < 3 ? `saved-${index + 1}` : requireId(record.id, `${path}.id`),
+    name: schemaVersion < 3 ? null : requireNullable(record.name, `${path}.name`, requireString),
     origin: parseOrigin(record.origin, `${path}.origin`),
     savedAt: requireNullable(record.savedAt, `${path}.savedAt`, requireString),
     // Absent in drafts written before saved publications were kept.
@@ -300,13 +381,27 @@ function parseSavedCandidate(value: unknown, path: string): SavedCandidate {
         ? null
         : requireNullable(record.publication, `${path}.publication`, parseSavedPublication),
   }
+  const edit = schemaVersion < 3 ? null : requireNullable(record.edit, `${path}.edit`, parseEdit)
+  if (edit) {
+    // Derived from the words; the file's own candidate and fingerprint are not read.
+    return withEditedLayout({ ...common, fingerprint: '', candidate: null, edit }, { words: edit.words, pool: edit.pool })
+  }
+  const candidate = parsePoolCandidate(record.candidate, `${path}.candidate`)
+  const fingerprint = requireString(record.fingerprint, `${path}.fingerprint`)
+  if (fingerprint !== candidateFingerprint(candidate)) {
+    throw new ShapeError(`${path}.fingerprint doesn't match the candidate's layout.`)
+  }
+  return { ...common, fingerprint, candidate, edit: null }
 }
 
-function parseSavedCandidates(value: unknown, path: string): SavedCandidate[] {
-  const saved = requireArray(value, path, parseSavedCandidate)
-  if (new Set(saved.map((entry) => entry.fingerprint)).size !== saved.length) {
+function parseSavedCandidates(value: unknown, path: string, schemaVersion: number): SavedCandidate[] {
+  if (!Array.isArray(value)) throw new ShapeError(`${path} must be an array.`)
+  const saved = value.map((entry, index) => parseSavedCandidate(entry, `${path}[${index}]`, schemaVersion, index))
+  const generated = saved.filter((entry) => !entry.edit)
+  if (new Set(generated.map((entry) => entry.fingerprint)).size !== generated.length) {
     throw new ShapeError(`${path} has the same layout saved twice.`)
   }
+  if (new Set(saved.map((entry) => entry.id)).size !== saved.length) throw new ShapeError(`${path} has duplicate ids.`)
   return saved
 }
 
@@ -315,17 +410,20 @@ function migratedSavedCandidates(finalPuzzle: FinalPuzzleDraft | null): SavedCan
   if (!finalPuzzle) return []
   return [
     {
+      id: 'saved-1',
+      name: null,
       fingerprint: candidateFingerprint(finalPuzzle.candidate),
       candidate: finalPuzzle.candidate,
       origin: { batchSeed: null, number: finalPuzzle.number, clue: null },
       savedAt: null,
       publication: null,
+      edit: null,
     },
   ]
 }
 
 // Every field except savedCandidates (see parseDraftWithShortlist).
-function parseDraft(value: unknown, path: string): WorkshopDraft {
+function parseDraft(value: unknown, path: string, schemaVersion: number): WorkshopDraft {
   const record = requireRecord(value, path)
   const sourcing = requireRecord(record.sourcing, `${path}.sourcing`)
   const priorityWords = requireRecord(record.priorityWords, `${path}.priorityWords`)
@@ -346,24 +444,36 @@ function parseDraft(value: unknown, path: string): WorkshopDraft {
     },
     generationCount: requireNonNegativeInteger(record.generationCount, `${path}.generationCount`),
     savedCandidates: [],
-    finalPuzzle: record.finalPuzzle === null ? null : parseFinalPuzzle(record.finalPuzzle, `${path}.finalPuzzle`),
+    finalPuzzle:
+      record.finalPuzzle === null ? null : parseFinalPuzzle(record.finalPuzzle, `${path}.finalPuzzle`, schemaVersion),
   }
 }
 
 function parseDraftWithShortlist(value: unknown, path: string, schemaVersion: number): WorkshopDraft {
-  const draft = parseDraft(value, path)
-  if (schemaVersion < 2) return { ...draft, savedCandidates: migratedSavedCandidates(draft.finalPuzzle) }
-  const savedCandidates = parseSavedCandidates(requireRecord(value, path).savedCandidates, `${path}.savedCandidates`)
-  if (draft.finalPuzzle) {
-    const approved = candidateFingerprint(draft.finalPuzzle.candidate)
-    const saved = savedCandidates.find((entry) => entry.fingerprint === approved)
+  const draft = parseDraft(value, path, schemaVersion)
+  const savedCandidates =
+    schemaVersion < 2
+      ? migratedSavedCandidates(draft.finalPuzzle)
+      : parseSavedCandidates(requireRecord(value, path).savedCandidates, `${path}.savedCandidates`, schemaVersion)
+  let finalPuzzle = draft.finalPuzzle
+  if (finalPuzzle) {
+    const approved = candidateFingerprint(finalPuzzle.candidate)
+    // Before version 3 the Final Puzzle named its entry by layout.
+    const saved =
+      schemaVersion < 3
+        ? savedCandidates.find((entry) => entry.fingerprint === approved)
+        : savedCandidates.find((entry) => entry.id === finalPuzzle!.savedId)
     if (!saved) throw new ShapeError(`${path}.finalPuzzle must be one of ${path}.savedCandidates.`)
+    if (saved.fingerprint !== approved) {
+      throw new ShapeError(`${path}.finalPuzzle doesn't match the layout of its saved candidate.`)
+    }
     // The Final Puzzle's publication is finalPuzzle.publication, never a second copy.
     if (saved.publication) {
       throw new ShapeError(`${path}.savedCandidates entry for the Final Puzzle must not have its own publication.`)
     }
+    finalPuzzle = { ...finalPuzzle, savedId: saved.id }
   }
-  return { ...draft, savedCandidates }
+  return { ...draft, savedCandidates, finalPuzzle }
 }
 
 function capture<T>(parse: () => T): ParseResult<T> {

@@ -50,14 +50,30 @@ export const DEV_PUBLICATION: PublishedState = {
   },
 }
 
+/**
+ * A test's id for a saved generated candidate. Real ids are random
+ * (newCandidateId); a fixed one per layout keeps fixtures deterministic.
+ */
+export function savedIdOf(candidate: PoolCandidate): string {
+  return `saved:${candidateFingerprint(candidate)}`
+}
+
 /** A Saved Candidates entry for a batch's candidate, as Save Candidate makes it. */
-export function savedEntry(candidate: PoolCandidate, number: number, batch: WorkshopBatch = dogsBatch()): SavedCandidate {
+export function savedEntry(
+  candidate: PoolCandidate,
+  number: number,
+  batch: WorkshopBatch = dogsBatch(),
+  id = savedIdOf(candidate),
+): SavedCandidate {
   return {
+    id,
+    name: null,
     fingerprint: candidateFingerprint(candidate),
     candidate,
     origin: { batchSeed: batch.seed, number, clue: batch.clue },
     savedAt: '2026-10-19T11:00:00.000Z',
     publication: null,
+    edit: null,
   }
 }
 
@@ -86,13 +102,13 @@ export function fullDraft({ published = false }: { published?: boolean } = {}): 
     { type: 'GENERATION_SUCCEEDED', batch: { ...batch, generationNumber: 3 } },
     { type: 'SAVE_CANDIDATE', saved: savedEntry(batch.candidates[0], 1) },
     { type: 'SAVE_CANDIDATE', saved: savedEntry(batch.candidates[1], 2) },
-    { type: 'APPROVE_SAVED_CANDIDATE', fingerprint: candidateFingerprint(batch.candidates[1]) },
+    { type: 'APPROVE_SAVED_CANDIDATE', id: savedIdOf(batch.candidates[1]) },
     { type: 'SET_FINAL_PUZZLE_INPUTS', inputs: { id: 'dogs7', clue: 'Good dogs' } },
   ]
   if (published) {
     actions.push({
       type: 'FINAL_PUZZLE_PUBLISHED',
-      signature: candidateFingerprint(batch.candidates[1]),
+      savedId: savedIdOf(batch.candidates[1]),
       inputs: { id: 'dogs7', clue: 'Good dogs' },
       published: DEV_PUBLICATION,
     })
@@ -104,8 +120,23 @@ export function envelopeOf(draft: WorkshopDraft, revision = 1): DraftEnvelope {
   return { schemaVersion: DRAFT_SCHEMA_VERSION, revision, savedAt: '2026-10-19T12:00:00.000Z', draft }
 }
 
+/**
+ * The same draft as a schema version 2 file (Saved Candidates without ids,
+ * names, or edited versions; the Final Puzzle matched by layout), as JSON data.
+ */
+export function version2EnvelopeOf(draft: WorkshopDraft, revision = 1): unknown {
+  const savedCandidates = draft.savedCandidates.map(({ id: _id, name: _name, edit: _edit, ...rest }) => rest)
+  const finalPuzzle = draft.finalPuzzle && (({ savedId: _savedId, ...rest }) => rest)(draft.finalPuzzle)
+  return JSON.parse(
+    JSON.stringify({ schemaVersion: 2, revision, savedAt: '2026-10-19T12:00:00.000Z', draft: { ...draft, savedCandidates, finalPuzzle } }),
+  )
+}
+
 /** The same draft as a schema version 1 file (before Saved Candidates), as JSON data. */
 export function legacyEnvelopeOf(draft: WorkshopDraft, revision = 1): unknown {
-  const { savedCandidates: _notInVersion1, ...rest } = draft
-  return JSON.parse(JSON.stringify({ schemaVersion: 1, revision, savedAt: '2026-10-19T12:00:00.000Z', draft: rest }))
+  const { savedCandidates: _notInVersion1, finalPuzzle, ...rest } = draft
+  const legacyFinal = finalPuzzle && (({ savedId: _savedId, ...other }) => other)(finalPuzzle)
+  return JSON.parse(
+    JSON.stringify({ schemaVersion: 1, revision, savedAt: '2026-10-19T12:00:00.000Z', draft: { ...rest, finalPuzzle: legacyFinal } }),
+  )
 }

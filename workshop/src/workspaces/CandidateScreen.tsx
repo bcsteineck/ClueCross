@@ -5,7 +5,10 @@ import { CandidateDetail } from '../CandidateDetail'
 import { useSwipeNavigation } from './useSwipeNavigation'
 
 interface CandidateScreenProps {
-  candidate: PoolCandidate
+  candidate: PoolCandidate | null
+  /** Its name; defaults to "Candidate N". */
+  title?: string
+  edited?: boolean
   /** Zero-based position in the collection being browsed (Current Batch or Saved Candidates). */
   index: number
   total: number
@@ -27,6 +30,8 @@ interface CandidateScreenProps {
 // Next onto the last candidate doesn't drop keyboard focus; they never wrap.
 export function CandidateScreen({
   candidate,
+  title,
+  edited,
   index,
   total,
   batchSeed,
@@ -52,13 +57,15 @@ export function CandidateScreen({
       <CandidateDetail
         candidate={candidate}
         number={number}
+        title={title}
+        edited={edited}
         batchSeed={batchSeed}
         status={status}
         actions={actions}
         origin={origin}
         heading={
           <>
-            Candidate {number} <span className="ws-detail__position">of {total}</span>
+            {title ?? `Candidate ${number}`} <span className="ws-detail__position">of {total}</span>
           </>
         }
         headingRef={headingRef}
@@ -77,7 +84,7 @@ export function CandidateScreen({
             </button>
             {/* Previous/Next keep focus on the button, so the new candidate is announced here. */}
             <p className="ws-visually-hidden" role="status">
-              Candidate {number} of {total}
+              {title ? `${title}, ${number} of ${total}` : `Candidate ${number} of ${total}`}
             </p>
           </div>
         }

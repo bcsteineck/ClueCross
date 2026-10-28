@@ -8,8 +8,13 @@ import { formatMobileCellSize } from './generateBatch'
 import type { SwipeHandlers } from './workspaces/useSwipeNavigation'
 
 interface CandidateDetailProps {
-  candidate: PoolCandidate
+  /** Null only for an edited version with an empty board. */
+  candidate: PoolCandidate | null
   number: number
+  /** Its name; defaults to "Candidate N". */
+  title?: string
+  /** An edited version (Manual Editor): marked Edited in text. */
+  edited?: boolean
   /** The batch it was generated in, if known. */
   batchSeed: string | null
   /** Shown as a Saved or Approved badge beside the heading. */
@@ -44,6 +49,8 @@ function formatPercent(value: number): string {
 export function CandidateDetail({
   candidate,
   number,
+  title = `Candidate ${number}`,
+  edited = false,
   batchSeed,
   status,
   actions,
@@ -53,15 +60,31 @@ export function CandidateDetail({
   navigation,
   swipe,
 }: CandidateDetailProps) {
+  const headingElement = (
+    <h3 id="ws-detail-heading" className="ws-detail__heading" ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+      {heading ?? `Selected ${title}`}
+      {edited && <span className="ws-badge ws-badge--saved">Edited</span>}
+      <StatusBadge status={status} />
+    </h3>
+  )
+
+  if (!candidate) {
+    return (
+      <section className="ws-detail" aria-labelledby="ws-detail-heading">
+        {headingElement}
+        {navigation}
+        <p className="ws-muted">This edited version’s board is empty. Edit it to place words.</p>
+        {actions}
+      </section>
+    )
+  }
+
   const { geometry, authoredIntersections, derivedEntries, letters } = candidate.metrics
   const mobileCellSize = formatMobileCellSize(geometry.boundingWidth, geometry.boundingHeight)
 
   return (
     <section className="ws-detail" aria-labelledby="ws-detail-heading">
-      <h3 id="ws-detail-heading" className="ws-detail__heading" ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
-        {heading ?? `Selected Candidate ${number}`}
-        <StatusBadge status={status} />
-      </h3>
+      {headingElement}
 
       {navigation}
 
