@@ -50,8 +50,7 @@ $ws-touch-height: 44px;
 // A status message: a tone bar plus a faint wash. The message's own text
 // ("Error:", "Ready to publish.") carries the meaning; the tone reinforces it.
 @mixin ws-callout($tone, $wash) {
-  border-left: 4px solid $tone;
-  border-radius: 0 $radius-4 $radius-4 0;
+  border-radius: $radius-4;
   background: $wash;
   padding: $spacing-8 $spacing-12;
   font-size: 14px;
@@ -1119,7 +1118,6 @@ $ws-final-columns: 720px;
   gap: $spacing-8;
   padding: $spacing-16;
   border: $border-1 solid $ws-border-strong;
-  border-left: 4px solid $ws-accent;
   border-radius: $radius-8;
   background: $color-gray-00;
 }
@@ -1158,8 +1156,7 @@ $ws-final-columns: 720px;
   align-items: center;
   gap: $spacing-8 $spacing-16;
   padding: $spacing-12 $spacing-16;
-  border-radius: 0 $radius-4 $radius-4 0;
-  border-left: 4px solid $color-brand-secondary;
+  border-radius: $radius-4;
   background: $color-brand-secondary-wash;
   font-size: 14px;
 
@@ -1663,12 +1660,11 @@ $ws-sidebar-width: 200px;
 
 // The two targets sit in the open, divided; Production keeps the banner's bar.
 .ws-publish-target {
-  padding-top: $spacing-16;
+  padding: $spacing-16;
   border-top: $border-1 solid $ws-border;
 
   &--production {
-    padding-left: $spacing-16;
-    border-left: 4px solid $color-brand-secondary;
+    border-radius: $radius-8;
     border-top: none;
     background: $color-gray-10;
   }

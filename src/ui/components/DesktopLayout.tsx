@@ -132,7 +132,7 @@ export function DesktopLayout({
             {view === 'reveal' ? (
               <RevealButton
                 variant="cancel"
-                label="Cancel Reveal"
+                label="Back to Puzzle"
                 sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
                 sublabelDots={state.freeRevealsRemaining}
                 onClick={() => onViewChange('puzzle')}

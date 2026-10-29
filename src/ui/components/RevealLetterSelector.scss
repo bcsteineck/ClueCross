@@ -17,7 +17,7 @@
 // match .mobile-puzzle-view__board's footprint (see
 // MobileRevealView.scss/MobilePuzzleView.scss) — filling that exactly,
 // rather than relying on the approximate fixed min-height above, is what
-// keeps Cancel Reveal (and the score line above it) landing where Reveal
+// keeps Back to Puzzle (and the score line above it) landing where Reveal
 // Letter did.
 .mobile-reveal-view__selector .reveal-letter-selector {
   width: 100%;

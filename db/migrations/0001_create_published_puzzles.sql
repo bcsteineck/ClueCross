@@ -1,12 +1,17 @@
--- Publishing v1: one permanent record per published puzzle.
+-- Publishing v1: one record per published puzzle.
 --
 -- Apply once per Neon branch, over a DIRECT (unpooled) connection: to the
 -- `main` branch (the permanent production calendar) before the `dev` and
 -- `test` branches are created from it, so both inherit the empty table.
 --
 -- Status is never stored: a publication releases at 10:00 PM
--- America/New_York on the day before publish_date (src/publishing). Rows
--- are never updated or deleted by the application.
+-- America/New_York on the day before publish_date (src/publishing).
+-- Released rows are permanent: the application never updates or deletes
+-- them. A scheduled (not yet released) row can be removed from the
+-- Production Schedule, which deletes it and moves every later scheduled row
+-- back one day, in one transaction; the database guards refuse any delete
+-- or move once the affected release instant has passed
+-- (workshop/server/publishing/scheduleManagement.ts).
 
 CREATE TABLE IF NOT EXISTS published_puzzles (
   puzzle_id TEXT NOT NULL,

@@ -13,10 +13,12 @@
   // or shrinks with the space around it.
   flex-shrink: 0;
   padding: $spacing-8 $spacing-16;
-  background-color: $color-brand-primary-wash;
+  background-color: $color-gray-10;
   font-family: $font-body;
   font-size: $font-size-16;
   color: $color-gray-90;
+  border-bottom: solid 1px $color-gray-30;
+  border-top: solid 1px $color-gray-30;
 
   // StarRating's own top padding is for its larger card placements; here it
   // sits centred on the text line.

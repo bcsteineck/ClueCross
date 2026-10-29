@@ -35,7 +35,6 @@ export function MobileHowToPlayView({ onBack }: MobileHowToPlayViewProps) {
           <li>Reveal letters one at a time using the "Reveal Letter" feature to help complete the puzzle.</li>
           <li>Revealing a letter locks every occurrence of that letter across the puzzle board.</li>
           <li>Puzzles begin with three free letter reveals.</li>
-          <li>Letter reveals reduce your score according to the cost of each letter.</li>
           <li>Additional reveals reduce your score according to each letter's cost.</li>
           <li>Scores are translated into a 0 to 3 star rating upon puzzle completion.</li>
           <li>The higher your remaining score, the more stars you earn.</li>

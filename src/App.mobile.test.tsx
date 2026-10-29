@@ -97,7 +97,7 @@ describe('Mobile layout', () => {
     expect(screen.getByText(/today's clue/i)).toBeTruthy() // info bar persists
     expect(screen.getByTestId('letter-A')).toBeTruthy()
 
-    await user.click(screen.getByRole('button', { name: /^cancel reveal$/i }))
+    await user.click(screen.getByRole('button', { name: /^back to puzzle$/i }))
 
     // Back on the Puzzle view, with nothing revealed or spent (spec section 7: Cancel).
     expect(screen.queryByText(/select letter to reveal/i)).toBeNull()
@@ -181,7 +181,7 @@ describe('Mobile layout', () => {
 
     await user.click(screen.getByRole('button', { name: /^how to play$/i }))
     expect(screen.getByRole('heading', { name: /how to play/i })).toBeTruthy()
-    expect(screen.getByText(/three free reveals/i)).toBeTruthy()
+    expect(screen.getByText(/three free letter reveals/i)).toBeTruthy()
 
     await user.click(screen.getByRole('button', { name: /back to puzzle/i }))
     expect(screen.getAllByTestId(/^cell-/).length).toBeGreaterThan(0)

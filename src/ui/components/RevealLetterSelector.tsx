@@ -38,7 +38,7 @@ export function RevealLetterSelector({ onRevealed }: RevealLetterSelectorProps) 
   return (
     <div className="reveal-letter-selector">
       <h2 ref={headingRef} tabIndex={-1} className="reveal-letter-selector__heading">
-        Select Letter to Reveal!
+        Select Letter to Reveal
       </h2>
       <div
         className="reveal-letter-selector__grid"
