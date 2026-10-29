@@ -42,7 +42,7 @@ export function MobileRevealView({
       <div className="mobile-reveal-view__cancel-band">
         <RevealButton
           variant="cancel"
-          label="Cancel Reveal"
+          label="Back to Puzzle"
           sublabel={getFreeRevealsSublabel(state.freeRevealsRemaining)}
           sublabelDots={state.freeRevealsRemaining}
           onClick={onCancel}

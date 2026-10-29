@@ -8,7 +8,7 @@
 
 .mobile-reveal-view__selector {
   // Same footprint as .mobile-puzzle-view__board, so the score line and
-  // Cancel Reveal land where they sit on the Puzzle view: the puzzle's own
+  // Back to Puzzle land where they sit on the Puzzle view: the puzzle's own
   // shape (cols:rows) inside 16px padding. The board's grid keeps that
   // ratio inside its padding, so the ratio applies to this content box too
   // (content-box sizing). --cols/--rows come from MobileLayout (see there),

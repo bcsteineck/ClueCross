@@ -10,7 +10,7 @@ export interface RevealButtonProps {
   onClick: () => void
 }
 
-// The primary "Reveal Letter" CTA (green) and its "Cancel Reveal" (purple)
+// The primary "Reveal Letter" CTA (green) and its "Back to Puzzle" (purple)
 // counterpart shown while the Reveal Letter view is open — same Figma
 // component, two variants. The sublabel renders as a caption below the
 // button rather than inside it, so the two variants' buttons always match

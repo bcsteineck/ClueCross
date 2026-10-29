@@ -258,7 +258,7 @@ Contains:
 
 1. Same puzzle information/navigation bar
 2. 1:1 Reveal Letter selector
-3. Cancel Reveal button
+3. Back to Puzzle button
 
 The Reveal selector occupies the same primary footprint as the puzzle so
 switching Puzzle -> Reveal does not cause the main content above/beside it
@@ -334,7 +334,7 @@ again.
 
 ## Cancel
 
-Cancel Reveal closes the Reveal Letter view without:
+Back to Puzzle closes the Reveal Letter view without:
 
 - revealing a letter
 - consuming a free reveal

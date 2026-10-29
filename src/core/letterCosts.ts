@@ -82,7 +82,7 @@ export function getLetterCost(letter: string): number {
 }
 
 // Shared by every place that shows the remaining free-reveal count (the
-// Reveal Letter and Cancel Reveal buttons, on both breakpoints) — undefined
+// Reveal Letter and Back to Puzzle buttons, on both breakpoints) — undefined
 // once they're exhausted, so callers can render nothing rather than an
 // empty or zero-count message.
 export function getFreeRevealsSublabel(freeRevealsRemaining: number): string | undefined {
