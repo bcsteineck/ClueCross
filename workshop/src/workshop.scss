@@ -1973,6 +1973,11 @@ button.ws-editor-board__cell {
     cursor: pointer;
   }
 
+  // An unused word with at least one connected placement (its count says so in text).
+  &--placeable {
+    background: $color-gray-10;
+  }
+
   &[aria-pressed='true'] {
     border-color: $ws-accent;
     box-shadow: inset 0 0 0 $border-1 $ws-accent;

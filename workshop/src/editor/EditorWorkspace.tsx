@@ -757,7 +757,7 @@ export function EditorWorkspace({
                     <li key={entry.word}>
                       <button
                         type="button"
-                        className="ws-editor__word"
+                        className={count > 0 ? 'ws-editor__word ws-editor__word--placeable' : 'ws-editor__word'}
                         aria-pressed={operation?.kind === 'replace' ? undefined : active}
                         onClick={() => (operation?.kind === 'replace' ? handleReplace(entry.word) : startAdd(entry.word))}
                       >
