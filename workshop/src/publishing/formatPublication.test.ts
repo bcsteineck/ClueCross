@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { formatPublishDate, formatReleaseInstant } from './formatPublication'
+import { formatLocalInstant, formatPublishDate, formatReleaseInstant } from './formatPublication'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -25,5 +25,20 @@ describe('publication date formatting', () => {
       expect(formatPublishDate('2027-01-01'), tz).toBe('January 1, 2027')
       expect(formatReleaseInstant('2026-10-04T02:00:00.000Z'), tz).toBe('October 3 at 10:00 PM ET')
     }
+  })
+
+  it('shows a release instant in another zone with that date’s own offset', () => {
+    // Nov 7, 2026 at 10 PM EST, the release of the November 8 puzzle.
+    expect(formatLocalInstant('2026-11-08T03:00:00.000Z', 'America/Los_Angeles')).toBe('November 7 at 7:00 PM PST')
+    expect(formatLocalInstant('2026-11-08T03:00:00.000Z', 'America/New_York')).toBe('November 7 at 10:00 PM EST')
+    // Summer: daylight time on both coasts.
+    expect(formatLocalInstant('2026-07-05T02:00:00.000Z', 'America/Los_Angeles')).toBe('July 4 at 7:00 PM PDT')
+    // A zone ahead of Eastern lands on the next calendar day.
+    expect(formatLocalInstant('2026-11-08T03:00:00.000Z', 'UTC')).toBe('November 8 at 3:00 AM UTC')
+  })
+
+  it('defaults to the machine (browser) timezone', () => {
+    vi.stubEnv('TZ', 'America/Chicago')
+    expect(formatLocalInstant('2026-11-08T03:00:00.000Z')).toBe('November 7 at 9:00 PM CST')
   })
 })

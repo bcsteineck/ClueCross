@@ -140,3 +140,35 @@ describe('Production endpoints (enabled)', () => {
     expect(JSON.stringify(crashed)).not.toMatch(/secret|postgres/)
   })
 })
+
+describe('backfill routes', () => {
+  const backfillBody = (overrides: Record<string, unknown> = {}) =>
+    JSON.stringify({ request: catsRequest(), publishDate: '2026-11-08', expectedFingerprint: 'a'.repeat(64), confirmPuzzleId: 'cats', ...overrides })
+
+  it('route only through the Production-operations paths, by path, with the same transport checks', async () => {
+    const { spy, middleware } = enabled()
+    await call({ url: PRODUCTION_PATHS.backfillPreview, body: JSON.stringify({ request: catsRequest(), operation: 'publish' }) }, middleware)
+    expect(spy).toHaveBeenLastCalledWith({ operation: 'backfill-preview', request: catsRequest() })
+    await call({ url: PRODUCTION_PATHS.backfill, body: backfillBody({ operation: 'publish' }) }, middleware)
+    expect(spy).toHaveBeenLastCalledWith(expect.objectContaining({ operation: 'backfill', publishDate: '2026-11-08', confirmPuzzleId: 'cats' }))
+    expect(
+      await call({ url: PRODUCTION_PATHS.backfill, headers: { ...JSON_TYPE, host: 'localhost:5175', origin: 'http://evil.example' }, body: backfillBody() }, middleware),
+    ).toMatchObject({ status: 403 })
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses a missing or wrong confirmation, or an invalid date, before starting anything', async () => {
+    const { spy, middleware } = enabled()
+    for (const body of [backfillBody({ confirmPuzzleId: 'dogs' }), backfillBody({ confirmPuzzleId: undefined }), backfillBody({ publishDate: '2026-11-31' })]) {
+      expect(await call({ url: PRODUCTION_PATHS.backfill, body }, middleware)).toMatchObject({ status: 400 })
+    }
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('is disabled with the rest of Production operations in plain Workshop', async () => {
+    const run = vi.fn<RunProductionOperation>()
+    const middleware = productionOpsMiddleware({ enabled: false, run })
+    expect(await call({ url: PRODUCTION_PATHS.backfill, body: backfillBody() }, middleware)).toMatchObject({ status: 404 })
+    expect(run).not.toHaveBeenCalled()
+  })
+})

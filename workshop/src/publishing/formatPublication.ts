@@ -36,3 +36,26 @@ export function formatReleaseInstant(iso: string): string {
   )
   return `${parts.month} ${parts.day} at ${parts.hour}:${parts.minute} ${parts.dayPeriod} ET`
 }
+
+/**
+ * "November 7 at 7:00 PM PST" — the same instant in a viewer's own zone,
+ * by default the browser's. Intl supplies the offset and abbreviation for
+ * that date, so daylight saving time is never assumed.
+ */
+export function formatLocalInstant(iso: string, timeZone?: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+      timeZoneName: 'short',
+    })
+      .formatToParts(new Date(iso))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  )
+  return `${parts.month} ${parts.day} at ${parts.hour}:${parts.minute} ${parts.dayPeriod} ${parts.timeZoneName}`
+}

@@ -1280,7 +1280,7 @@ function defaultProductionFakes() {
   return {
     schedule: vi.fn<ProductionClient['schedule']>(async () => ({
       ok: true,
-      body: { status: 'ok', schedule: { asOf: '2026-10-06T16:00:00.000Z', entries: [], summary: { currentDate: null, lastScheduledDate: null, scheduledCount: 0, filledThrough: null, daysAhead: 0, gaps: [] } } },
+      body: { status: 'ok', schedule: { asOf: '2026-10-06T16:00:00.000Z', entries: [], summary: { currentDate: null, lastScheduledDate: null, scheduledCount: 0, filledThrough: null, daysAhead: 0, gaps: [], missedDates: [] } } },
     })),
     previewPublish: vi.fn<ProductionClient['previewPublish']>(async () => ({
       ok: true,
@@ -1293,6 +1293,8 @@ function defaultProductionFakes() {
         publication: { puzzleId: request.id, publishDate: '2026-10-07', releaseInstant: '2026-10-07T02:00:00.000Z', contentFingerprint: PRODUCTION_FINGERPRINT, fingerprintVersion: 1 },
       },
     })),
+    previewBackfill: vi.fn(),
+    backfill: vi.fn(),
     previewRemoval: vi.fn<ProductionClient['previewRemoval']>(async () => ({ ok: true, body: { status: 'not-found' } })),
     remove: vi.fn<ProductionClient['remove']>(async () => ({ ok: true, body: { status: 'not-found' } })),
   }
@@ -1312,6 +1314,9 @@ describe('WorkshopApp Production operations', () => {
     expect(screen.queryByRole('link', { name: 'Production Schedule' })).toBeNull()
     expect(screen.queryByRole('heading', { name: 'Publish to Production' })).toBeNull()
     expect(screen.getByRole('heading', { name: 'Publish to dev calendar (testing)' })).toBeTruthy()
+    // Backfilling a missed date is Production-only: the dev calendar offers no date choice.
+    expect(screen.queryByRole('radio', { name: 'A missed past date' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Find Missed Dates' })).toBeNull()
     void user
   })
 

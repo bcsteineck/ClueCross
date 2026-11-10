@@ -101,6 +101,27 @@ describe('GET /api/calendar', () => {
     expect(response.headers['Content-Type']).toBe('application/json; charset=utf-8')
   })
 
+  it('serves a backfilled missed date like any released date, CDN-cached for at most a minute', async () => {
+    // Oct 1 was missed, then backfilled after its release time had passed.
+    const current = released('catstwo', '2026-10-02')
+    const reader = fakeReader({
+      calendar: () => ({
+        now: NOON_OCT_2,
+        dates: [
+          { publishDate: '2026-09-30', puzzleId: 'older' },
+          { publishDate: '2026-10-01', puzzleId: 'backfilled' },
+          { publishDate: '2026-10-02', puzzleId: 'catstwo' },
+        ],
+        current,
+      }),
+    })
+    const response = await handleCalendarRequest(GET('/api/calendar'), { reader })
+    expect(response.status).toBe(200)
+    expect((response.body as { dates: { puzzleId: string }[] }).dates.map((d) => d.puzzleId)).toEqual(['older', 'backfilled', 'catstwo'])
+    expect(response.headers['Cache-Control']).toBe('public, max-age=0, must-revalidate')
+    expect(response.headers['Vercel-CDN-Cache-Control']).toBe('public, s-maxage=60')
+  })
+
   it('returns an empty calendar as 200', async () => {
     const reader = fakeReader({ calendar: () => ({ now: NOON_OCT_2, dates: [], current: null }) })
     const response = await handleCalendarRequest(GET('/api/calendar'), { reader })

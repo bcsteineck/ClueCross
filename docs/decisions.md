@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-09
+
+### Backfilling a missed date (retroactive publishing)
+
+A puzzle published just after the 10 PM Eastern cutoff lands a day late, leaving a hole in the Archive (for example, November 8 was missed because the puzzle went out after 10 PM on November 7). Production publishing now has a second, explicit mode, **A missed past date**, beside **Next available date**.
+
+- **Eligibility.** A date can be backfilled only if it is on or after the first published date, its release instant (10 PM Eastern the day before) has already passed, and it holds no puzzle. A missed date qualifies the moment its cutoff passes, including today's date. With no publication history nothing qualifies; there is no hardcoded launch date. The rules live in `src/publishing/releaseSchedule.ts` (`backfillIneligibility`, `missedPublishDates`) and are judged by database time.
+- **Normal publishing is unchanged.** It still appends after the latest date and never fills a gap; a backfill is a separate operation that must name its date, never a reinterpretation of Publish.
+- **Nothing else moves.** A backfill inserts one row. It never edits, moves, or replaces another puzzle, released or scheduled, and never shifts dates. A retry re-checks the same date and reports why it can't be used; it never substitutes another date.
+- **Separate guarded insert.** The existing insert keeps its "release still in the future" guard. Backfill uses its own insert with the reverse guard (release already passed) plus the first-date bound, both in SQL against `statement_timestamp()`, and the same `UNIQUE (puzzle_id)` / `UNIQUE (publish_date)` constraints. No schema change.
+- **Released at once.** A backfilled row is visible through `released_puzzles` as soon as it commits. To make it show in the Archive promptly, the `/api/calendar` CDN cache is now at most 60 seconds (still never past the next release boundary). Released-puzzle and 404 caching are unchanged.
+- **Production UI only.** The Workshop's Production publishing offers the mode; the dev calendar UI doesn't. The domain function and store support both environments, and the tests run it on the in-memory store and the Neon `test` branch.
+- **Confirmation.** The operator types the puzzle ID; the confirmation shows the ID, clue, date, its release time in Eastern and in the browser's zone, and that the puzzle becomes public immediately. The server re-validates the content, the previewed fingerprint, the date, and the confirmation.
+- **Recovering a late puzzle.** There is no "move to a past date". Remove the late puzzle from the Production Schedule while it is still scheduled (later scheduled puzzles shift back as before), then publish the same Final Puzzle to the missed date. Removal doesn't touch the Workshop draft, and the removed ID is free to reuse. A released late puzzle can't be moved.
+
 ## 2026-10-22
 
 ### Workshop Saved Candidates
@@ -131,7 +146,7 @@ Publishing to Production no longer needs a captured browser request or a hand-st
 The calendar invariant changes for unreleased rows only:
 
 - **Released puzzles are immutable history.** No Workshop operation edits, moves, replaces, or removes one. Correcting a live puzzle stays out of scope.
-- **Scheduled puzzles are a future queue.** New puzzles still append through `publishFinalPuzzle`'s date assignment. A scheduled puzzle may be removed; every later scheduled puzzle moves forward one day, in order, in one SERIALIZABLE transaction, so the queue never has an internal gap. A removed puzzle is simply deleted: there is no removal history, and its ID may be reused.
+- **Scheduled puzzles are a future queue.** New puzzles still append through `publishFinalPuzzle`'s date assignment (a missed past date is filled only by an explicit backfill; see 2026-11-09). A scheduled puzzle may be removed; every later scheduled puzzle moves forward one day, in order, in one SERIALIZABLE transaction, so the queue never has an internal gap. A removed puzzle is simply deleted: there is no removal history, and its ID may be reused.
 
 Removability is decided by database time inside the removal transaction, never by the browser. The confirmation carries the previewed date and fingerprint plus the typed puzzle ID, and a mismatch changes nothing. The puzzle ID is the removal identity, so retrying a completed removal reports "not found" rather than removing the puzzle that moved into its date. Moves run in ascending date order, which keeps the non-deferrable `UNIQUE (publish_date)` constraint valid without a schema change.
 

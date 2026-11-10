@@ -26,6 +26,8 @@ const OPERATION_BY_PATH: Record<string, ProductionOperationName> = {
   [PRODUCTION_PATHS.schedule]: 'schedule',
   [PRODUCTION_PATHS.publishPreview]: 'publish-preview',
   [PRODUCTION_PATHS.publish]: 'publish',
+  [PRODUCTION_PATHS.backfillPreview]: 'backfill-preview',
+  [PRODUCTION_PATHS.backfill]: 'backfill',
   [PRODUCTION_PATHS.removePreview]: 'remove-preview',
   [PRODUCTION_PATHS.remove]: 'remove',
 }

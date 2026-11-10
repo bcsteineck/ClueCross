@@ -16,7 +16,7 @@
 // and fingerprint, so a stale preview can never be forced through.
 
 import { addDays, compareDateKeys } from '../../../src/publishing/dateKey'
-import { releaseInstant } from '../../../src/publishing/releaseSchedule'
+import { missedPublishDates, releaseInstant } from '../../../src/publishing/releaseSchedule'
 import type { DateKey } from '../../../src/publishing/types'
 import { MAX_PUBLISH_ATTEMPTS } from './publishPuzzle'
 import { PublicationContentionError } from './publicationStore'
@@ -106,6 +106,7 @@ export function buildSchedule(records: CalendarRecord[], now: Date): Schedule {
       filledThrough,
       daysAhead: currentDate !== null && filledThrough !== null ? daysBetween(currentDate, filledThrough) : 0,
       gaps,
+      missedDates: missedPublishDates([...dates], now),
     },
   }
 }

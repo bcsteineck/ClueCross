@@ -14,7 +14,13 @@
 //   - deleteScheduled/moveScheduled change a row only while it is still at
 //     the given date and the affected release instant is strictly after
 //     now(), so a released row can never be deleted or moved; they report
-//     whether the row changed, and a move onto a taken date is contention.
+//     whether the row changed, and a move onto a taken date is contention;
+//   - insertMissed is the separate backfill insert: the same uniqueness,
+//     but its guard is the reverse of insert's — the release instant must
+//     already have passed — and the date must be on or after the earliest
+//     existing publishDate (so never with an empty calendar). A refused
+//     guard is contention ('backfill-slot-refused'); the retry re-checks
+//     eligibility and reports why.
 
 import type { DateKey, FingerprintVersion, PublishedPuzzle } from '../../../src/publishing/types'
 
@@ -40,6 +46,8 @@ export interface PublicationReader {
 export interface PublicationTransaction extends PublicationReader {
   /** Stages the record; it becomes visible to others only when the transaction commits. */
   insert(record: NewPublication): Promise<PublishedPuzzle>
+  /** Stages a backfill onto an already-released, missed date; never moves or touches another row. */
+  insertMissed(record: NewPublication): Promise<PublishedPuzzle>
   /** Deletes the row if it is still at `publishDate` and that date has not released. */
   deleteScheduled(puzzleId: string, publishDate: DateKey): Promise<boolean>
   /** Moves the row from `from` to `to` if it is still at `from` and `to` has not released. */
@@ -52,7 +60,12 @@ export interface PublicationStore {
   reader(): PublicationReader
 }
 
-export type ContentionReason = 'puzzle-id-taken' | 'publish-date-taken' | 'serialization' | 'release-slot-passed'
+export type ContentionReason =
+  | 'puzzle-id-taken'
+  | 'publish-date-taken'
+  | 'serialization'
+  | 'release-slot-passed'
+  | 'backfill-slot-refused'
 
 /** Retryable: another publisher or the clock moved; a completely fresh attempt may succeed. */
 export class PublicationContentionError extends Error {

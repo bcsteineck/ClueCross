@@ -16,17 +16,19 @@ Workshop Final Puzzle → server-side validation → publishing service → Neon
 - **Code:** `workshop/server/publishing/` (writes) and `src/publishing/` (shared pure rules).
 - **Released rows are permanent.** A released puzzle (its release instant has passed by database time) is never edited, moved, replaced, or removed. The same ID with the same content is an idempotent success; with different content it is a conflict.
 - **Scheduled rows are a future queue.** New puzzles append at the next date. An unreleased puzzle may be deliberately removed; every later scheduled puzzle then moves forward one day, in order, in the same transaction (`workshop/server/publishing/scheduleManagement.ts`). The delete and each move re-check the release guard against `statement_timestamp()`, so a released row can never change, and moves run in ascending date order so the unique `publish_date` constraint never collides.
+- **Missed dates can be backfilled, explicitly.** `backfillFinalPuzzle` publishes to one date the operator chose: on or after the first published date, already past its release instant, and empty (`backfillIneligibility` in `src/publishing/releaseSchedule.ts`). It inserts through a separate statement whose guard is the reverse of the normal insert's (release already passed) plus the first-date bound, and the same unique constraints. It never moves another row or substitutes a date; a retry re-checks the same date. Normal publishing still never fills a gap.
 - **No public write endpoint exists**, and the Workshop is not deployed.
 
 ## Production operations (Workshop)
 
-`npm run workshop:production-ops` starts the Workshop on port 5175 with Production Preview / Publish in Final Puzzle and a **Production Schedule** view (release status, removal with backfill). Plain `npm run workshop` (port 5174) has none of this: every `/api/production/*` request answers "disabled".
+`npm run workshop:production-ops` starts the Workshop on port 5175 with Production Preview / Publish in Final Puzzle (to the next date, or to a missed past date) and a **Production Schedule** view (release status, missed dates, removal with queue compaction). Plain `npm run workshop` (port 5174) has none of this: every `/api/production/*` request answers "disabled".
 
 Workshop browser → `/api/production/*` (same-origin, JSON, typed puzzle-ID confirmation) → `vercel env run -e production -- node workshop/server/production/runner.mjs` (one short-lived child per operation; the operation on stdin) → identity check → the existing publishing/schedule services → one sanitized result line → child exits.
 
 - **Credentials:** only the child process has Production's `DATABASE_URL_UNPOOLED`, injected by the Vercel CLI. The Workshop server, the browser, `.env.local`, command lines, and logs never hold it. The Workshop's own publishing store stays on `dev`.
 - **Identity:** the runner refuses unless the `cluecross_production_calendar` marker table exists (`db/migrations/0003`, applied to `main` only) and the test branch's `cluecross_test_branch` marker does not.
 - **Exact content:** Production Preview and Publish send the approved `{ construction, id, clue }` from Final Puzzle. Publish also sends the previewed fingerprint; `publishFinalPuzzle` refuses different content before writing.
+- **Missed dates:** Publish to Production offers **Next available date** (above, unchanged) or **A missed past date**. `backfill-preview` lists the missed dates by database time (never the browser clock) with the fingerprint; `backfill` sends the chosen date, the fingerprint, and the typed puzzle ID. The confirmation shows the release time in Eastern and the browser's zone. The schedule summary lists missed dates too. The dev calendar UI has no such mode.
 - **Privacy:** the schedule is metadata only (ID, clue, date, release instant, status, fingerprint) and never passes through the player's `api/`. `cluecross_reader` is unchanged and still sees released rows only.
 - **Out of scope:** correcting or replacing a released (live) puzzle, editing a scheduled puzzle in place, reordering, and any removal history.
 
@@ -99,7 +101,7 @@ Neon `published_puzzles` → `released_puzzles` view → `cluecross_reader` → 
 - **Responses:**
   - a gap and an unreleased date return identical 404s;
   - released puzzles are cached as immutable;
-  - the calendar's CDN cache expires before the next release.
+  - the calendar's CDN cache lasts at most 60 seconds and always expires before the next release, so a backfilled date appears within about a minute.
 
 ## Release rule
 
@@ -111,7 +113,7 @@ Neon `published_puzzles` → `released_puzzles` view → `cluecross_reader` → 
 
 - **The server decides the current puzzle:** the released puzzle with the greatest `publishDate`. The browser clock never authorizes availability.
 - **"Today's Clue"** labels the current puzzle, even between 10 PM and midnight Eastern, when its date is the next civil day.
-- **The Archive** lists released dates only; gaps stay unavailable.
+- **The Archive** lists released dates only; a gap stays unavailable until it is backfilled.
 - **Opening the Archive** refreshes the calendar. An active puzzle is never replaced when a release passes; a reload or new visit gets the new current puzzle.
 - **No data:** if the calendar is loading, fails, or is empty, the player shows a loading, error-with-Retry, or no-puzzle state. It never falls back to a bundled puzzle.
 

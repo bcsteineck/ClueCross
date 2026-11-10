@@ -55,6 +55,8 @@ function fakeProduction(): ProductionClient {
     schedule: vi.fn(() => new Promise<never>(() => {})),
     previewPublish: vi.fn(),
     publish: vi.fn(),
+    previewBackfill: vi.fn(),
+    backfill: vi.fn(),
     previewRemoval: vi.fn(),
     remove: vi.fn(),
   }

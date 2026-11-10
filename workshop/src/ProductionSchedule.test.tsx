@@ -29,7 +29,7 @@ const SCHEDULE: Schedule = {
     entry('animals', 'Animals', '2026-10-07', 'scheduled', '2026-10-07T02:00:00.000Z'),
     entry('movies', 'Movies', '2026-10-08', 'scheduled', '2026-10-08T02:00:00.000Z'),
   ],
-  summary: { currentDate: '2026-10-06', lastScheduledDate: '2026-10-08', scheduledCount: 2, filledThrough: '2026-10-08', daysAhead: 2, gaps: [] },
+  summary: { currentDate: '2026-10-06', lastScheduledDate: '2026-10-08', scheduledCount: 2, filledThrough: '2026-10-08', daysAhead: 2, gaps: [], missedDates: [] },
 }
 
 function fakeClient(overrides: Partial<ProductionClient> = {}) {
@@ -37,6 +37,8 @@ function fakeClient(overrides: Partial<ProductionClient> = {}) {
     schedule: vi.fn<ProductionClient['schedule']>(async () => ({ ok: true, body: { status: 'ok', schedule: SCHEDULE } })),
     previewPublish: vi.fn<ProductionClient['previewPublish']>(),
     publish: vi.fn<ProductionClient['publish']>(),
+    previewBackfill: vi.fn(),
+    backfill: vi.fn(),
     previewRemoval: vi.fn<ProductionClient['previewRemoval']>(async () => ({
       ok: true,
       body: {
@@ -67,7 +69,11 @@ describe('Production Schedule', () => {
     expect(within(row('Animals')).getByText('Scheduled')).toBeTruthy()
     expect(within(row('Animals')).getByText('October 6 at 10:00 PM ET')).toBeTruthy()
     expect(screen.getByText('October 8, 2026 (2 days ahead)')).toBeTruthy()
-    expect(screen.getByText('None')).toBeTruthy() // no gaps
+    expect(screen.getByText('Gaps').nextElementSibling?.textContent).toBe('None')
+    expect(screen.getByText('Missed dates').nextElementSibling?.textContent).toBe('None')
+    const overview = screen.getByRole('region', { name: 'Schedule Overview' })
+    expect(within(overview).getByText('Missed dates')).toBeTruthy()
+    expect(within(overview).getByText(/^As of/).textContent).toBe('As of October 6 at 12:00 PM ET')
 
     // Only scheduled rows can be removed.
     expect(within(row('Colors')).queryByRole('button')).toBeNull()
