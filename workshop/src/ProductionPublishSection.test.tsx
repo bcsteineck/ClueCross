@@ -51,6 +51,7 @@ function fakeClient(overrides: Partial<ProductionClient> = {}): ProductionClient
     backfill: vi.fn<ProductionClient['backfill']>(async () => created),
     previewRemoval: vi.fn(),
     remove: vi.fn(),
+    previewPuzzle: vi.fn(),
     ...overrides,
   }
 }

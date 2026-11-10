@@ -1,4 +1,4 @@
-// The seven Production management operations, as one small orchestration
+// The eight Production management operations, as one small orchestration
 // layer over the existing publishing and schedule services:
 //
 //   schedule          readSchedule              (metadata only)
@@ -8,6 +8,7 @@
 //   backfill          backfillFinalPuzzle       (one explicit missed past date)
 //   remove-preview    previewRemoval            (never writes)
 //   remove            removeScheduledPuzzle     (atomic remove + queue compaction)
+//   puzzle-preview    previewStoredPuzzle       (never writes; one puzzle's content)
 //
 // Nothing here assigns dates, fingerprints content, or decides release:
 // those stay in publishPuzzle.ts / scheduleManagement.ts against the
@@ -15,7 +16,8 @@
 // (including the operator's typed confirmation) and maps outcomes onto the
 // wire contract, so every result is built from known fields — no driver
 // errors, connection details, or puzzle content beyond what the contract
-// names ever leave it.
+// names ever leave it. puzzle-preview is the only operation that returns a
+// stored puzzle's content, and only for the one puzzle it names.
 
 import { isDateKey } from '../../../src/publishing/dateKey'
 import type { BackfillIneligibility } from '../../../src/publishing/releaseSchedule'
@@ -24,6 +26,7 @@ import type {
   ProductionBackfillPreviewBody,
   ProductionPublishBody,
   ProductionPublishPreviewBody,
+  ProductionPuzzlePreviewBody,
   ProductionRemoveBody,
   ProductionRemovePreviewBody,
   ProductionScheduleBody,
@@ -32,6 +35,7 @@ import type { PublishingConflictBody, PublishRequest } from '../../src/publishin
 import { handlePreviewRequest } from '../publishing/publishingEndpoint'
 import { parsePublishRequest } from '../publishing/parsePublishRequest'
 import type { PublicationStore } from '../publishing/publicationStore'
+import { previewStoredPuzzle } from '../publishing/puzzlePreview'
 import { backfillFinalPuzzle, previewBackfill, publishFinalPuzzle } from '../publishing/publishPuzzle'
 import type { ExistingPublicationRef } from '../publishing/publishPuzzle'
 import { previewRemoval, readSchedule, removeScheduledPuzzle } from '../publishing/scheduleManagement'
@@ -50,6 +54,7 @@ export type ProductionOperation =
     }
   | { operation: 'remove-preview'; puzzleId: string }
   | { operation: 'remove'; puzzleId: string; expectedPublishDate: string; expectedFingerprint: string; confirmPuzzleId: string }
+  | { operation: 'puzzle-preview'; puzzleId: string; expectedFingerprint: string }
 
 export type ProductionOperationName = ProductionOperation['operation']
 
@@ -61,6 +66,7 @@ export type ProductionOperationBody =
   | ProductionBackfillBody
   | ProductionRemovePreviewBody
   | ProductionRemoveBody
+  | ProductionPuzzlePreviewBody
 
 export type ParseOperationResult = { ok: true; operation: ProductionOperation } | { ok: false; message: string }
 
@@ -72,6 +78,7 @@ const OPERATIONS: readonly ProductionOperationName[] = [
   'backfill',
   'remove-preview',
   'remove',
+  'puzzle-preview',
 ]
 const PUZZLE_ID = /^[a-z][a-z0-9]*$/
 const FINGERPRINT = /^[0-9a-f]{64}$/
@@ -173,6 +180,15 @@ export function parseProductionOperation(value: unknown): ParseOperationResult {
           },
         }
       }
+      case 'puzzle-preview':
+        return {
+          ok: true,
+          operation: {
+            operation: 'puzzle-preview',
+            puzzleId: requireString(value, 'puzzleId', PUZZLE_ID),
+            expectedFingerprint: requireString(value, 'expectedFingerprint', FINGERPRINT),
+          },
+        }
     }
   } catch (error) {
     if (error instanceof OperationShapeError) return { ok: false, message: error.message }
@@ -298,6 +314,27 @@ async function remove(operation: Extract<ProductionOperation, { operation: 'remo
   }
 }
 
+async function puzzlePreview(
+  operation: Extract<ProductionOperation, { operation: 'puzzle-preview' }>,
+  store: PublicationStore,
+): Promise<ProductionPuzzlePreviewBody> {
+  try {
+    const outcome = await previewStoredPuzzle(store.reader(), operation.puzzleId, operation.expectedFingerprint)
+    switch (outcome.kind) {
+      case 'ok':
+        return { status: 'ok', preview: outcome.preview }
+      case 'not-found':
+        return { status: 'not-found' }
+      case 'changed':
+        return { status: 'changed', current: outcome.current }
+      case 'unreadable':
+        return { status: 'unavailable', message: 'The stored puzzle content couldn’t be read for preview. Nothing was changed.' }
+    }
+  } catch {
+    return { status: 'unavailable', message: UNAVAILABLE }
+  }
+}
+
 /** Runs one validated operation against `store`. Never throws; failures are sanitized bodies. */
 export async function runProductionOperation(operation: ProductionOperation, store: PublicationStore): Promise<ProductionOperationBody> {
   try {
@@ -317,6 +354,8 @@ export async function runProductionOperation(operation: ProductionOperation, sto
         return await removePreview(operation.puzzleId, store)
       case 'remove':
         return await remove(operation, store)
+      case 'puzzle-preview':
+        return await puzzlePreview(operation, store)
     }
   } catch {
     return { status: 'production-unavailable', reason: 'unavailable', message: UNAVAILABLE }

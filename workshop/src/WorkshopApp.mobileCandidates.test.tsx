@@ -57,6 +57,7 @@ function fakeProduction(): ProductionClient {
     publish: vi.fn(),
     previewBackfill: vi.fn(),
     backfill: vi.fn(),
+    previewPuzzle: vi.fn(),
     previewRemoval: vi.fn(),
     remove: vi.fn(),
   }

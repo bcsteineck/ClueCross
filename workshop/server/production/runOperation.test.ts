@@ -45,6 +45,25 @@ describe('Production runner', () => {
     expect(d.createStore).not.toHaveBeenCalled()
   })
 
+  it('puzzle preview goes through the same identity check, and returns content only once verified', async () => {
+    const d = await deps(PRODUCTION)
+    const { contentFingerprint } = d.store.records()[0]
+    const preview = JSON.stringify({ operation: 'puzzle-preview', puzzleId: 'outerspace', expectedFingerprint: contentFingerprint })
+    expect(await runOperation(preview, { [PRODUCTION_DATABASE_URL_VARIABLE]: SECRET_URL }, d)).toMatchObject({
+      ok: true,
+      body: { status: 'ok', preview: { puzzleId: 'outerspace' } },
+    })
+    for (const identity of [
+      { productionMarker: false, testMarker: false },
+      { productionMarker: true, testMarker: true },
+    ]) {
+      const refused = await deps(identity)
+      const result = await runOperation(preview, { [PRODUCTION_DATABASE_URL_VARIABLE]: SECRET_URL }, refused)
+      expect(result).toMatchObject({ ok: false, error: 'identity' })
+      expect(refused.createStore).not.toHaveBeenCalled()
+    }
+  })
+
   it('reads only the Production direct connection variable', async () => {
     const d = await deps(PRODUCTION)
     const others = { DATABASE_URL: SECRET_URL, POSTGRES_URL: SECRET_URL, PUBLISHING_DATABASE_URL: SECRET_URL, PUZZLES_READ_DATABASE_URL: SECRET_URL }

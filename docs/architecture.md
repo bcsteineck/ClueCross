@@ -21,7 +21,7 @@ Workshop Final Puzzle → server-side validation → publishing service → Neon
 
 ## Production operations (Workshop)
 
-`npm run workshop:production-ops` starts the Workshop on port 5175 with Production Preview / Publish in Final Puzzle (to the next date, or to a missed past date) and a **Production Schedule** view (release status, missed dates, removal with queue compaction). Plain `npm run workshop` (port 5174) has none of this: every `/api/production/*` request answers "disabled".
+`npm run workshop:production-ops` starts the Workshop on port 5175 with Production Preview / Publish in Final Puzzle (to the next date, or to a missed past date) and a **Production Schedule** view (release status, missed dates, read-only puzzle preview, removal with queue compaction). Plain `npm run workshop` (port 5174) has none of this: every `/api/production/*` request answers "disabled".
 
 Workshop browser → `/api/production/*` (same-origin, JSON, typed puzzle-ID confirmation) → `vercel env run -e production -- node workshop/server/production/runner.mjs` (one short-lived child per operation; the operation on stdin) → identity check → the existing publishing/schedule services → one sanitized result line → child exits.
 
@@ -29,7 +29,8 @@ Workshop browser → `/api/production/*` (same-origin, JSON, typed puzzle-ID con
 - **Identity:** the runner refuses unless the `cluecross_production_calendar` marker table exists (`db/migrations/0003`, applied to `main` only) and the test branch's `cluecross_test_branch` marker does not.
 - **Exact content:** Production Preview and Publish send the approved `{ construction, id, clue }` from Final Puzzle. Publish also sends the previewed fingerprint; `publishFinalPuzzle` refuses different content before writing.
 - **Missed dates:** Publish to Production offers **Next available date** (above, unchanged) or **A missed past date**. `backfill-preview` lists the missed dates by database time (never the browser clock) with the fingerprint; `backfill` sends the chosen date, the fingerprint, and the typed puzzle ID. The confirmation shows the release time in Eastern and the browser's zone. The schedule summary lists missed dates too. The dev calendar UI has no such mode.
-- **Privacy:** the schedule is metadata only (ID, clue, date, release instant, status, fingerprint) and never passes through the player's `api/`. `cluecross_reader` is unchanged and still sees released rows only.
+- **Puzzle preview:** each schedule row has a read-only **Preview**. Only when it is clicked, `puzzle-preview` sends the puzzle ID and the schedule's fingerprint, and the server returns that one puzzle's stored grid and answers (`workshop/server/publishing/puzzlePreview.ts`), or not-found / changed if the schedule is stale. Results are cached in memory per ID and fingerprint for the page's lifetime (`workshop/src/production/puzzlePreviewCache.ts`), never in browser storage.
+- **Privacy:** the schedule is metadata only (ID, clue, date, release instant, status, fingerprint) and never passes through the player's `api/`. The one exception is the on-demand puzzle preview above, which can return an unreleased puzzle's content to the local Production-operations Workshop only. `cluecross_reader` is unchanged and still sees released rows only; the player API never serves an unreleased puzzle.
 - **Out of scope:** correcting or replacing a released (live) puzzle, editing a scheduled puzzle in place, reordering, and any removal history.
 
 ## Workshop authoring state

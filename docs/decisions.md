@@ -1,5 +1,17 @@
 # Decisions
 
+## 2026-11-10
+
+### Production Schedule puzzle preview
+
+Each row of the Production Schedule, scheduled or released, has a **Preview** action that opens a read-only modal with the stored grid (every letter shown), the clue, ID, date, status, and the full answer list. There is no Show Answers toggle and nothing can be edited, solved, or published from it.
+
+- **A narrow exception to "metadata only".** The schedule list still carries no puzzle content. Unreleased content reaches the Workshop browser only through the dedicated read-only `puzzle-preview` Production operation, only for the one puzzle the operator clicked, and only in the local Production-operations Workshop. It uses the same transport and safeguards as the other operations (same-origin JSON POST, one `vercel env run` child, the Production identity check, sanitized results); it never writes. The player API is unchanged: `released_puzzles` and `/api/puzzle` still never serve an unreleased puzzle, and there is no public preview endpoint.
+- **The puzzle the schedule listed, or nothing.** The request names the puzzle ID and the fingerprint the schedule showed. A removed puzzle returns not-found; the same ID with different content returns "changed" (with no content); either way the modal says to refresh the schedule rather than showing a different puzzle. A puzzle whose date moved since the schedule loaded is shown with a note giving its current date.
+- **Stored data, not regenerated.** The server rebuilds the grid from the stored cells and positions (shifted so the top-left occupied cell is at 0,0) and the answers from the stored entries in order, using the existing parsers. The Workshop's read-only `CandidateBoard` renders the grid.
+- **Session cache in memory only.** Successful previews are kept per puzzle ID and fingerprint for the life of the Workshop page (owned by `WorkshopApp`, so leaving and returning to the schedule reuses them). A new fingerprint replaces the old entry; failures are never cached; an in-flight request is shared. Nothing is written to browser storage, and a reload clears it.
+- **Modal behavior.** Close, Escape, or the backdrop closes it; focus moves to the title, Tab stays inside, the rest of the page is inert and can't scroll, and focus returns to the Preview button without scrolling. The schedule stays mounted and the route doesn't change. The Close button is a text button, like the Workshop's navigation drawer.
+
 ## 2026-11-09
 
 ### Backfilling a missed date (retroactive publishing)

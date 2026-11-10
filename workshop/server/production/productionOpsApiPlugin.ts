@@ -30,6 +30,7 @@ const OPERATION_BY_PATH: Record<string, ProductionOperationName> = {
   [PRODUCTION_PATHS.backfill]: 'backfill',
   [PRODUCTION_PATHS.removePreview]: 'remove-preview',
   [PRODUCTION_PATHS.remove]: 'remove',
+  [PRODUCTION_PATHS.puzzlePreview]: 'puzzle-preview',
 }
 
 /** Production-operations mode: an explicit process-environment opt-in, exactly "1". */

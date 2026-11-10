@@ -59,3 +59,39 @@ export function formatLocalInstant(iso: string, timeZone?: string): string {
   )
   return `${parts.month} ${parts.day} at ${parts.hour}:${parts.minute} ${parts.dayPeriod} ${parts.timeZoneName}`
 }
+
+const shortDateFormat = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: '2-digit', day: '2-digit', year: '2-digit' })
+
+/** "10/04/26" — the compact form of formatPublishDate, for narrow tables. */
+export function formatPublishDateShort(date: DateKey): string {
+  const { year, month, day } = parseDateKey(date)
+  const utc = new Date(0)
+  utc.setUTCFullYear(year, month - 1, day)
+  return shortDateFormat.format(utc)
+}
+
+const shortReleaseFormat = new Intl.DateTimeFormat('en-US', {
+  timeZone: PUBLICATION_TIME_ZONE,
+  month: '2-digit',
+  day: '2-digit',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+})
+
+/**
+ * { date: "10/03", time: "10 PM" } — the compact form of
+ * formatReleaseInstant, still in Eastern time (the zone is named once, by
+ * the column header, instead of on every row). Minutes appear only when
+ * they aren't :00.
+ */
+export function formatReleaseInstantShort(iso: string): { date: string; time: string } {
+  const parts = Object.fromEntries(
+    shortReleaseFormat
+      .formatToParts(new Date(iso))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  )
+  const minutes = parts.minute === '00' ? '' : `:${parts.minute}`
+  return { date: `${parts.month}/${parts.day}`, time: `${parts.hour}${minutes} ${parts.dayPeriod}` }
+}

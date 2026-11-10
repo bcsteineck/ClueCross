@@ -235,3 +235,74 @@ describe('backfill operations', () => {
     })
   })
 })
+
+const previewIn = (body: Awaited<ReturnType<typeof runProductionOperation>>) => (body.status === 'ok' && 'preview' in body ? body.preview : null)
+
+describe('puzzle-preview operation', () => {
+  async function storeWithQueue() {
+    const store = await productionLikeStore()
+    store.commitDirectly(await publicationFor(animals(), '2026-10-07'))
+    return store
+  }
+  const fingerprintOf = (store: MemoryPublicationStore, puzzleId: string) => store.records().find((r) => r.puzzleId === puzzleId)!.contentFingerprint
+
+  it('parses only a puzzle ID and fingerprint, and needs no confirmation', () => {
+    expect(parse({ operation: 'puzzle-preview', puzzleId: 'animals', expectedFingerprint: 'a'.repeat(64), extra: 1 })).toEqual({
+      operation: 'puzzle-preview',
+      puzzleId: 'animals',
+      expectedFingerprint: 'a'.repeat(64),
+    })
+    for (const bad of [
+      { operation: 'puzzle-preview', expectedFingerprint: 'a'.repeat(64) },
+      { operation: 'puzzle-preview', puzzleId: 'animals' },
+      { operation: 'puzzle-preview', puzzleId: '../animals', expectedFingerprint: 'a'.repeat(64) },
+      { operation: 'puzzle-preview', puzzleId: 'animals', expectedFingerprint: 'A'.repeat(64) },
+    ]) {
+      expect(parseProductionOperation(bad), JSON.stringify(bad)).toMatchObject({ ok: false })
+    }
+  })
+
+  it('returns a scheduled puzzle’s stored content, and a released one’s', async () => {
+    const store = await storeWithQueue()
+    const scheduled = await runProductionOperation(parse({ operation: 'puzzle-preview', puzzleId: 'animals', expectedFingerprint: fingerprintOf(store, 'animals') }), store)
+    expect(scheduled).toMatchObject({ status: 'ok', preview: { puzzleId: 'animals', clue: 'Animals', publishDate: '2026-10-07', status: 'scheduled' } })
+    expect(previewIn(scheduled)?.answers.map((a) => a.word)).toEqual(['CAT', 'TIE'])
+    expect(previewIn(scheduled)?.board).toEqual({
+      width: 3,
+      height: 3,
+      cells: { r0c0: 'C', r0c1: 'A', r0c2: 'T', r1c2: 'I', r2c2: 'E' },
+      positions: { r0c0: { x: 0, y: 0 }, r0c1: { x: 1, y: 0 }, r0c2: { x: 2, y: 0 }, r1c2: { x: 2, y: 1 }, r2c2: { x: 2, y: 2 } },
+    })
+    const released = await runProductionOperation(parse({ operation: 'puzzle-preview', puzzleId: 'colors', expectedFingerprint: fingerprintOf(store, 'colors') }), store)
+    expect(released).toMatchObject({ status: 'ok', preview: { puzzleId: 'colors', status: 'released' } })
+  })
+
+  it('refuses a removed puzzle or a mismatched fingerprint without content', async () => {
+    const store = await storeWithQueue()
+    expect(await runProductionOperation(parse({ operation: 'puzzle-preview', puzzleId: 'movies', expectedFingerprint: 'a'.repeat(64) }), store)).toEqual({
+      status: 'not-found',
+    })
+    const mismatch = await runProductionOperation(parse({ operation: 'puzzle-preview', puzzleId: 'animals', expectedFingerprint: 'a'.repeat(64) }), store)
+    expect(mismatch).toMatchObject({ status: 'changed', current: { puzzleId: 'animals', publishDate: '2026-10-07' } })
+    expect(JSON.stringify(mismatch)).not.toMatch(/"board"|"answers"|correctLetter/)
+  })
+
+  it('never writes, and a store failure is a fixed message', async () => {
+    const store = await storeWithQueue()
+    const before = JSON.stringify(store.records())
+    await runProductionOperation(parse({ operation: 'puzzle-preview', puzzleId: 'animals', expectedFingerprint: fingerprintOf(store, 'animals') }), store)
+    expect(JSON.stringify(store.records())).toBe(before)
+    store.failNextRead(new Error('connect ECONNREFUSED 10.0.0.1 password=hunter2'))
+    const failed = await runProductionOperation(parse({ operation: 'puzzle-preview', puzzleId: 'animals', expectedFingerprint: fingerprintOf(store, 'animals') }), store)
+    expect(failed).toEqual({ status: 'unavailable', message: 'Production is unavailable right now. Nothing was changed; try again.' })
+  })
+
+  it('leaves the schedule metadata only', async () => {
+    const store = await storeWithQueue()
+    const schedule = await runProductionOperation({ operation: 'schedule' }, store)
+    expect(schedule.status === 'ok' && 'schedule' in schedule && Object.keys(schedule.schedule.entries[0]).sort()).toEqual(
+      ['clue', 'contentFingerprint', 'publishDate', 'puzzleId', 'releaseInstant', 'removable', 'status'],
+    )
+    expect(JSON.stringify(schedule)).not.toMatch(/"cells"|"entries":\[\{"id"|correctLetter|cellPositions|"board"|"answers"/)
+  })
+})

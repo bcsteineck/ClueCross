@@ -268,7 +268,7 @@ describe('production game / Workshop isolation', () => {
     expect(productionClient.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
     expect(productionClient).toMatch(/fetchImpl\(path,/)
     expect([...productionClient.matchAll(/post\(PRODUCTION_PATHS\.(\w+)/g)].map((m) => m[1]).sort()).toEqual(
-      ['backfill', 'backfillPreview', 'publish', 'publishPreview', 'remove', 'removePreview', 'schedule'],
+      ['backfill', 'backfillPreview', 'publish', 'publishPreview', 'puzzlePreview', 'remove', 'removePreview', 'schedule'],
     )
     const draftClient = workshopSources['/workshop/src/draft/draftClient.ts']
     expect(draftClient.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
@@ -335,6 +335,20 @@ describe('production game / Workshop isolation', () => {
     expect(gameViteConfig).not.toMatch(/production\/|productionOps|PRODUCTION_OPS/)
     // The public player API stays the two read-only routes.
     expect(Object.keys(apiSources).sort()).toEqual(['/api/calendar.ts', '/api/puzzle.ts'])
+  })
+
+  it('stored puzzle content reaches the Workshop browser only through the Production puzzle-preview operation', () => {
+    const importers = Object.entries(workshopServerSources)
+      .filter(([path]) => !/\.test\.ts$/.test(path))
+      .filter(([, source]) => importSpecifiers(source).some((s) => /\/puzzlePreview$/.test(s)))
+      .map(([path]) => path)
+    expect(importers).toEqual(['/workshop/server/production/productionOperations.ts'])
+    // Only the explicit Preview action asks for it; nothing preloads previews.
+    const callers = Object.entries(workshopSources)
+      .filter(([path]) => !/\.test\.tsx?$/.test(path))
+      .filter(([, source]) => /\.previewPuzzle\(/.test(source))
+      .map(([path]) => path)
+    expect(callers).toEqual(['/workshop/src/PuzzlePreviewDialog.tsx'])
   })
 
   it('Workshop browser code never starts processes or sees the Production connection', () => {
