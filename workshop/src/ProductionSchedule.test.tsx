@@ -39,6 +39,7 @@ function fakeClient(overrides: Partial<ProductionClient> = {}) {
     publish: vi.fn<ProductionClient['publish']>(),
     previewBackfill: vi.fn(),
     backfill: vi.fn(),
+    previewPuzzle: vi.fn(),
     previewRemoval: vi.fn<ProductionClient['previewRemoval']>(async () => ({
       ok: true,
       body: {
@@ -73,11 +74,11 @@ describe('Production Schedule', () => {
     expect(screen.getByText('Missed dates').nextElementSibling?.textContent).toBe('None')
     const overview = screen.getByRole('region', { name: 'Schedule Overview' })
     expect(within(overview).getByText('Missed dates')).toBeTruthy()
-    expect(within(overview).getByText(/^As of/).textContent).toBe('As of October 6 at 12:00 PM ET')
+    expect(within(overview).getByText(/^\(as of/).textContent).toBe('(as of October 6 at 12:00 PM ET)')
 
     // Only scheduled rows can be removed.
-    expect(within(row('Colors')).queryByRole('button')).toBeNull()
-    expect(within(row('Outer Space')).queryByRole('button')).toBeNull()
+    expect(within(row('Colors')).queryByRole('button', { name: /Remove/ })).toBeNull()
+    expect(within(row('Outer Space')).queryByRole('button', { name: /Remove/ })).toBeNull()
     expect(within(row('Animals')).getByRole('button', { name: /Remove Animals/ })).toBeTruthy()
 
     // No polling: only an explicit Refresh reads again.
@@ -85,6 +86,34 @@ describe('Production Schedule', () => {
     expect(client.schedule).toHaveBeenCalledTimes(1)
     await userEvent.setup().click(screen.getByRole('button', { name: 'Refresh' }))
     await waitFor(() => expect(client.schedule).toHaveBeenCalledTimes(2))
+  })
+
+  it('carries compact cells for narrow workspaces without changing what screen readers hear', async () => {
+    render(<ProductionSchedule client={fakeClient()} />)
+    await screen.findByText('Outer Space')
+    const animals = row('Animals')
+
+    // The compact forms (shown by CSS on a narrow workspace) are hidden from
+    // assistive technology; the full forms stay as the accessible text.
+    const short = [...animals.querySelectorAll('.ws-schedule__short')].map((element) => [element.textContent, element.getAttribute('aria-hidden')])
+    expect(short).toEqual([
+      ['10/07/26', 'true'],
+      ['S', 'true'],
+      ['10/06 10 PM', 'true'],
+    ])
+    expect(within(animals).getByText('October 7, 2026')).toBeTruthy()
+    expect(within(row('Colors')).getByText('R').getAttribute('aria-hidden')).toBe('true')
+    expect(within(row('Outer Space')).getByText('C').closest('[aria-hidden]')).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Releases (ET)' })).toBeTruthy()
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toBeTruthy()
+
+    // Icon actions keep their full names; the icons themselves are hidden.
+    const preview = within(animals).getByRole('button', { name: 'Preview Animals (animals)' })
+    const remove = within(animals).getByRole('button', { name: 'Remove Animals (animals) from the schedule…' })
+    for (const button of [preview, remove]) {
+      expect(button.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true')
+      expect(button.closest('.ws-schedule__actions')).toBe(preview.closest('.ws-schedule__actions'))
+    }
   })
 
   it('shows gaps and failures', async () => {

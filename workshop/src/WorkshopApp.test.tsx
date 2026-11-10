@@ -1295,6 +1295,7 @@ function defaultProductionFakes() {
     })),
     previewBackfill: vi.fn(),
     backfill: vi.fn(),
+    previewPuzzle: vi.fn(),
     previewRemoval: vi.fn<ProductionClient['previewRemoval']>(async () => ({ ok: true, body: { status: 'not-found' } })),
     remove: vi.fn<ProductionClient['remove']>(async () => ({ ok: true, body: { status: 'not-found' } })),
   }

@@ -1,8 +1,10 @@
 // Wire contract between the Workshop browser and its local Production
 // operations endpoints (Production-operations mode only). Types plus the
 // fixed paths — shared by the server bridge/runner and the browser client,
-// like publishing/contract.ts. The browser never receives credentials or
-// unreleased puzzle content: schedule data is metadata only.
+// like publishing/contract.ts. The browser never receives credentials, and
+// schedule data is metadata only. The one narrow exception is
+// puzzle-preview: when the operator clicks Preview, that single puzzle's
+// stored content (released or not) comes back for read-only display.
 
 import type { BackfillIneligibility } from '../../../src/publishing/releaseSchedule'
 import type { DateKey } from '../../../src/publishing/types'
@@ -23,6 +25,7 @@ export const PRODUCTION_PATHS = {
   remove: '/api/production/remove',
   backfillPreview: '/api/production/backfill/preview',
   backfill: '/api/production/backfill',
+  puzzlePreview: '/api/production/puzzle/preview',
 } as const
 
 export type ScheduleStatus = 'released' | 'current' | 'scheduled'
@@ -106,6 +109,13 @@ export interface ProductionBackfillRequest {
   confirmPuzzleId: string
 }
 
+/** Read one scheduled or released puzzle's stored content, as the schedule listed it. */
+export interface ProductionPuzzlePreviewRequest {
+  puzzleId: string
+  /** The fingerprint the schedule showed; the server refuses if the stored content differs. */
+  expectedFingerprint: string
+}
+
 export interface ProductionRemovePreviewRequest {
   puzzleId: string
 }
@@ -174,6 +184,45 @@ export type ProductionBackfillBody =
   | { status: 'invalid'; errors: PublishValidationErrors }
   | { status: 'content-changed'; message: string; contentFingerprint: string }
   | { status: 'busy'; message: string }
+  | { status: 'unavailable'; message: string }
+  | ProductionFailure
+
+/** A stored puzzle's grid, shifted so its top-left occupied cell is at (0, 0). */
+export interface PreviewBoard {
+  width: number
+  height: number
+  /** cellId -> correct letter. */
+  cells: Record<string, string>
+  /** cellId -> 0-indexed position. */
+  positions: Record<string, { x: number; y: number }>
+}
+
+export interface PreviewAnswer {
+  /** The entry's letters in its stored cell order. */
+  word: string
+  direction: 'across' | 'down' | null
+}
+
+/** One stored puzzle for read-only display: only what the preview renders. */
+export interface PuzzlePreview {
+  puzzleId: string
+  clue: string
+  publishDate: DateKey
+  releaseInstant: string
+  /** Derived from database time; a released puzzle includes the current one. */
+  status: 'scheduled' | 'released'
+  contentFingerprint: string
+  board: PreviewBoard
+  /** In stored entry order. */
+  answers: PreviewAnswer[]
+}
+
+export type ProductionPuzzlePreviewBody =
+  | { status: 'ok'; preview: PuzzlePreview }
+  /** No puzzle with that ID: removed since the schedule loaded. */
+  | { status: 'not-found' }
+  /** Same ID, different stored content (removed and published again). Nothing is shown. */
+  | { status: 'changed'; current: SchedulePuzzle }
   | { status: 'unavailable'; message: string }
   | ProductionFailure
 

@@ -172,3 +172,43 @@ describe('backfill routes', () => {
     expect(run).not.toHaveBeenCalled()
   })
 })
+
+describe('puzzle preview route', () => {
+  const previewBody = (overrides: Record<string, unknown> = {}) =>
+    JSON.stringify({ puzzleId: 'animals', expectedFingerprint: 'a'.repeat(64), ...overrides })
+
+  it('routes only by its Production-operations path, with the same transport checks', async () => {
+    const { spy, middleware } = enabled()
+    await call({ url: PRODUCTION_PATHS.puzzlePreview, body: previewBody({ operation: 'remove', confirmPuzzleId: 'animals' }) }, middleware)
+    expect(spy).toHaveBeenLastCalledWith({ operation: 'puzzle-preview', puzzleId: 'animals', expectedFingerprint: 'a'.repeat(64) })
+    expect(await call({ method: 'GET', url: PRODUCTION_PATHS.puzzlePreview, body: previewBody() }, middleware)).toMatchObject({ status: 405 })
+    expect(
+      await call({ url: PRODUCTION_PATHS.puzzlePreview, headers: { ...JSON_TYPE, host: 'localhost:5175', origin: 'http://evil.example' }, body: previewBody() }, middleware),
+    ).toMatchObject({ status: 403 })
+    expect(await call({ url: PRODUCTION_PATHS.puzzlePreview, headers: SAME_ORIGIN, body: previewBody() }, middleware)).toMatchObject({ status: 415 })
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('refuses a missing or malformed puzzle ID or fingerprint before starting anything', async () => {
+    const { spy, middleware } = enabled()
+    for (const body of [
+      previewBody({ puzzleId: undefined }),
+      previewBody({ puzzleId: 'Not An Id' }),
+      previewBody({ expectedFingerprint: undefined }),
+      previewBody({ expectedFingerprint: 'xyz' }),
+    ]) {
+      expect(await call({ url: PRODUCTION_PATHS.puzzlePreview, body }, middleware)).toMatchObject({ status: 400 })
+    }
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('is disabled with the rest of Production operations in plain Workshop', async () => {
+    const run = vi.fn<RunProductionOperation>()
+    const middleware = productionOpsMiddleware({ enabled: false, run })
+    expect(await call({ url: PRODUCTION_PATHS.puzzlePreview, body: previewBody() }, middleware)).toMatchObject({
+      status: 404,
+      body: { status: 'production-unavailable', reason: 'disabled' },
+    })
+    expect(run).not.toHaveBeenCalled()
+  })
+})

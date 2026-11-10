@@ -13,6 +13,8 @@ import type {
   ProductionPublishBody,
   ProductionPublishPreviewBody,
   ProductionPublishRequest,
+  ProductionPuzzlePreviewBody,
+  ProductionPuzzlePreviewRequest,
   ProductionRemoveBody,
   ProductionRemovePreviewBody,
   ProductionRemoveRequest,
@@ -29,6 +31,8 @@ export interface ProductionClient {
   backfill(body: ProductionBackfillRequest): Promise<ProductionResult<ProductionBackfillBody>>
   previewRemoval(puzzleId: string): Promise<ProductionResult<ProductionRemovePreviewBody>>
   remove(body: ProductionRemoveRequest): Promise<ProductionResult<ProductionRemoveBody>>
+  /** Read-only: one puzzle's stored content, fetched only when the operator asks to preview it. */
+  previewPuzzle(body: ProductionPuzzlePreviewRequest): Promise<ProductionResult<ProductionPuzzlePreviewBody>>
 }
 
 // Each operation starts a short-lived child and fetches the Production
@@ -60,5 +64,6 @@ export function createProductionClient(fetchImpl: typeof fetch = (...args) => gl
     backfill: (body) => post(PRODUCTION_PATHS.backfill, body),
     previewRemoval: (puzzleId) => post(PRODUCTION_PATHS.removePreview, { puzzleId }),
     remove: (body) => post(PRODUCTION_PATHS.remove, body),
+    previewPuzzle: (body) => post(PRODUCTION_PATHS.puzzlePreview, body),
   }
 }

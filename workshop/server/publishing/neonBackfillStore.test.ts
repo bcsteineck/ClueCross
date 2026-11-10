@@ -15,6 +15,7 @@ import type { PublishedPuzzle } from '../../../src/publishing/types'
 import { createNeonPublicationStore } from './neonPublicationStore'
 import { PublicationContentionError } from './publicationStore'
 import { backfillFinalPuzzle, previewBackfill } from './publishPuzzle'
+import { previewStoredPuzzle } from './puzzlePreview'
 import { removeScheduledPuzzle } from './scheduleManagement'
 import { TEST_BRANCH_MARKER_TABLE, TEST_DATABASE_LOCK_KEY, assertTestBranchMarker, decideTestDatabase } from './testDatabaseGuard'
 import { batsRequest, catsRequest, publicationFor } from './testFixtures'
@@ -168,6 +169,28 @@ describe.skipIf(!decision.run)('Neon backfill of a missed past date (test branch
     expect(backfilled.kind).toBe('created')
     expect(removed.kind).toBe('removed')
     expect(await dates()).toEqual(['2020-01-01 oldone', '2020-01-02 cats', '2020-01-03 oldthree', '2031-01-01 queued1', '2031-01-02 queued3'])
+  }, 60_000)
+
+  it('puzzle preview reads a scheduled and a released puzzle’s stored content without writing', async () => {
+    const before = await snapshot()
+    const queued = before.find((row) => row.puzzle_id === 'queued1')!
+    const released = before.find((row) => row.puzzle_id === 'oldone')!
+    expect(await previewStoredPuzzle(store().reader(), 'queued1', queued.content_fingerprint)).toMatchObject({
+      kind: 'ok',
+      preview: { puzzleId: 'queued1', clue: 'Clue queued1', publishDate: '2031-01-01', status: 'scheduled', answers: [{ word: 'BAT' }, { word: 'TEN' }] },
+    })
+    expect(await previewStoredPuzzle(store().reader(), 'oldone', released.content_fingerprint)).toMatchObject({
+      kind: 'ok',
+      preview: { status: 'released' },
+    })
+    expect(await previewStoredPuzzle(store().reader(), 'queued1', released.content_fingerprint)).toMatchObject({ kind: 'changed' })
+    expect(await previewStoredPuzzle(store().reader(), 'missing', released.content_fingerprint)).toEqual({ kind: 'not-found' })
+    expect(await snapshot()).toEqual(before)
+    if (readerUrl !== '') {
+      // The player API still never serves the scheduled puzzle.
+      const deps = { reader: createNeonReleasedPuzzleReader(readerUrl) }
+      expect((await handlePuzzleRequest({ method: 'GET', url: '/api/puzzle?date=2031-01-01' }, deps)).status).toBe(404)
+    }
   }, 60_000)
 
   it.skipIf(readerUrl === '')('is public through the released view and the player API immediately after commit', async () => {

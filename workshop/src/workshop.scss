@@ -24,6 +24,9 @@ $ws-warning-wash: #fff6e3;
 $ws-error: #b3261e;
 $ws-error-hover: #8f1d17;
 $ws-error-wash: #fdf1f0;
+// The error red at the same tint as $color-brand-primary-wash (hue 3°,
+// 100% saturation, 96% lightness), for hover on red icon buttons.
+$ws-error-tint: #ffedec;
 $ws-info: $color-gray-50;
 $ws-info-wash: $color-gray-10;
 
@@ -106,6 +109,9 @@ h4 {
 $ws-author-columns: 860px;
 $ws-candidates-columns: 760px;
 $ws-final-columns: 720px;
+// Below this the Production Schedule table switches to its compact cells
+// (short dates, letter badges, icon actions) so it never scrolls sideways.
+$ws-schedule-full: 880px;
 
 .ws-muted {
   color: $ws-text-muted;
@@ -1307,10 +1313,71 @@ $ws-final-columns: 720px;
     font-weight: $font-weight-semibold;
     color: $ws-text-muted;
   }
+
+  @container ws-workspace (max-width: #{$ws-schedule-full - 1px}) {
+    th,
+    td {
+      padding: $spacing-8 $spacing-4;
+    }
+
+    th:first-child,
+    td:first-child {
+      padding-left: 0;
+    }
+
+    th:last-child,
+    td:last-child {
+      padding-right: 0;
+    }
+  }
 }
 
 .ws-schedule__row--current td {
   background: $color-brand-secondary-wash;
+}
+
+// A long clue or ID wraps instead of widening the table.
+.ws-schedule__puzzle {
+  overflow-wrap: anywhere;
+}
+
+// Each responsive cell holds a full form and a compact one; the narrow
+// workspace shows the compact one and keeps the full one for screen readers.
+.ws-schedule__full,
+.ws-schedule__short {
+  white-space: nowrap;
+}
+
+.ws-schedule__short {
+  display: none;
+}
+
+@container ws-workspace (max-width: #{$ws-schedule-full - 1px}) {
+  .ws-schedule__short {
+    display: inline;
+  }
+
+  .ws-schedule__full {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  // The ID under the clue, on every row alike.
+  .ws-schedule__puzzle .ws-muted-inline {
+    display: block;
+  }
+
+  // Release date over its time.
+  .ws-schedule__release {
+    display: inline-flex;
+    flex-direction: column;
+    line-height: 1.3;
+  }
 }
 
 .ws-status {
@@ -1320,6 +1387,18 @@ $ws-final-columns: 720px;
   font-size: 12px;
   font-weight: 700;
   border: $border-1 solid $color-gray-40;
+
+  // A circular letter badge (R, C, S) in the same tones.
+  @container ws-workspace (max-width: #{$ws-schedule-full - 1px}) {
+    .ws-schedule__table & {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+    }
+  }
 }
 
 .ws-status--current {
@@ -1335,6 +1414,83 @@ $ws-final-columns: 720px;
 .ws-status--released {
   background: $color-gray-10;
   color: $ws-text-muted;
+}
+
+// Preview, then Remove (scheduled rows only), side by side so Preview
+// lines up on every row.
+.ws-schedule__actions {
+  display: flex;
+  align-items: center;
+  gap: $spacing-8;
+}
+
+.ws-schedule__action {
+  white-space: nowrap;
+}
+
+.ws-schedule__icon {
+  display: none;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+// Icon-only buttons with a full touch target; the accessible names are
+// unchanged (aria-label).
+@container ws-workspace (max-width: #{$ws-schedule-full - 1px}) {
+  // Actions sit against the right edge, header included, with Preview
+  // outermost so the eye icons line up whether or not a row has Remove.
+  .ws-schedule__actions {
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    gap: $spacing-4;
+  }
+
+  .ws-schedule__table th:last-child {
+    text-align: right;
+  }
+
+  .ws-schedule__action {
+    width: $ws-touch-height;
+    min-height: $ws-touch-height;
+    padding: 0;
+  }
+
+  // A borderless red trash icon that hovers like Preview (a tint, no
+  // border); its confirmation is unchanged.
+  .ws-schedule__action--remove {
+    background: transparent;
+    border-color: transparent;
+
+    &:not(:disabled) {
+      color: $ws-error;
+    }
+
+    // Same selectors as .ws-button--secondary's states, so these (later)
+    // win instead of its grey wash and border.
+    @include hoverable {
+      &:hover:not(:disabled):not([aria-disabled='true']) {
+        background: $ws-error-tint;
+        border-color: transparent;
+      }
+    }
+
+    &:active:not(:disabled):not([aria-disabled='true']) {
+      background: $ws-error-tint;
+    }
+  }
+
+  .ws-schedule__icon {
+    display: block;
+  }
+
+  .ws-schedule__action-label {
+    display: none;
+  }
 }
 
 .ws-schedule__moves {
@@ -1586,6 +1742,154 @@ $ws-sidebar-width: 200px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: $spacing-8;
+}
+
+// A modal dialog over the page (the Production Schedule's puzzle preview).
+// Rendered at the end of <body>, so sized by the viewport: a centered panel
+// on wide screens, nearly full-screen below the narrow width. The header
+// stays put and the body scrolls inside the dialog.
+.ws-modal__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.ws-modal__dialog {
+  position: fixed;
+  z-index: 30;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(960px, calc(100vw - #{2 * $spacing-32}));
+  max-height: calc(100dvh - #{2 * $spacing-32});
+  display: flex;
+  flex-direction: column;
+  background: $color-gray-00;
+  border: $border-1 solid $ws-border;
+  border-radius: $radius-8;
+  box-shadow: $shadow-large;
+
+  @media (max-width: #{$ws-narrow-workspace - 1px}) {
+    width: calc(100vw - #{2 * $spacing-8});
+    max-height: calc(100dvh - #{2 * $spacing-8});
+  }
+}
+
+.ws-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: $spacing-12;
+  padding: $ws-panel-padding;
+  border-bottom: $border-1 solid $ws-border;
+
+  @media (max-width: #{$ws-narrow-workspace - 1px}) {
+    padding: $ws-panel-padding-narrow;
+  }
+}
+
+.ws-modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+  padding: $ws-panel-padding;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  @media (max-width: #{$ws-narrow-workspace - 1px}) {
+    padding: $ws-panel-padding-narrow;
+  }
+}
+
+.ws-preview {
+  font-size: 14px;
+}
+
+.ws-preview__heading {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+  min-width: 0;
+}
+
+.ws-preview__title {
+  margin: 0;
+  font-size: $ws-font-title;
+  overflow-wrap: anywhere;
+}
+
+.ws-preview__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: $spacing-4 $spacing-12;
+  margin: 0;
+  color: $ws-text-muted;
+  font-size: $ws-font-meta;
+}
+
+.ws-preview__id {
+  font-family: $ws-font-mono;
+}
+
+// Grid and answers side by side when there's room; stacked otherwise.
+.ws-preview__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: $spacing-20;
+  align-items: start;
+
+  @media (min-width: 760px) {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
+  }
+}
+
+.ws-preview__board {
+  width: 100%;
+  max-width: 520px;
+}
+
+.ws-preview__answers {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-8;
+  min-width: 0;
+
+  .ws-detail__subheading {
+    margin: 0;
+  }
+}
+
+.ws-preview__answer-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-4;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: $spacing-8;
+    padding: $spacing-4 0;
+    border-bottom: $border-1 solid $ws-border;
+  }
+}
+
+.ws-preview__word {
+  font-family: $ws-font-mono;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.ws-preview__problem {
+  display: flex;
+  flex-direction: column;
   gap: $spacing-8;
 }
 

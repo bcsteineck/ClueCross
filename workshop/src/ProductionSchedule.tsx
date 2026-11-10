@@ -7,10 +7,15 @@ import type {
   ScheduleStatus,
 } from './production/contract'
 import type { ProductionClient } from './production/productionClient'
-import { formatPublishDate, formatReleaseInstant } from './publishing/formatPublication'
+import { createPuzzlePreviewCache } from './production/puzzlePreviewCache'
+import type { PuzzlePreviewCache } from './production/puzzlePreviewCache'
+import { PuzzlePreviewDialog } from './PuzzlePreviewDialog'
+import { formatPublishDate, formatPublishDateShort, formatReleaseInstant, formatReleaseInstantShort } from './publishing/formatPublication'
 
 interface ProductionScheduleProps {
   client: ProductionClient
+  /** Previews fetched this session (owned by WorkshopApp so they outlive this view). */
+  previewCache?: PuzzlePreviewCache
 }
 
 type LoadState = { kind: 'loading' } | { kind: 'ready'; schedule: Schedule } | { kind: 'failed'; message: string }
@@ -22,17 +27,21 @@ type RemovalState =
   | { kind: 'result'; body: ProductionRemoveBody | null; puzzleId: string }
 
 const STATUS_LABEL: Record<ScheduleStatus, string> = { released: 'Released', current: 'Current', scheduled: 'Scheduled' }
+const STATUS_BADGE: Record<ScheduleStatus, string> = { released: 'R', current: 'C', scheduled: 'S' }
 
 // The Production calendar as the operator manages it: released history,
 // the current puzzle, and the scheduled future queue. Statuses come from
 // the server's database time. Only scheduled puzzles can be removed; the
-// server re-checks that inside the removal transaction.
-export function ProductionSchedule({ client }: ProductionScheduleProps) {
+// server re-checks that inside the removal transaction. Any puzzle can be
+// previewed (read-only); its content is fetched only then.
+export function ProductionSchedule({ client, previewCache }: ProductionScheduleProps) {
   const [load, setLoad] = useState<LoadState>({ kind: 'loading' })
   const [removal, setRemoval] = useState<RemovalState | null>(null)
   const [confirmText, setConfirmText] = useState('')
   const inFlight = useRef(false)
   const panelHeadingRef = useRef<HTMLHeadingElement>(null)
+  const [ownCache] = useState(createPuzzlePreviewCache)
+  const [previewing, setPreviewing] = useState<ScheduleEntry | null>(null)
 
   const refresh = useCallback(async () => {
     setLoad({ kind: 'loading' })
@@ -102,6 +111,9 @@ export function ProductionSchedule({ client }: ProductionScheduleProps) {
       {load.kind === 'ready' && (
         <>
           <ScheduleSummaryView schedule={load.schedule} />
+          {/* On a narrower workspace each cell shows its compact form (the "--short"
+              spans) and the full one stays as visually hidden text, so screen
+              readers always hear the full date, status, and release time. */}
           <table className="ws-schedule__table">
             <caption className="ws-visually-hidden">Production calendar, oldest first</caption>
             <thead>
@@ -109,38 +121,69 @@ export function ProductionSchedule({ client }: ProductionScheduleProps) {
                 <th scope="col">Date</th>
                 <th scope="col">Puzzle</th>
                 <th scope="col">Status</th>
-                <th scope="col">Releases</th>
                 <th scope="col">
-                  <span className="ws-visually-hidden">Actions</span>
+                  Releases <span className="ws-schedule__short">(ET)</span>
                 </th>
+                <th scope="col">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {load.schedule.entries.map((entry) => (
-                <tr key={entry.puzzleId} className={`ws-schedule__row ws-schedule__row--${entry.status}`}>
-                  <td>{formatPublishDate(entry.publishDate)}</td>
-                  <td>
-                    {entry.clue} <span className="ws-muted-inline">{entry.puzzleId}</span>
-                  </td>
-                  <td>
-                    <span className={`ws-status ws-status--${entry.status}`}>{STATUS_LABEL[entry.status]}</span>
-                  </td>
-                  <td>{formatReleaseInstant(entry.releaseInstant)}</td>
-                  <td>
-                    {entry.removable && (
-                      <button
-                        type="button"
-                        className="ws-button ws-button--secondary"
-                        onClick={() => void startRemoval(entry)}
-                        disabled={busy || load.kind !== 'ready'}
-                        aria-label={`Remove ${entry.clue} (${entry.puzzleId}) from the schedule…`}
-                      >
-                        Remove from Schedule…
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {load.schedule.entries.map((entry) => {
+                const release = formatReleaseInstantShort(entry.releaseInstant)
+                return (
+                  <tr key={entry.puzzleId} className={`ws-schedule__row ws-schedule__row--${entry.status}`}>
+                    <td>
+                      <span className="ws-schedule__full">{formatPublishDate(entry.publishDate)}</span>
+                      <span className="ws-schedule__short" aria-hidden="true">
+                        {formatPublishDateShort(entry.publishDate)}
+                      </span>
+                    </td>
+                    <td className="ws-schedule__puzzle">
+                      {entry.clue} <span className="ws-muted-inline">{entry.puzzleId}</span>
+                    </td>
+                    <td>
+                      <span className={`ws-status ws-status--${entry.status}`}>
+                        <span className="ws-schedule__full">{STATUS_LABEL[entry.status]}</span>
+                        <span className="ws-schedule__short" aria-hidden="true">
+                          {STATUS_BADGE[entry.status]}
+                        </span>
+                      </span>
+                    </td>
+                    <td>
+                      <span className="ws-schedule__full">{formatReleaseInstant(entry.releaseInstant)}</span>
+                      <span className="ws-schedule__short ws-schedule__release" aria-hidden="true">
+                        <span>{release.date}</span> <span>{release.time}</span>
+                      </span>
+                    </td>
+                    <td>
+                      <div className="ws-schedule__actions">
+                        <button
+                          type="button"
+                          className="ws-button ws-button--tertiary ws-schedule__action"
+                          onClick={() => setPreviewing(entry)}
+                          aria-label={`Preview ${entry.clue} (${entry.puzzleId})`}
+                          aria-haspopup="dialog"
+                        >
+                          <EyeIcon />
+                          <span className="ws-schedule__action-label">Preview</span>
+                        </button>
+                        {entry.removable && (
+                          <button
+                            type="button"
+                            className="ws-button ws-button--secondary ws-schedule__action ws-schedule__action--remove"
+                            onClick={() => void startRemoval(entry)}
+                            disabled={busy || load.kind !== 'ready'}
+                            aria-label={`Remove ${entry.clue} (${entry.puzzleId}) from the schedule…`}
+                          >
+                            <TrashIcon />
+                            <span className="ws-schedule__action-label">Remove from Schedule…</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           {load.schedule.entries.length === 0 && <p className="ws-muted">The Production calendar is empty.</p>}
@@ -168,7 +211,30 @@ export function ProductionSchedule({ client }: ProductionScheduleProps) {
           </button>
         </div>
       )}
+
+      {previewing && (
+        <PuzzlePreviewDialog entry={previewing} client={client} cache={previewCache ?? ownCache} onClose={() => setPreviewing(null)} />
+      )}
     </section>
+  )
+}
+
+// Icons for the narrow-workspace actions; the buttons keep their full
+// accessible names, and desktop shows the text labels instead.
+function EyeIcon() {
+  return (
+    <svg className="ws-schedule__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg className="ws-schedule__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13h12l1-13M9 7V4h6v3" />
+    </svg>
   )
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { formatLocalInstant, formatPublishDate, formatReleaseInstant } from './formatPublication'
+import { formatLocalInstant, formatPublishDate, formatPublishDateShort, formatReleaseInstant, formatReleaseInstantShort } from './formatPublication'
 
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -18,12 +18,23 @@ describe('publication date formatting', () => {
     expect(formatReleaseInstant('2027-01-01T03:00:00.000Z')).toBe('December 31 at 10:00 PM ET')
   })
 
+  it('has compact forms that keep the same date and Eastern time', () => {
+    expect(formatPublishDateShort('2026-10-04')).toBe('10/04/26')
+    expect(formatPublishDateShort('2028-02-29')).toBe('02/29/28')
+    expect(formatReleaseInstantShort('2026-10-04T02:00:00.000Z')).toEqual({ date: '10/03', time: '10 PM' }) // EDT
+    expect(formatReleaseInstantShort('2026-11-02T03:00:00.000Z')).toEqual({ date: '11/01', time: '10 PM' }) // EST
+    expect(formatReleaseInstantShort('2027-01-01T03:00:00.000Z')).toEqual({ date: '12/31', time: '10 PM' }) // across the year
+    expect(formatReleaseInstantShort('2026-10-04T02:30:00.000Z')).toEqual({ date: '10/03', time: '10:30 PM' })
+  })
+
   it('never shifts with the machine timezone', () => {
     for (const tz of ['Pacific/Kiritimati', 'Pacific/Pago_Pago', 'Asia/Tokyo', 'America/Los_Angeles', 'UTC']) {
       vi.stubEnv('TZ', tz)
       expect(formatPublishDate('2026-10-04'), tz).toBe('October 4, 2026')
       expect(formatPublishDate('2027-01-01'), tz).toBe('January 1, 2027')
       expect(formatReleaseInstant('2026-10-04T02:00:00.000Z'), tz).toBe('October 3 at 10:00 PM ET')
+      expect(formatPublishDateShort('2027-01-01'), tz).toBe('01/01/27')
+      expect(formatReleaseInstantShort('2026-10-04T02:00:00.000Z'), tz).toEqual({ date: '10/03', time: '10 PM' })
     }
   })
 

@@ -6,10 +6,12 @@ import type { ConstructionSuccess } from '../../tools/generator/src/types.js'
 // plus gameplay state (values, active cell, reveal locks, input handlers),
 // none of which exist for an unpublished candidate. This renders only the
 // occupied cells, positioned on the candidate's own bounding grid, fitted
-// into a square frame so every preview shares one consistent area.
+// into a square frame so every preview shares one consistent area. The
+// Production Schedule's puzzle preview passes a stored puzzle's grid in the
+// same shape.
 
 interface CandidateBoardProps {
-  construction: ConstructionSuccess
+  construction: Pick<ConstructionSuccess, 'width' | 'height' | 'cells' | 'positions'>
   /** Text alternative for the whole board; omit when the board is decorative (its details are already given as text nearby). */
   label?: string
 }

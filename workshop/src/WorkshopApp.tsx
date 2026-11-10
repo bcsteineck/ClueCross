@@ -17,6 +17,7 @@ import { NewPuzzleControl } from './NewPuzzleControl'
 import { buildPoolSummary } from './poolDiagnostics'
 import { analyzePriorityWords } from './priorityWords'
 import { createProductionClient } from './production/productionClient'
+import { createPuzzlePreviewCache } from './production/puzzlePreviewCache'
 import type { ProductionClient } from './production/productionClient'
 import { PRODUCTION_OPS_ENABLED } from './production/productionOpsMode'
 import { ProductionSchedule } from './ProductionSchedule'
@@ -186,6 +187,8 @@ export function WorkshopApp({
   const { workspace, candidateDetail, editorId, candidateDetailNavigation, navigate, openEditor } = useWorkspaceRoute(
     production !== null,
   )
+  // Production previews fetched this session: memory only, gone on reload.
+  const [previewCache] = useState(createPuzzlePreviewCache)
   const [sourcing, setSourcing] = useState(false)
   // Guards against a second submission before the `sourcing` state re-renders.
   const sourcingInFlight = useRef(false)
@@ -541,7 +544,7 @@ export function WorkshopApp({
   if (working.phase.kind !== 'ready') {
     content = <DraftGate phase={working.phase} onRetry={working.reload} onReplaceInvalid={working.replaceInvalidDraft} />
   } else if (workspace === 'schedule' && production) {
-    content = <ProductionSchedule client={production} />
+    content = <ProductionSchedule client={production} previewCache={previewCache} />
   } else if (workspace === 'candidates') {
     content = (
       <CandidatesWorkspace
