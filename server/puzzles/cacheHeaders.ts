@@ -2,8 +2,10 @@
 // a response was judged at. Vercel's CDN honors Vercel-CDN-Cache-Control
 // (and doesn't forward it); browsers see only Cache-Control.
 //
-//   calendar   CDN until just before the next 10:00 PM America/New_York
-//              release boundary; browsers revalidate on every load.
+//   calendar   At most 60 s at the CDN, and never past the next 10:00 PM
+//              America/New_York release boundary; browsers revalidate on
+//              every load. Short because a backfilled missed date joins
+//              the calendar at an arbitrary time, not only at a release.
 //   puzzle 200 Released content never changes: CDN 1 year, browser 1 day.
 //   puzzle 404 At most 60 s at the CDN, and never past the next release
 //              boundary, so a date that is about to release can't stay
@@ -20,6 +22,7 @@ export type CacheHeaders = Record<'Cache-Control', string> & Partial<Record<'Ver
  * calendar or 404 always expires before the boundary rather than after it.
  */
 export const BOUNDARY_SAFETY_SECONDS = 2
+export const CALENDAR_MAX_SECONDS = 60
 export const NOT_FOUND_MAX_SECONDS = 60
 const ONE_YEAR = 31_536_000
 const ONE_DAY = 86_400
@@ -45,7 +48,7 @@ function cdnFor(seconds: number): CacheHeaders {
 }
 
 export function calendarCacheHeaders(now: Date): CacheHeaders {
-  return cdnFor(secondsBeforeNextBoundary(now))
+  return cdnFor(Math.min(CALENDAR_MAX_SECONDS, secondsBeforeNextBoundary(now)))
 }
 
 export function releasedPuzzleCacheHeaders(): CacheHeaders {

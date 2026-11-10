@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { addDays } from './dateKey'
 import { easternWallClock } from './easternTime'
-import { assignPublishDate, earliestPublishDate, publicationStatus, releaseInstant } from './releaseSchedule'
+import {
+  assignPublishDate,
+  backfillIneligibility,
+  earliestPublishDate,
+  latestReleasedDate,
+  missedPublishDates,
+  publicationStatus,
+  releaseInstant,
+} from './releaseSchedule'
 
 const at = (iso: string) => new Date(iso)
 // vi.stubEnv('TZ', …) changes the zone Node uses for local-time Date
@@ -147,5 +155,114 @@ describe('publicationStatus', () => {
     expect(publicationStatus('2026-11-02', at('2026-11-02T03:00:00.000Z'))).toBe('published')
     expect(publicationStatus('2026-03-09', at('2026-03-09T01:59:59.999Z'))).toBe('scheduled')
     expect(publicationStatus('2026-03-09', at('2026-03-09T02:00:00.000Z'))).toBe('published')
+  })
+})
+
+describe('latestReleasedDate', () => {
+  it('is today (Eastern) before 10 PM and tomorrow from 10 PM, in daylight time', () => {
+    // October 2, 2026 in New York (EDT).
+    expect(latestReleasedDate(at('2026-10-03T01:59:59.999Z'))).toBe('2026-10-02') // Oct 2, 9:59:59.999 PM EDT
+    expect(latestReleasedDate(at('2026-10-03T02:00:00.000Z'))).toBe('2026-10-03') // Oct 2, 10:00 PM EDT
+  })
+
+  it('uses the EST cutoff in winter', () => {
+    // The November 8, 2026 puzzle releases November 7 at 10 PM EST (03:00Z).
+    expect(latestReleasedDate(at('2026-11-08T02:59:59.999Z'))).toBe('2026-11-07')
+    expect(latestReleasedDate(at('2026-11-08T03:00:00.000Z'))).toBe('2026-11-08')
+  })
+
+  it('always names a date whose release has passed, and the next date has not', () => {
+    const start = at('2026-03-06T00:00:00.000Z').getTime()
+    for (let t = start; t < start + 10 * 86_400_000; t += 37 * 60_000 + 7) {
+      const now = at(new Date(t).toISOString())
+      const latest = latestReleasedDate(now)
+      expect(publicationStatus(latest, now)).toBe('published')
+      expect(publicationStatus(addDays(latest, 1), now)).toBe('scheduled')
+    }
+  })
+})
+
+describe('backfillIneligibility', () => {
+  // Released Nov 1–7 and Nov 9 (published late), Nov 10 scheduled; Nov 8 was missed.
+  const DATES = ['2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-09', '2026-11-10']
+  const NOON_NOV_9 = at('2026-11-09T17:00:00.000Z') // noon EST
+
+  it('accepts a missed historical date after the first published date', () => {
+    expect(backfillIneligibility('2026-11-08', DATES, NOON_NOV_9)).toBeNull()
+  })
+
+  it('refuses a date before the first published date', () => {
+    expect(backfillIneligibility('2026-10-31', DATES, NOON_NOV_9)).toBe('before-first')
+  })
+
+  it('refuses an occupied date, released or scheduled', () => {
+    expect(backfillIneligibility('2026-11-07', DATES, NOON_NOV_9)).toBe('occupied')
+    expect(backfillIneligibility('2026-11-09', DATES, NOON_NOV_9)).toBe('occupied')
+  })
+
+  it('refuses a future date, scheduled or not', () => {
+    expect(backfillIneligibility('2026-11-10', DATES, NOON_NOV_9)).toBe('not-released') // scheduled
+    expect(backfillIneligibility('2026-11-11', DATES, NOON_NOV_9)).toBe('not-released')
+  })
+
+  it('accepts a missed date only from its release cutoff (10 PM Eastern the day before)', () => {
+    const dates = DATES.slice(0, 7) // through Nov 7; Nov 8 is missing
+    expect(backfillIneligibility('2026-11-08', dates, at('2026-11-08T02:59:59.999Z'))).toBe('not-released') // 9:59:59.999 PM EST
+    expect(backfillIneligibility('2026-11-08', dates, at('2026-11-08T03:00:00.000Z'))).toBeNull() // 10:00 PM EST
+  })
+
+  it('uses the EDT cutoff in daylight time', () => {
+    const dates = ['2026-07-01', '2026-07-02']
+    expect(backfillIneligibility('2026-07-03', dates, at('2026-07-03T01:59:59.999Z'))).toBe('not-released') // 9:59:59.999 PM EDT
+    expect(backfillIneligibility('2026-07-03', dates, at('2026-07-03T02:00:00.000Z'))).toBeNull() // 10:00 PM EDT
+  })
+
+  it('crosses the DST transitions at 10 PM local time', () => {
+    // Spring forward: the March 9, 2026 puzzle releases March 8 at 10 PM EDT (02:00Z).
+    expect(backfillIneligibility('2026-03-09', ['2026-03-07'], at('2026-03-09T01:59:59.999Z'))).toBe('not-released')
+    expect(backfillIneligibility('2026-03-09', ['2026-03-07'], at('2026-03-09T02:00:00.000Z'))).toBeNull()
+    // Fall back: the November 2, 2026 puzzle releases November 1 at 10 PM EST (03:00Z).
+    expect(backfillIneligibility('2026-11-02', ['2026-10-30'], at('2026-11-02T02:59:59.999Z'))).toBe('not-released')
+    expect(backfillIneligibility('2026-11-02', ['2026-10-30'], at('2026-11-02T03:00:00.000Z'))).toBeNull()
+  })
+
+  it('refuses everything with no publication history', () => {
+    expect(backfillIneligibility('2026-11-08', [], NOON_NOV_9)).toBe('no-history')
+  })
+
+  it('takes the first date from the data, in any order', () => {
+    expect(backfillIneligibility('2026-11-02', ['2026-11-05', '2026-11-01'], NOON_NOV_9)).toBeNull()
+    expect(backfillIneligibility('2026-10-31', ['2026-11-05', '2026-11-01'], NOON_NOV_9)).toBe('before-first')
+  })
+})
+
+describe('missedPublishDates', () => {
+  it('lists missed dates from the first published date through the latest released date', () => {
+    const dates = ['2026-11-01', '2026-11-03', '2026-11-04', '2026-11-07', '2026-11-09', '2026-11-12']
+    expect(missedPublishDates(dates, at('2026-11-09T17:00:00.000Z'))).toEqual(['2026-11-02', '2026-11-05', '2026-11-06', '2026-11-08'])
+  })
+
+  it('includes today’s missed date right after its cutoff, with nothing after it', () => {
+    const dates = ['2026-11-06', '2026-11-07']
+    expect(missedPublishDates(dates, at('2026-11-08T02:59:59.999Z'))).toEqual([]) // Nov 7, 9:59:59.999 PM EST
+    expect(missedPublishDates(dates, at('2026-11-08T03:00:00.000Z'))).toEqual(['2026-11-08']) // Nov 7, 10:00 PM EST
+  })
+
+  it('is empty with no history, with nothing missed, or before the first date releases', () => {
+    expect(missedPublishDates([], at('2026-11-09T17:00:00.000Z'))).toEqual([])
+    expect(missedPublishDates(['2026-11-08', '2026-11-09'], at('2026-11-09T17:00:00.000Z'))).toEqual([])
+    // The only puzzle is still scheduled: nothing has released, so nothing is missed.
+    expect(missedPublishDates(['2026-11-20'], at('2026-11-09T17:00:00.000Z'))).toEqual([])
+  })
+
+  it('never lists a date before the first published date', () => {
+    const missed = missedPublishDates(['2026-11-05'], at('2026-11-09T17:00:00.000Z'))
+    expect(missed).toEqual(['2026-11-06', '2026-11-07', '2026-11-08', '2026-11-09'])
+  })
+
+  it('agrees with backfillIneligibility for every date it lists', () => {
+    const dates = ['2026-03-01', '2026-03-04', '2026-03-10']
+    const now = at('2026-03-12T12:00:00.000Z')
+    for (const date of missedPublishDates(dates, now)) expect(backfillIneligibility(date, dates, now), date).toBeNull()
   })
 })

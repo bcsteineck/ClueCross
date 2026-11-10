@@ -175,33 +175,47 @@ export function ProductionSchedule({ client }: ProductionScheduleProps) {
 function ScheduleSummaryView({ schedule }: { schedule: Schedule }) {
   const { summary } = schedule
   return (
-    <dl className="ws-detail__summary ws-schedule__summary">
-      <div>
-        <dt>Current</dt>
-        <dd>{summary.currentDate ? formatPublishDate(summary.currentDate) : 'None released yet'}</dd>
+    <section className="ws-schedule__overview" aria-labelledby="ws-schedule-overview-heading">
+      <div className="ws-schedule__overview-header">
+        <h3 id="ws-schedule-overview-heading" className="ws-schedule__overview-title">
+          Schedule Overview
+        </h3>
+        <p className="ws-muted">
+          (as of <time dateTime={schedule.asOf}>{formatReleaseInstant(schedule.asOf)}</time>)
+        </p>
       </div>
-      <div>
-        <dt>Filled through</dt>
-        <dd>
-          {summary.filledThrough ? `${formatPublishDate(summary.filledThrough)} (${summary.daysAhead} ${summary.daysAhead === 1 ? 'day' : 'days'} ahead)` : '—'}
-        </dd>
-      </div>
-      <div>
-        <dt>Scheduled</dt>
-        <dd>
-          {summary.scheduledCount}
-          {summary.lastScheduledDate ? `, last ${formatPublishDate(summary.lastScheduledDate)}` : ''}
-        </dd>
-      </div>
-      <div>
-        <dt>Gaps</dt>
-        <dd>{summary.gaps.length === 0 ? 'None' : summary.gaps.map(formatPublishDate).join(', ')}</dd>
-      </div>
-      <div>
-        <dt>As of</dt>
-        <dd>{formatReleaseInstant(schedule.asOf)}</dd>
-      </div>
-    </dl>
+      <dl className="ws-detail__summary ws-schedule__summary">
+        <div>
+          <dt>Current</dt>
+          <dd>{summary.currentDate ? formatPublishDate(summary.currentDate) : 'None released yet'}</dd>
+        </div>
+        <div>
+          <dt>Filled through</dt>
+          <dd>
+            {summary.filledThrough ? `${formatPublishDate(summary.filledThrough)} (${summary.daysAhead} ${summary.daysAhead === 1 ? 'day' : 'days'} ahead)` : '—'}
+          </dd>
+        </div>
+        <div>
+          <dt>Scheduled</dt>
+          <dd>
+            {summary.scheduledCount}
+            {summary.lastScheduledDate ? `, last ${formatPublishDate(summary.lastScheduledDate)}` : ''}
+          </dd>
+        </div>
+        <div>
+          <dt>Gaps</dt>
+          <dd>{summary.gaps.length === 0 ? 'None' : summary.gaps.map(formatPublishDate).join(', ')}</dd>
+        </div>
+        <div>
+          <dt>Missed dates</dt>
+          <dd>
+            {summary.missedDates.length === 0
+              ? 'None'
+              : `${summary.missedDates.map(formatPublishDate).join(', ')} — fill from Publish (A missed past date)`}
+          </dd>
+        </div>
+      </dl>
+    </section>
   )
 }
 

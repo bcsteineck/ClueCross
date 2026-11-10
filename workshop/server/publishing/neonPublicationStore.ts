@@ -18,6 +18,9 @@
 //     statement_timestamp(), which is reported as 'release-slot-passed'.
 //     deleteScheduled() and moveScheduled() carry the same guard, so the
 //     scheduled-queue compaction can never touch a released row.
+//   - insertMissed() is the backfill insert, with the reverse guard: the
+//     date's release has already passed, and it isn't before the earliest
+//     existing publishDate ('backfill-slot-refused' otherwise).
 //
 // Date assignment stays in the domain (publishPuzzle.ts); SQL only guards.
 
@@ -28,6 +31,7 @@ import type { DateKey, PublishedPuzzle } from '../../../src/publishing/types'
 import { PublicationContentionError } from './publicationStore'
 import type {
   CalendarRecord,
+  ContentionReason,
   NewPublication,
   PublicationReader,
   PublicationStore,
@@ -65,6 +69,19 @@ const INSERT_PUBLICATION = `
     (puzzle_id, publish_date, content_fingerprint, fingerprint_version, puzzle, layout)
   SELECT $1, $2::date, $3, $4, $5::jsonb, $6::jsonb
   WHERE ((($2::date - 1) + make_time($7, 0, 0)) AT TIME ZONE $8) > statement_timestamp()
+  RETURNING ${isoText('created_at')} AS created_at`
+// The backfill insert's guard is the reverse of INSERT_PUBLICATION's: the
+// date's release must already have passed, and the date must be on or
+// after the earliest existing publishDate (min() of an empty table is
+// NULL, so nothing is inserted without history). It inserts nothing
+// otherwise, reported as 'backfill-slot-refused'. Uniqueness is the same
+// two constraints; no other row is read for update or changed.
+const INSERT_MISSED_PUBLICATION = `
+  INSERT INTO published_puzzles
+    (puzzle_id, publish_date, content_fingerprint, fingerprint_version, puzzle, layout)
+  SELECT $1, $2::date, $3, $4, $5::jsonb, $6::jsonb
+  WHERE ((($2::date - 1) + make_time($7, 0, 0)) AT TIME ZONE $8) <= statement_timestamp()
+    AND $2::date >= (SELECT min(publish_date) FROM published_puzzles)
   RETURNING ${isoText('created_at')} AS created_at`
 // Metadata only: the clue is read out of the stored puzzle, nothing else.
 const SELECT_CALENDAR = `
@@ -166,27 +183,30 @@ export function createNeonPublicationStore(
         await client.connect()
         await client.query('BEGIN ISOLATION LEVEL SERIALIZABLE')
         const query = async (text: string, params?: unknown[]) => (await client.query(text, params)).rows
+        // Both inserts take the same parameters; only the guard (and its refusal reason) differs.
+        const insertWith = async (sql: string, record: NewPublication, refused: ContentionReason) => {
+          let rows: Row[]
+          try {
+            rows = await query(sql, [
+              record.puzzleId,
+              record.publishDate,
+              record.contentFingerprint,
+              record.fingerprintVersion,
+              JSON.stringify(record.puzzle),
+              JSON.stringify(record.layout),
+              RELEASE_HOUR,
+              PUBLICATION_TIME_ZONE,
+            ])
+          } catch (error) {
+            throw classifyDatabaseError(error)
+          }
+          if (rows.length === 0) throw new PublicationContentionError(refused)
+          return { ...structuredClone(record), createdAt: String(rows[0].created_at) }
+        }
         const tx: PublicationTransaction = {
           ...readerFor(query),
-          async insert(record: NewPublication) {
-            let rows: Row[]
-            try {
-              rows = await query(INSERT_PUBLICATION, [
-                record.puzzleId,
-                record.publishDate,
-                record.contentFingerprint,
-                record.fingerprintVersion,
-                JSON.stringify(record.puzzle),
-                JSON.stringify(record.layout),
-                RELEASE_HOUR,
-                PUBLICATION_TIME_ZONE,
-              ])
-            } catch (error) {
-              throw classifyDatabaseError(error)
-            }
-            if (rows.length === 0) throw new PublicationContentionError('release-slot-passed')
-            return { ...structuredClone(record), createdAt: String(rows[0].created_at) }
-          },
+          insert: (record) => insertWith(INSERT_PUBLICATION, record, 'release-slot-passed'),
+          insertMissed: (record) => insertWith(INSERT_MISSED_PUBLICATION, record, 'backfill-slot-refused'),
           async deleteScheduled(puzzleId: string, publishDate: DateKey) {
             try {
               const rows = await query(DELETE_SCHEDULED, [puzzleId, publishDate, RELEASE_HOUR, PUBLICATION_TIME_ZONE])

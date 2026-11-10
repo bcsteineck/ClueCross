@@ -4,8 +4,16 @@
 // like publishing/contract.ts. The browser never receives credentials or
 // unreleased puzzle content: schedule data is metadata only.
 
+import type { BackfillIneligibility } from '../../../src/publishing/releaseSchedule'
 import type { DateKey } from '../../../src/publishing/types'
-import type { PreviewResponseBody, PublishRequest, PublishResponseBody } from '../publishing/contract'
+import type {
+  PreviewResponseBody,
+  PublicationSummary,
+  PublishingConflictBody,
+  PublishRequest,
+  PublishResponseBody,
+  PublishValidationErrors,
+} from '../publishing/contract'
 
 export const PRODUCTION_PATHS = {
   schedule: '/api/production/schedule',
@@ -13,6 +21,8 @@ export const PRODUCTION_PATHS = {
   publish: '/api/production/publish',
   removePreview: '/api/production/remove/preview',
   remove: '/api/production/remove',
+  backfillPreview: '/api/production/backfill/preview',
+  backfill: '/api/production/backfill',
 } as const
 
 export type ScheduleStatus = 'released' | 'current' | 'scheduled'
@@ -44,6 +54,12 @@ export interface ScheduleSummary {
   daysAhead: number
   /** Dates with no puzzle between the first and last date in the calendar. */
   gaps: DateKey[]
+  /**
+   * Dates a backfill can fill: on or after the first date, already past
+   * their release, and holding no puzzle — including today's date once its
+   * release has passed with nothing in it.
+   */
+  missedDates: DateKey[]
 }
 
 export interface Schedule {
@@ -70,6 +86,21 @@ export interface ProductionPublishPreviewRequest {
 export interface ProductionPublishRequest {
   request: PublishRequest
   /** The fingerprint shown in the Production preview. */
+  expectedFingerprint: string
+  /** The operator's typed confirmation; must equal request.id. */
+  confirmPuzzleId: string
+}
+
+export interface ProductionBackfillPreviewRequest {
+  request: PublishRequest
+}
+
+/** Publish to one missed past date — an explicit, separate operation from publish. */
+export interface ProductionBackfillRequest {
+  request: PublishRequest
+  /** The missed date the operator chose; the server re-checks it and never substitutes another. */
+  publishDate: DateKey
+  /** The fingerprint shown in the backfill preview. */
   expectedFingerprint: string
   /** The operator's typed confirmation; must equal request.id. */
   confirmPuzzleId: string
@@ -110,6 +141,40 @@ export type ProductionPublishPreviewBody = PreviewResponseBody | ProductionFailu
 export type ProductionPublishBody =
   | PublishResponseBody
   | { status: 'content-changed'; message: string; contentFingerprint: string }
+  | ProductionFailure
+
+/** A date a backfill could take, with the release instant that already passed. */
+export interface MissedDate {
+  publishDate: DateKey
+  /** ISO 8601: 10:00 PM America/New_York on the day before publishDate (already passed). */
+  releaseInstant: string
+}
+
+export type ProductionBackfillPreviewBody =
+  | {
+      status: 'missed-dates'
+      contentFingerprint: string
+      /** The first published date (the backfill lower bound); null with no history. */
+      firstPublishDate: DateKey | null
+      /** Oldest first; empty when nothing is missing or there is no history. */
+      dates: MissedDate[]
+    }
+  | { status: 'existing'; publication: PublicationSummary }
+  | PublishingConflictBody
+  | { status: 'invalid'; errors: PublishValidationErrors }
+  | { status: 'unavailable'; message: string }
+  | ProductionFailure
+
+export type ProductionBackfillBody =
+  | { status: 'created'; publication: PublicationSummary }
+  /** The same content is already published under this ID, on its own date; nothing was written. */
+  | { status: 'existing'; publication: PublicationSummary }
+  | PublishingConflictBody
+  | { status: 'ineligible'; publishDate: DateKey; reason: BackfillIneligibility; message: string }
+  | { status: 'invalid'; errors: PublishValidationErrors }
+  | { status: 'content-changed'; message: string; contentFingerprint: string }
+  | { status: 'busy'; message: string }
+  | { status: 'unavailable'; message: string }
   | ProductionFailure
 
 export type ProductionRemovePreviewBody =

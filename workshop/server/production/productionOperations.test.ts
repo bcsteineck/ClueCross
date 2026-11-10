@@ -133,3 +133,105 @@ describe('runProductionOperation', () => {
     expect(JSON.stringify(body)).not.toMatch(/secret|postgres|ECONNREFUSED/)
   })
 })
+
+describe('backfill operations', () => {
+  // Oct 4 and Oct 6 released; Oct 5 was missed. Noon EDT on October 6.
+  async function storeWithMissedDate() {
+    return new MemoryPublicationStore({
+      now: NOON_OCT_6,
+      records: [
+        await publicationFor(catsRequest({ id: 'colors', clue: 'Colors' }), '2026-10-04'),
+        await publicationFor(catsRequest({ id: 'outerspace', clue: 'Outer Space' }), '2026-10-06'),
+      ],
+    })
+  }
+  const fingerprint = async () => (await publicationFor(animals(), 'x')).contentFingerprint
+  const backfillOp = async (overrides: Record<string, unknown> = {}) => ({
+    operation: 'backfill',
+    request: animals(),
+    publishDate: '2026-10-05',
+    expectedFingerprint: await fingerprint(),
+    confirmPuzzleId: 'animals',
+    ...overrides,
+  })
+
+  it('parses a backfill with a strict calendar date and the typed confirmation', async () => {
+    expect(parse(await backfillOp())).toMatchObject({ operation: 'backfill', publishDate: '2026-10-05', confirmPuzzleId: 'animals' })
+    expect(parse({ operation: 'backfill-preview', request: animals() })).toMatchObject({ operation: 'backfill-preview' })
+    for (const bad of [
+      await backfillOp({ publishDate: '2026-02-30' }),
+      await backfillOp({ publishDate: '2026-10-5' }),
+      await backfillOp({ publishDate: 20261005 }),
+      await backfillOp({ publishDate: undefined }),
+      await backfillOp({ confirmPuzzleId: 'Animals' }),
+      await backfillOp({ confirmPuzzleId: undefined }),
+      await backfillOp({ expectedFingerprint: 'xyz' }),
+      { operation: 'backfill-preview' },
+    ]) {
+      expect(parseProductionOperation(bad), JSON.stringify(bad)).toMatchObject({ ok: false })
+    }
+  })
+
+  it('preview lists the missed dates without writing; backfill publishes to exactly that date', async () => {
+    const store = await storeWithMissedDate()
+    const preview = await runProductionOperation({ operation: 'backfill-preview', request: animals() }, store)
+    expect(preview).toEqual({
+      status: 'missed-dates',
+      contentFingerprint: await fingerprint(),
+      firstPublishDate: '2026-10-04',
+      dates: [{ publishDate: '2026-10-05', releaseInstant: '2026-10-05T02:00:00.000Z' }],
+    })
+    expect(store.records()).toHaveLength(2)
+
+    const result = await runProductionOperation(parse(await backfillOp()), store)
+    expect(result).toMatchObject({ status: 'created', publication: { puzzleId: 'animals', publishDate: '2026-10-05' } })
+    expect(store.records().map((r) => `${r.publishDate} ${r.puzzleId}`)).toEqual([
+      '2026-10-04 colors',
+      '2026-10-05 animals',
+      '2026-10-06 outerspace',
+    ])
+    // A repeat is idempotent, never a second row.
+    expect(await runProductionOperation(parse(await backfillOp()), store)).toMatchObject({ status: 'existing' })
+    expect(store.records()).toHaveLength(3)
+  })
+
+  it('reports an ineligible date with an actionable message and never another date', async () => {
+    const store = await storeWithMissedDate()
+    const cases = [
+      ['2026-10-04', 'occupied', /already has a puzzle/],
+      ['2026-10-03', 'before-first', /before the first Production puzzle/],
+      ['2026-10-07', 'not-released', /hasn’t reached its release time/],
+    ] as const
+    for (const [publishDate, reason, message] of cases) {
+      const result = await runProductionOperation(parse(await backfillOp({ publishDate })), store)
+      expect(result, publishDate).toMatchObject({ status: 'ineligible', publishDate, reason })
+      expect(result.status === 'ineligible' && result.message).toMatch(message)
+      expect(result.status === 'ineligible' && result.message).toMatch(/Nothing was published/)
+    }
+    expect(store.records()).toHaveLength(2)
+  })
+
+  it('refuses changed content, and keeps ID conflicts', async () => {
+    const store = await storeWithMissedDate()
+    const changed = catsRequest({ id: 'animals', clue: 'Wild Animals' })
+    expect(await runProductionOperation(parse(await backfillOp({ request: changed })), store)).toMatchObject({ status: 'content-changed' })
+    const rival = catsRequest({ id: 'colors', clue: 'Colours' })
+    const rivalFingerprint = (await publicationFor(rival, 'x')).contentFingerprint
+    expect(
+      await runProductionOperation(parse(await backfillOp({ request: rival, expectedFingerprint: rivalFingerprint, confirmPuzzleId: 'colors' })), store),
+    ).toMatchObject({ status: 'conflict', existing: { puzzleId: 'colors' } })
+    expect(store.records()).toHaveLength(2)
+  })
+
+  it('keeps unrelated operations working beside it', async () => {
+    const store = await storeWithMissedDate()
+    const schedule = await runProductionOperation({ operation: 'schedule' }, store)
+    expect(schedule).toMatchObject({ status: 'ok', schedule: { summary: { gaps: ['2026-10-05'], missedDates: ['2026-10-05'] } } })
+    expect(JSON.stringify(schedule)).not.toMatch(/"cells"|"entries":\[\{"id"|correctLetter|cellPositions/)
+    // Normal publishing still appends after the latest date.
+    expect(await runProductionOperation({ operation: 'publish-preview', request: animals() }, store)).toMatchObject({
+      status: 'estimate',
+      estimate: { publishDate: '2026-10-07' },
+    })
+  })
+})

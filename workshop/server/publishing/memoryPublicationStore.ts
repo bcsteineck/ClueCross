@@ -9,7 +9,8 @@
 //     publishDate after this transaction read it (what SERIALIZABLE
 //     isolation would detect);
 //   - the release guard: an insert whose release instant is not strictly
-//     after the store clock is rejected as retryable;
+//     after the store clock is rejected as retryable, and its reverse for
+//     insertMissed (release passed, on or after the earliest publishDate);
 //   - an injectable, controllable authoritative clock;
 //   - interceptors that run just before an insert is checked, so tests can
 //     commit a competing publication, move the clock, or throw;
@@ -236,6 +237,26 @@ export class MemoryPublicationStore implements PublicationStore {
         // Database-side release guard, against the authoritative clock at insert.
         if (releaseInstant(record.publishDate).getTime() <= this.clock.getTime()) {
           throw new PublicationContentionError('release-slot-passed')
+        }
+        checkAgainstCommitted(record, staged)
+
+        const created: PublishedPuzzle = { ...structuredClone(record), createdAt: this.clock.toISOString() }
+        staged.push(created)
+        return copy(created)
+      },
+      insertMissed: async (record) => {
+        this.attemptedDates.push(record.publishDate)
+        this.insertInterceptors.shift()?.({ store: this, record, transactionNumber })
+
+        // The reverse release guard, plus the earliest-date bound, against the
+        // authoritative clock and the committed calendar at insert.
+        const earliest = [...this.committed.values()].map((r) => r.publishDate).sort(compareDateKeys)[0]
+        if (
+          releaseInstant(record.publishDate).getTime() > this.clock.getTime() ||
+          earliest === undefined ||
+          compareDateKeys(record.publishDate, earliest) < 0
+        ) {
+          throw new PublicationContentionError('backfill-slot-refused')
         }
         checkAgainstCommitted(record, staged)
 

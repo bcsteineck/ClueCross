@@ -56,6 +56,7 @@ describe('schedule', () => {
       filledThrough: '2026-10-09',
       daysAhead: 3,
       gaps: [],
+      missedDates: [],
     })
   })
 
@@ -75,6 +76,8 @@ describe('schedule', () => {
     ])
     const schedule = buildSchedule(records_.map((r) => ({ ...r, clue: r.puzzle.clue })), NOON_OCT_6)
     expect(schedule.summary.gaps).toEqual(['2026-10-04', '2026-10-05', '2026-10-08'])
+    // Only released dates are missed: October 8 is still in the scheduled future.
+    expect(schedule.summary.missedDates).toEqual(['2026-10-04', '2026-10-05'])
     expect(schedule.summary.filledThrough).toBe('2026-10-07')
     expect(schedule.summary.daysAhead).toBe(1)
     expect(schedule.summary.lastScheduledDate).toBe('2026-10-09')
@@ -89,10 +92,22 @@ describe('schedule', () => {
       filledThrough: '2026-10-06',
       daysAhead: 0,
       gaps: [],
+      missedDates: [],
     })
     const empty = buildSchedule([], NOON_OCT_6)
     expect(empty.entries).toEqual([])
-    expect(empty.summary).toEqual({ currentDate: null, lastScheduledDate: null, scheduledCount: 0, filledThrough: null, daysAhead: 0, gaps: [] })
+    expect(empty.summary).toEqual({ currentDate: null, lastScheduledDate: null, scheduledCount: 0, filledThrough: null, daysAhead: 0, gaps: [], missedDates: [] })
+  })
+
+  it('lists a missed current date once its release passes, even with nothing after it', async () => {
+    // Released through Oct 5 and nothing else: Oct 6 released at 10 PM Oct 5 with no puzzle.
+    const records_ = await records([
+      ['colors', 'Colors', '2026-10-04'],
+      ['outerspace', 'Outer Space', '2026-10-05'],
+    ])
+    const schedule = buildSchedule(records_.map((r) => ({ ...r, clue: r.puzzle.clue })), NOON_OCT_6)
+    expect(schedule.summary.gaps).toEqual([]) // nothing between the first and last dates
+    expect(schedule.summary.missedDates).toEqual(['2026-10-06'])
   })
 
   it('flips the next puzzle to current exactly at 10 PM Eastern', async () => {

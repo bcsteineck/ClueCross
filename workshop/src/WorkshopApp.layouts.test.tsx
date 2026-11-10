@@ -34,6 +34,8 @@ function fakeProduction(): ProductionClient {
     schedule: vi.fn(),
     previewPublish: vi.fn(),
     publish: vi.fn(),
+    previewBackfill: vi.fn(),
+    backfill: vi.fn(),
     previewRemoval: vi.fn(),
     remove: vi.fn(),
   }

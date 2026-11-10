@@ -1180,6 +1180,41 @@ $ws-final-columns: 720px;
   overflow-wrap: anywhere;
 }
 
+// Publish to Production: the date-mode choice above the chosen flow.
+.ws-production-publish {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+}
+
+// Missed past dates a backfill can take: one radio per date, its release
+// time (already passed) on a second line.
+.ws-missed-dates {
+  border: 0;
+  margin: 0;
+  padding: 0;
+
+  legend {
+    font-size: $ws-font-label;
+    font-weight: $font-weight-semibold;
+    padding: 0;
+    margin-bottom: $spacing-4;
+  }
+
+  label {
+    display: flex;
+    align-items: baseline;
+    gap: $spacing-8;
+    font-weight: 400;
+  }
+}
+
+.ws-missed-dates__release {
+  display: block;
+  color: $ws-text-muted;
+  font-size: $ws-font-meta;
+}
+
 .ws-production__facts {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
@@ -1214,6 +1249,37 @@ $ws-final-columns: 720px;
   align-items: center;
   justify-content: space-between;
   gap: $spacing-8;
+}
+
+// The summary above the table: one quiet bounded group (not metric cards),
+// tinted so it doesn't read as another table header row.
+.ws-schedule__overview {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-12;
+  margin-bottom: $spacing-8;
+  padding: $spacing-16;
+  background: $color-gray-10;
+  border: $border-1 solid $ws-border;
+  border-radius: $radius-8;
+  min-width: 0;
+
+  @container ws-workspace (max-width: #{$ws-narrow-workspace - 1px}) {
+    padding: $spacing-12;
+  }
+}
+
+.ws-schedule__overview-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: $spacing-4 $spacing-12;
+}
+
+.ws-schedule__overview-title {
+  margin: 0;
+  font-size: $ws-font-meta;
+  font-weight: $font-weight-semibold;
 }
 
 .ws-schedule__summary {

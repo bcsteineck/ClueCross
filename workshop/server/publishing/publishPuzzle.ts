@@ -15,13 +15,27 @@
 // A retryable contention error abandons the attempt entirely; the next one
 // re-reads everything and recalculates the date — it never increments the
 // previously attempted date. All clock reads come from the store.
+//
+// Backfill (backfillFinalPuzzle) is the separate, explicit path for one
+// missed past date the operator chose: the same preparation, fingerprint
+// check, and id lookup, then the date's eligibility at the store clock
+// (backfillIneligibility) and insertMissed. It never chooses or changes the
+// date — a retry re-checks the same date and reports why it can't be used.
 
 import { computeFingerprintV1, FINGERPRINT_VERSION } from '../../../src/publishing/fingerprint'
-import { assignPublishDate, earliestPublishDate, releaseInstant } from '../../../src/publishing/releaseSchedule'
+import {
+  assignPublishDate,
+  backfillIneligibility,
+  earliestPublishDate,
+  missedPublishDates,
+  releaseInstant,
+} from '../../../src/publishing/releaseSchedule'
+import type { BackfillIneligibility } from '../../../src/publishing/releaseSchedule'
 import type { DateKey, PublishedPuzzle } from '../../../src/publishing/types'
 import type { PuzzleDefinition } from '../../../src/core/types'
 import type { LayoutDefinition } from '../../../src/layout/types'
 import { prepareFinalPuzzle } from '../../src/finalPuzzle/finalPuzzle'
+import type { MissedDate } from '../../src/production/contract'
 import type { PublicationSummary, PublishRequest, PublishValidationErrors } from '../../src/publishing/contract'
 import { PublicationContentionError } from './publicationStore'
 import type { PublicationReader, PublicationStore } from './publicationStore'
@@ -168,6 +182,95 @@ export async function previewPublication(request: PublishRequest, store: Publica
       publishDate,
       releaseInstant: releaseInstant(publishDate).toISOString(),
       contentFingerprint,
+    }
+  } catch {
+    return { kind: 'unavailable' }
+  }
+}
+
+// ---- Backfill: one explicit missed past date ------------------------------
+
+export type BackfillOutcome =
+  | { kind: 'created'; publication: PublicationSummary }
+  /** The same content is already published under this id (on its own date); nothing was written. */
+  | { kind: 'existing'; publication: PublicationSummary }
+  | { kind: 'conflict'; existing: ExistingPublicationRef }
+  | { kind: 'ineligible'; publishDate: DateKey; reason: BackfillIneligibility }
+  | { kind: 'invalid'; errors: PublishValidationErrors }
+  | { kind: 'content-changed'; contentFingerprint: string }
+  | { kind: 'busy' }
+  | { kind: 'unavailable' }
+
+export type BackfillPreviewOutcome =
+  | { kind: 'missed-dates'; contentFingerprint: string; firstPublishDate: DateKey | null; dates: MissedDate[] }
+  | { kind: 'existing'; publication: PublicationSummary }
+  | { kind: 'conflict'; existing: ExistingPublicationRef }
+  | { kind: 'invalid'; errors: PublishValidationErrors }
+  | { kind: 'unavailable' }
+
+const toMissedDate = (publishDate: DateKey): MissedDate => ({
+  publishDate,
+  releaseInstant: releaseInstant(publishDate).toISOString(),
+})
+
+export async function backfillFinalPuzzle(
+  request: PublishRequest,
+  publishDate: DateKey,
+  store: PublicationStore,
+  { maxAttempts = MAX_PUBLISH_ATTEMPTS, expectedFingerprint }: PublishOptions = {},
+): Promise<BackfillOutcome> {
+  const preparation = await preparePublication(request)
+  if (!preparation.ok) return { kind: 'invalid', errors: preparation.errors }
+  const { puzzle, layout, contentFingerprint } = preparation.prepared
+  if (expectedFingerprint !== undefined && expectedFingerprint !== contentFingerprint) {
+    return { kind: 'content-changed', contentFingerprint }
+  }
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await store.transaction<BackfillOutcome>(async (tx) => {
+        const existing = await tx.findById(puzzle.id)
+        if (existing) return classifyExisting(existing, contentFingerprint)
+
+        const dates = (await tx.listCalendar()).map((record) => record.publishDate)
+        const reason = backfillIneligibility(publishDate, dates, await tx.now())
+        if (reason) return { kind: 'ineligible', publishDate, reason }
+
+        const record = await tx.insertMissed({
+          puzzleId: puzzle.id,
+          publishDate,
+          contentFingerprint,
+          fingerprintVersion: FINGERPRINT_VERSION,
+          puzzle,
+          layout,
+        })
+        return { kind: 'created', publication: summarizePublication(record) }
+      })
+    } catch (error) {
+      if (error instanceof PublicationContentionError) continue
+      return { kind: 'unavailable' }
+    }
+  }
+  return { kind: 'busy' }
+}
+
+/** Never writes. The missed dates can go stale before a real backfill, which re-checks its date. */
+export async function previewBackfill(request: PublishRequest, store: PublicationStore): Promise<BackfillPreviewOutcome> {
+  const preparation = await preparePublication(request)
+  if (!preparation.ok) return { kind: 'invalid', errors: preparation.errors }
+  const { puzzle, contentFingerprint } = preparation.prepared
+
+  try {
+    const reader = store.reader()
+    const existing = await reader.findById(puzzle.id)
+    if (existing) return classifyExisting(existing, contentFingerprint)
+    const [now, records] = [await reader.now(), await reader.listCalendar()]
+    const dates = records.map((record) => record.publishDate)
+    return {
+      kind: 'missed-dates',
+      contentFingerprint,
+      firstPublishDate: records[0]?.publishDate ?? null,
+      dates: missedPublishDates(dates, now).map(toMissedDate),
     }
   } catch {
     return { kind: 'unavailable' }

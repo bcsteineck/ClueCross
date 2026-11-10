@@ -35,12 +35,14 @@ function fakeProduction(): ProductionClient {
         schedule: {
           asOf: '2026-10-06T16:00:00.000Z',
           entries: [],
-          summary: { currentDate: null, lastScheduledDate: null, scheduledCount: 0, filledThrough: null, daysAhead: 0, gaps: [] },
+          summary: { currentDate: null, lastScheduledDate: null, scheduledCount: 0, filledThrough: null, daysAhead: 0, gaps: [], missedDates: [] },
         },
       },
     })),
     previewPublish: vi.fn(),
     publish: vi.fn(),
+    previewBackfill: vi.fn(),
+    backfill: vi.fn(),
     previewRemoval: vi.fn(),
     remove: vi.fn(),
   }

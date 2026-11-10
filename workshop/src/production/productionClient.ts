@@ -1,12 +1,15 @@
 // Browser client for the Workshop's local Production-operations endpoints.
 // It holds no credentials: it POSTs to fixed same-origin paths and returns
 // the server's outcome. A transport failure (no response, or one that isn't
-// the contract) is reported separately, because for Publish or Remove it
-// says nothing about whether the change happened.
+// the contract) is reported separately, because for Publish, Backfill, or
+// Remove it says nothing about whether the change happened.
 
 import type { PublishRequest } from '../publishing/contract'
 import { PRODUCTION_PATHS } from './contract'
 import type {
+  ProductionBackfillBody,
+  ProductionBackfillPreviewBody,
+  ProductionBackfillRequest,
   ProductionPublishBody,
   ProductionPublishPreviewBody,
   ProductionPublishRequest,
@@ -22,6 +25,8 @@ export interface ProductionClient {
   schedule(): Promise<ProductionResult<ProductionScheduleBody>>
   previewPublish(request: PublishRequest): Promise<ProductionResult<ProductionPublishPreviewBody>>
   publish(body: ProductionPublishRequest): Promise<ProductionResult<ProductionPublishBody>>
+  previewBackfill(request: PublishRequest): Promise<ProductionResult<ProductionBackfillPreviewBody>>
+  backfill(body: ProductionBackfillRequest): Promise<ProductionResult<ProductionBackfillBody>>
   previewRemoval(puzzleId: string): Promise<ProductionResult<ProductionRemovePreviewBody>>
   remove(body: ProductionRemoveRequest): Promise<ProductionResult<ProductionRemoveBody>>
 }
@@ -51,6 +56,8 @@ export function createProductionClient(fetchImpl: typeof fetch = (...args) => gl
     schedule: () => post(PRODUCTION_PATHS.schedule, {}),
     previewPublish: (request) => post(PRODUCTION_PATHS.publishPreview, { request }),
     publish: (body) => post(PRODUCTION_PATHS.publish, body),
+    previewBackfill: (request) => post(PRODUCTION_PATHS.backfillPreview, { request }),
+    backfill: (body) => post(PRODUCTION_PATHS.backfill, body),
     previewRemoval: (puzzleId) => post(PRODUCTION_PATHS.removePreview, { puzzleId }),
     remove: (body) => post(PRODUCTION_PATHS.remove, body),
   }

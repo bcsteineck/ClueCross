@@ -4,7 +4,7 @@
 // the current instant as a parameter — callers supply the authoritative
 // clock (the database's, when publishing) — so nothing here reads Date.now().
 
-import { addDays, maxDateKey } from './dateKey.js'
+import { addDays, compareDateKeys, maxDateKey } from './dateKey.js'
 import { easternDateKey, easternWallTimeToInstant } from './easternTime.js'
 import type { DateKey, PublicationStatus } from './types'
 
@@ -27,7 +27,8 @@ export function earliestPublishDate(now: Date): DateKey {
 
 /**
  * The date a new publication takes: the day after the latest existing
- * publishDate, but never before `earliest`. Gaps are never backfilled.
+ * publishDate, but never before `earliest`. Normal publishing never fills
+ * a gap; only an explicit backfill to a missed date does (missedPublishDates).
  */
 export function assignPublishDate(latestPublishDate: DateKey | null, earliest: DateKey): DateKey {
   return latestPublishDate === null ? earliest : maxDateKey(addDays(latestPublishDate, 1), earliest)
@@ -35,4 +36,48 @@ export function assignPublishDate(latestPublishDate: DateKey | null, earliest: D
 
 export function publicationStatus(publishDate: DateKey, now: Date): PublicationStatus {
   return now.getTime() < releaseInstant(publishDate).getTime() ? 'scheduled' : 'published'
+}
+
+/** The latest publishDate whose release instant has passed at `now`: the day before earliestPublishDate. */
+export function latestReleasedDate(now: Date): DateKey {
+  return addDays(earliestPublishDate(now), -1)
+}
+
+export type BackfillIneligibility = 'no-history' | 'before-first' | 'not-released' | 'occupied'
+
+/**
+ * Why `publishDate` can't take a backfill at `now`, or null when it can: a
+ * missed date is one on or after the first published date, already past
+ * its release instant, and holding no puzzle. `publishDates` is every
+ * existing publishDate (released or scheduled), in any order.
+ */
+export function backfillIneligibility(
+  publishDate: DateKey,
+  publishDates: readonly DateKey[],
+  now: Date,
+): BackfillIneligibility | null {
+  if (publishDates.length === 0) return 'no-history'
+  const first = publishDates.reduce((a, b) => (compareDateKeys(a, b) <= 0 ? a : b))
+  if (compareDateKeys(publishDate, first) < 0) return 'before-first'
+  if (publicationStatus(publishDate, now) !== 'published') return 'not-released'
+  if (publishDates.includes(publishDate)) return 'occupied'
+  return null
+}
+
+/**
+ * Every missed date at `now`, oldest first: from the first published date
+ * through latestReleasedDate(now), skipping dates that hold a puzzle. It
+ * includes today's date once its release has passed with nothing in it.
+ * Bounded by the first published date; empty with no history.
+ */
+export function missedPublishDates(publishDates: readonly DateKey[], now: Date): DateKey[] {
+  if (publishDates.length === 0) return []
+  const occupied = new Set(publishDates)
+  const first = publishDates.reduce((a, b) => (compareDateKeys(a, b) <= 0 ? a : b))
+  const last = latestReleasedDate(now)
+  const missed: DateKey[] = []
+  for (let date = first; compareDateKeys(date, last) <= 0; date = addDays(date, 1)) {
+    if (!occupied.has(date)) missed.push(date)
+  }
+  return missed
 }

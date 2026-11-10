@@ -268,7 +268,7 @@ describe('production game / Workshop isolation', () => {
     expect(productionClient.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
     expect(productionClient).toMatch(/fetchImpl\(path,/)
     expect([...productionClient.matchAll(/post\(PRODUCTION_PATHS\.(\w+)/g)].map((m) => m[1]).sort()).toEqual(
-      ['publish', 'publishPreview', 'remove', 'removePreview', 'schedule'],
+      ['backfill', 'backfillPreview', 'publish', 'publishPreview', 'remove', 'removePreview', 'schedule'],
     )
     const draftClient = workshopSources['/workshop/src/draft/draftClient.ts']
     expect(draftClient.match(/fetch\w*\(/g)).toEqual(['fetch(', 'fetchImpl('])
